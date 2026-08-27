@@ -1,0 +1,15 @@
+{
+  "name": "mat-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@deepseek-ai/cordis": "link:~/mat-harness/deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-tools": "link:~/mat-harness/deepseek-harness/packages/core/tools",
+    "mat-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22"
+  }
+}
