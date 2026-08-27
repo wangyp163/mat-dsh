@@ -66,7 +66,11 @@ export const defaultRunner: CommandRunner = async (argv) => {
     return { rc: 0, stdout, stderr }
   } catch (err) {
     const e = err as { code?: number; stdout?: string; stderr?: string; message?: string }
-    return { rc: e.code ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? String(e.message ?? err) }
+    return {
+      rc: typeof e.code === 'number' ? e.code : 1,
+      stdout: e.stdout ?? '',
+      stderr: e.stderr ?? String(e.message ?? err),
+    }
   }
 }
 
@@ -86,6 +90,7 @@ export async function curlWithRetry(
   const delays = opts.delays ?? [5, 15, 30]
   const requireBody = opts.requireBody ?? false
   let last: Error | undefined
+  // 重试次数固定为 3；delays 只提供前两次退避（缺省回落 30s）
   for (let i = 0; i < 3; i += 1) {
     try {
       const result = await run(argv)

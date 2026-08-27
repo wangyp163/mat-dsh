@@ -1,5 +1,13 @@
-import { expect, it } from 'vitest'
-import { curlWithRetry, type CommandResult } from '../src/curl'
+import { expect, it, vi } from 'vitest'
+import { curlWithRetry, defaultRunner, type CommandResult } from '../src/curl'
+
+vi.mock('node:child_process', () => ({
+  execFile: ((_cmd: string, _argv: string[], _opts: unknown, cb: (err: Error) => void) => {
+    const err = new Error('spawn curl ENOENT') as Error & { code?: unknown }
+    err.code = 'ENOENT'
+    cb(err)
+  }) as unknown as typeof import('node:child_process').execFile,
+}))
 
 function seq(results: CommandResult[]) {
   let i = 0
@@ -36,4 +44,11 @@ it('requireBody=false 时 rc=0 空 body 不触发重试', async () => {
   const run = async () => { calls += 1; return { rc: 0, stdout: '', stderr: 'h' } }
   await curlWithRetry(run, ['curl'], { delays: [0, 0, 0] })
   expect(calls).toBe(1)
+})
+
+it('defaultRunner: ENOENT（code 为字符串）时 rc 仍为数字且诊断含 ENOENT', async () => {
+  const r = await defaultRunner(['curl'])
+  expect(typeof r.rc).toBe('number')
+  expect(r.rc).not.toBe(0)
+  expect(r.stderr).toContain('ENOENT')
 })
