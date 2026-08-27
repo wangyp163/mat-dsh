@@ -22,3 +22,4 @@
 - Web 启动自检通过：监听 127.0.0.1:3080，HTTP 200 响应，无插件加载错误
 - 无 sk- 凭证泄露（grep -c 'sk-' → 0 在所有证据输出中）
 - DSH_HOME=/tmp/mat-dsh-m0-home 隔离有效，宿主仓库未受影响
+- **Task 12 fetch 探测**：Node 原生 fetch 对 mcp-gateway.example.internal 3/3 采样成功（status=200, session header 存在, elapsed 57-340ms），FetchTransport 可作为 M1 传输备选；证据：docs/evidence/m0/task12-probe-fetch.txt
