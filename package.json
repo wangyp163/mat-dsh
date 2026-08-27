@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -b",
     "test": "vitest run",
     "dsh": "pnpm --dir ~/mat-harness/deepseek-harness dsh"
   },
