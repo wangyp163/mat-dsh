@@ -1,0 +1,2 @@
+SMOKE_FAIL: exec_command failed after 3 retries: MCP session init failed after 3 attempts: curl failed: rc=23 body_len=0
+exit=1
