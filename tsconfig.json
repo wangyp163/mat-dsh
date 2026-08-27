@@ -1,0 +1,7 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/mat-core" },
+    { "path": "packages/mat-tools" }
+  ]
+}
