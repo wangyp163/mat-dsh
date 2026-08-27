@@ -1,0 +1,28 @@
+# mat-dsh M0 overlay：骑在 web profile 之上（--patch）
+# LLM 路由模式复制自 vasp-matstream-dsh profiles/spike.yml（2026-08-24 已验证）：
+#   自定义 baseURL + apiKeyEnv + compat.thinkingFormat: deepseek
+# 注意：llm-pi-ai 行是"替换"（同 id 覆盖 dsh-base 默认行），插件行是 insert。
+- id: llm-pi-ai
+  config:
+    providers:
+      mat:
+        displayName: HPC LLM
+        apiKeyEnv: LLM_API_KEY
+        api: openai-completions
+        baseURL: !!js process.env.LLM_BASE_URL
+        compat:
+          thinkingFormat: deepseek
+        models:
+          - id: !!js process.env.LLM_MODEL_ID
+            name: HPC LLM
+            contextWindow: 128000
+            maxTokens: 8192
+
+- id: agent-default-model
+  config:
+    provider: mat
+    model: !!js process.env.LLM_MODEL_ID
+
+- insert:
+    - id: mat-tools
+      name: '~/mat-harness/mat-dsh/packages/mat-tools/src/index.ts'
