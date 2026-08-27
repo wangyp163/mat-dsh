@@ -5,7 +5,7 @@
 | 端到端：一句话让模型调 mat_exec 真集群执行成功（headless 自动化） | PASS | docs/evidence/m0/task11-e2e-transcript.md |
 | 传输冒烟（11250 hostname） | PASS | docs/evidence/m0/task10-smoke-exec.txt |
 | 宿主 git 干净 | PASS | `git -C ../deepseek-harness status --short` 输出为空 |
-| 全部单测绿 | PASS | `pnpm test` 输出（贴末尾摘要） |
+| 全部单测绿 | PASS | `pnpm test`：判定时 26/26 绿；最终审查修复（85c92f3）后终态 30/30 绿，typecheck 通过 |
 
 ## 判定：GO（进入 M1）
 
@@ -23,3 +23,10 @@
 - 无 sk- 凭证泄露（grep -c 'sk-' → 0 在所有证据输出中）
 - DSH_HOME=/tmp/mat-dsh-m0-home 隔离有效，宿主仓库未受影响
 - **Task 12 fetch 探测**：Node 原生 fetch 对 mcp-gateway.example.internal 3/3 采样成功（status=200, session header 存在, elapsed 57-340ms），FetchTransport 可作为 M1 传输备选；证据：docs/evidence/m0/task12-probe-fetch.txt
+
+## 最终全局审查（2026-08-27，APPROVE；M1 backlog）
+
+- **cause 标准化**：`MatExecError`/transport 现用手动 `err.cause = ...` 赋值（因 tsconfig.base 未配 lib，`Error.cause` 类型缺失，测试里有 `as Error & { cause?: Error }` 断言）。M1 修法：`tsconfig.base.json` 加 `"lib": ["ES2023"]` → 构造器改 `super(message, options)` → 去断言。行为已测（30/30），仅为惯用法优化
+- **并发性未验证**：M0 只验证过串行单调用；`execCommand` 无串行化（JSDoc 已如实注明）。M1 需定并发策略：独立 client 实例或调用方串行
+- **非 2xx 语义**：只按 curl `rc≠0` 检测失败，不解析 HTTP 状态码（与 Python 原版一致，curl.test.ts 有行为测试）——M1 若引入 FetchTransport 必须补状态码检查（fetch 不会把 406 变成进程退出码）
+- 文档 minors：verdict 证据列格式统一；transcript 自引用行清理；outputText data 类型组合边界测试补充
