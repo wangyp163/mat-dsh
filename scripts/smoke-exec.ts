@@ -1,4 +1,4 @@
-import { MatClient, outputText } from '../packages/mat-core/src/index'
+import { MatClient, outputText } from '../packages/mat-core/src/index.js'
 
 async function main() {
   const clusterId = process.argv[2] ?? '11250'

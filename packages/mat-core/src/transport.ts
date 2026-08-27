@@ -38,7 +38,11 @@ export class CurlMcpTransport {
         if (i < 2) await sleep(this.delays[i] ?? 30)
       }
     }
-    throw new Error(`MCP session init failed after 3 attempts: ${last?.message ?? last}`)
+    {
+      const err = new Error(`MCP session init failed after 3 attempts: ${last?.message ?? last}`)
+      ;(err as { cause?: unknown }).cause = last
+      throw err
+    }
   }
 
   async initSession(): Promise<string> {
@@ -79,7 +83,12 @@ export class CurlMcpTransport {
       return parseToolCallResponse(result.stdout)
     } catch (err) {
       this.invalidate() // 会话可疑，置空促上层重建
-      throw err instanceof Error ? err : new Error(String(err))
+      if (err instanceof Error) {
+        throw err
+      }
+      const wrapped = new Error(String(err))
+      ;(wrapped as { cause?: unknown }).cause = err
+      throw wrapped
     }
   }
 }

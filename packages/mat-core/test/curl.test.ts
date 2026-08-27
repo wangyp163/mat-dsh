@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { buildCurlArgs, extractSessionId, parseToolCallResponse } from '../src/curl'
+import { buildCurlArgs, extractSessionId, parseToolCallResponse, curlWithRetry } from '../src/curl'
+import type { CommandRunner } from '../src/curl'
 
 it('buildCurlArgs: 含全部不变量参数', () => {
   const args = buildCurlArgs({ url: 'https://x/mcp', body: '{"a":1}', maxTimeSec: 30 })
@@ -50,4 +51,21 @@ it('parseToolCallResponse: 忽略非 data 行与坏 JSON', () => {
 
 it('parseToolCallResponse: 空流抛错（网络故障信号）', () => {
   expect(() => parseToolCallResponse('')).toThrow(/empty MCP stream/)
+})
+
+it('curl 非 2xx HTTP 状态（如 406）→ 按 rc≠0 处理，与 Python 原版一致', async () => {
+  // Python 原版只检查 returncode != 0，不直接检查 HTTP 状态码
+  // curl 在 HTTP 错误时通常返回非零退出码，会被重试逻辑捕获
+  const run: CommandRunner = async (argv) => {
+    return {
+      rc: 22,  // curl 返回 22 表示 HTTP 错误（如 406）
+      stdout: '<html>406 Not Acceptable</html>',
+      stderr: 'HTTP/1.1 406 Not Acceptable\r\n',
+    }
+  }
+  await expect(curlWithRetry(
+    run,
+    buildCurlArgs({ url: 'https://mcp-gateway.example.internal/api/mcp/test/test/mcp', body: '{}', maxTimeSec: 30, sessionId: 'sess-1' }),
+    { delays: [0, 0, 0], requireBody: true },
+  )).rejects.toThrow(/curl failed: rc=22/)
 })

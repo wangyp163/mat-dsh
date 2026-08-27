@@ -71,3 +71,33 @@ it('initSession 连续失败 3 次后抛错', async () => {
   await expect(t.initSession()).rejects.toThrow(/session|curl/i)
   expect(calls).toBe(3)
 })
+
+it('initSession 失败后错误包含 cause', async () => {
+  const run: CommandRunner = async () => { return { rc: 0, stdout: '', stderr: '' } }
+  const t = new CurlMcpTransport({ mcpUrl: 'https://x/mcp', run, delays: [0, 0, 0] })
+  try {
+    await t.initSession()
+    throw new Error('should have thrown')
+  } catch (err) {
+    expect(err).toBeInstanceOf(Error)
+    // 验证错误消息包含原始错误（间接证明 cause 存在）
+    expect((err as Error).message).toContain('curl failed')
+    // 验证错误栈包含原始错误位置（间接证明 cause 链）
+    expect((err as Error).stack).toMatch(/curlWithRetry/)
+  }
+})
+
+it('callTool 失败后错误包含 cause', async () => {
+  const run: CommandRunner = async () => { return { rc: 0, stdout: '', stderr: '' } }
+  const t = new CurlMcpTransport({ mcpUrl: 'https://x/mcp', run, delays: [0, 0, 0] })
+  // 先 init
+  try { await t.initSession() } catch {}
+  try {
+    await t.callTool('remote_shell_execute', {}, 5)
+    throw new Error('should have thrown')
+  } catch (err) {
+    expect(err).toBeInstanceOf(Error)
+    // callTool 直接抛出原始错误，所以应该包含 curl 相关信息
+    expect((err as Error).message).toContain('curl')
+  }
+})

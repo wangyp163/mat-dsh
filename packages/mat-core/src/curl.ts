@@ -95,7 +95,9 @@ export async function curlWithRetry(
     try {
       const result = await run(argv)
       if (result.rc !== 0 || (requireBody && !result.stdout.trim())) {
-        throw new Error(`curl failed: rc=${result.rc} body_len=${result.stdout.length}`)
+        const checkErr = new Error(`curl failed: rc=${result.rc} body_len=${result.stdout.length}`)
+        // 这个错误没有原始 cause，是检查失败产生的
+        throw checkErr
       }
       return result
     } catch (err) {
@@ -103,5 +105,8 @@ export async function curlWithRetry(
       if (i < 2) await sleep(delays[i] ?? 30)
     }
   }
-  throw last ?? new Error('curl failed')
+  // last 总是 Error（因为 i<2 时至少设置过一次），但为了类型安全保留 ?? 逻辑
+  const finalErr = last ?? new Error('curl failed')
+  // 确保 last 中的错误链保持完整
+  throw finalErr
 }

@@ -51,6 +51,20 @@ it('三次皆失败 → 抛 MatExecError 且信息含末次错误', async () => 
   await expect(c.execCommand('11250', 'hostname', 30)).rejects.toThrow(/exec_command failed after 3 retries: network down/)
 })
 
+it('三次皆失败 → MatExecError.cause 保留末次原始错误', async () => {
+  const t = fakeTransport([{ ok: false }])
+  const c = new MatClient({ mcpKey: 'sk-K', transport: t, retryDelays: [0, 0] })
+  try {
+    await c.execCommand('11250', 'hostname', 30)
+    throw new Error('should have thrown')
+  } catch (err) {
+    expect(err).toBeInstanceOf(Error)
+    const error = err as Error & { cause?: Error }
+    expect(error.cause).toBeInstanceOf(Error)
+    expect(error.cause).toHaveProperty('message', 'network down')
+  }
+})
+
 it('未提供 mcp_key → 构造/调用时报凭证错误', async () => {
   const c = new MatClient({ mcpKey: '' })
   await expect(c.execCommand('11250', 'hostname', 30)).rejects.toThrow(/MAT_MCP_KEY/)

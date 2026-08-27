@@ -8,9 +8,13 @@ export interface ExecResult {
 }
 
 export class MatExecError extends Error {
-  constructor(message: string) {
+  constructor(message: string, options?: { cause?: unknown }) {
     super(message)
     this.name = 'MatExecError'
+    // 手动设置 cause 以确保兼容性
+    if (options?.cause) {
+      ;(this as { cause?: unknown }).cause = options.cause
+    }
   }
 }
 
@@ -38,7 +42,13 @@ export class MatClient {
     }
   }
 
-  /** 三级容错第三级宿主：exec 整体重试 3 次，每次失败后置空会话促重建（对齐 plugin.py exec_command）。 */
+  /**
+   * 三级容错第三级宿主：exec 整体重试 3 次，每次失败后置空会话促重建（对齐 plugin.py exec_command）。
+   *
+   * 并发性：本实现未做调用串行化。JS 单线程保证 JSON-RPC id 分配不会竞争，
+   * 但同一会话上的并发请求在服务端的行为未经验证——M0 仅验证过串行单调用。
+   * 需要并发时建议每路并发使用独立 MatClient 实例，或由调用方自行串行。
+   */
   async execCommand(clusterId: string, command: string, timeoutSeconds = 30): Promise<ExecResult> {
     const key = this.opts.mcpKey || process.env.MAT_MCP_KEY || ''
     if (!key.startsWith('sk-')) {
@@ -58,7 +68,7 @@ export class MatClient {
         if (attempt < 2) await sleep(delays[attempt] ?? 15)
       }
     }
-    throw new MatExecError(`exec_command failed after 3 retries: ${last?.message ?? last}`)
+    throw new MatExecError(`exec_command failed after 3 retries: ${last?.message ?? last}`, { cause: last })
   }
 }
 
