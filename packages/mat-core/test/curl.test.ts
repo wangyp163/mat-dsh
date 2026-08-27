@@ -7,7 +7,7 @@ it('buildCurlArgs: 含全部不变量参数', () => {
     'curl', '-k', '-s', '--noproxy', '*',
     '-H', 'Content-Type: application/json',
     '-H', 'Accept: application/json, text/event-stream',
-    '-D', '/dev/stderr',
+    '-D', '-',
     '-d', '{"a":1}',
     '--max-time', '30',
     'https://x/mcp',

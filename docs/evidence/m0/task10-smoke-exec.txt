@@ -1,2 +1,13 @@
+首次尝试失败 rc=23，根因 -D /dev/stderr 在管道 stderr 下不可写，修法 -D -，详见计划偏差记录
+
+--- 首次尝试（失败）---
 SMOKE_FAIL: exec_command failed after 3 retries: MCP session init failed after 3 attempts: curl failed: rc=23 body_len=0
 exit=1
+
+--- 修复后重跑 ---
+elapsed_ms=21713
+code=0 message=success
+--- output ---
+sandbox-11333188068
+hpc-user-a
+exit=0

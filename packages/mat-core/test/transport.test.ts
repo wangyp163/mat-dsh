@@ -15,7 +15,7 @@ it('initSession 从响应头提取会话 id，且 initialize 请求体正确', a
   const run: CommandRunner = async (argv) => {
     const i = argv.indexOf('-d')
     seenBody = argv[i + 1]
-    return { rc: 0, stdout: 'data: {}\n', stderr: INIT_HEADERS }
+    return { rc: 0, stdout: INIT_HEADERS + 'data: {}\n', stderr: '' }
   }
   const t = new CurlMcpTransport({ mcpUrl: 'https://x/mcp', run, delays: [0, 0, 0] })
   await expect(t.initSession()).resolves.toBe('sess-1')
@@ -31,7 +31,7 @@ it('callTool 携带 Mcp-Session-Id 并返回 HPC 业务 JSON', async () => {
     seen.push(h?.slice('Mcp-Session-Id: '.length) ?? '(none)')
     const d = argv.indexOf('-d')
     seen.push(argv[d + 1])
-    if (h === undefined) return { rc: 0, stdout: 'data: {}\n', stderr: INIT_HEADERS }
+    if (h === undefined) return { rc: 0, stdout: INIT_HEADERS + 'data: {}\n', stderr: '' }
     return { rc: 0, stdout: sseBody({ code: 0, data: 'compute-01', message: 'success' }), stderr: '' }
   }
   const t = new CurlMcpTransport({ mcpUrl: 'https://x/mcp', run, delays: [0, 0, 0] })
@@ -50,7 +50,7 @@ it('callTool 失败后 会话失效，下次调用重新 initialize', async () =
   const run: CommandRunner = async (argv) => {
     if (!argv.some((a) => a.startsWith('Mcp-Session-Id: '))) {
       initCount += 1
-      return { rc: 0, stdout: 'data: {}\n', stderr: INIT_HEADERS }
+      return { rc: 0, stdout: INIT_HEADERS + 'data: {}\n', stderr: '' }
     }
     calls += 1
     // 第一次 callTool：curlWithRetry 内部 3 次尝试全部空 body（HTTP 000）→ 抛错并使会话失效

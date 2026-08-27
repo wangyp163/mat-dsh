@@ -15,7 +15,7 @@ export function buildCurlArgs(input: CurlArgsInput): string[] {
     '-H', 'Accept: application/json, text/event-stream',
   ]
   if (input.sessionId) args.push('-H', `Mcp-Session-Id: ${input.sessionId}`)
-  args.push('-D', '/dev/stderr', '-d', input.body, '--max-time', String(input.maxTimeSec), input.url)
+  args.push('-D', '-', '-d', input.body, '--max-time', String(input.maxTimeSec), input.url) // -D - 头部写 stdout（Linux 管道下 /dev/stderr 不可写）
   return args
 }
 

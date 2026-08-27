@@ -57,7 +57,7 @@ export class CurlMcpTransport {
       buildCurlArgs({ url: this.mcpUrl, body, maxTimeSec: 30 }),
       { delays: this.delays, requireBody: true },
     )
-    const sid = extractSessionId(result.stderr)
+    const sid = extractSessionId(result.stdout)
     if (!sid) throw new Error('no mcp-session-id in response headers')
     return sid
   }
