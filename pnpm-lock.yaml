@@ -24,6 +24,22 @@ importers:
         specifier: ^22
         version: 22.20.1
 
+  packages/mat-tools:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: link:~/mat-harness/deepseek-harness/vendor/cordis
+        version: link:../../../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-tools':
+        specifier: link:~/mat-harness/deepseek-harness/packages/core/tools
+        version: link:../../../deepseek-harness/packages/core/tools
+      mat-core:
+        specifier: workspace:*
+        version: link:../mat-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':

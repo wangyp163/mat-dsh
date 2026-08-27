@@ -5,7 +5,9 @@
     "noEmit": false,
     "emitDeclarationOnly": true,
     "declaration": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "module": "es2022",
+    "moduleResolution": "bundler"
   },
   "include": ["src"]
 }
