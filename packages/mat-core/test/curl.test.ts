@@ -14,10 +14,9 @@ it('buildCurlArgs: 含全部不变量参数', () => {
   ])
 })
 
-it('buildCurlArgs: 带 session 时插入 Mcp-Session-Id 头', () => {
+it('buildCurlArgs: 带 session 时插入 Mcp-Session-Id 头（单元素 "Name: value" 形式）', () => {
   const args = buildCurlArgs({ url: 'https://x/mcp', body: '{}', maxTimeSec: 40, sessionId: 'sid-1' })
-  const i = args.indexOf('Mcp-Session-Id')
-  expect(args[i + 1]).toBe('sid-1')
+  expect(args).toContain('Mcp-Session-Id: sid-1')
 })
 
 it('extractSessionId: 小写头名可提取', () => {

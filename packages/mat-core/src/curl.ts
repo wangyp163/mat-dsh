@@ -11,7 +11,7 @@ export function buildCurlArgs(input: CurlArgsInput): string[] {
     '-H', 'Content-Type: application/json',
     '-H', 'Accept: application/json, text/event-stream',
   ]
-  if (input.sessionId) args.push('-H', 'Mcp-Session-Id', input.sessionId)
+  if (input.sessionId) args.push('-H', `Mcp-Session-Id: ${input.sessionId}`)
   args.push('-D', '/dev/stderr', '-d', input.body, '--max-time', String(input.maxTimeSec), input.url)
   return args
 }
