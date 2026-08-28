@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc -b && tsc --noEmit -p scripts",
     "test": "vitest run",
+    "build:mat-ui": "node scripts/build-mat-ui.mjs",
     "dsh": "pnpm --dir ~/mat-harness/deepseek-harness dsh"
   },
   "devDependencies": {
