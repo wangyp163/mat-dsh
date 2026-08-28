@@ -38,3 +38,36 @@ pnpm --dir ../deepseek-harness dsh web --no-open --patch "$PWD/profiles/mat.yml"
 
 证据：`docs/evidence/m1/`（格式探测、fetch 探针、headless e2e ×2、web gaussian e2e）。
 
+## M2：工具面补全 + mat_gaussian 一站式 + 文件传输 + 回放契约
+
+**新增工具**（`packages/mat-tools`）：
+
+- `mat_partitions` / `mat_sbatch` / `mat_job_status` / `mat_cancel` —— 四薄工具，
+  对齐 Python 时代语义（sinfo 五列、sbatch 解析、squeue→sacct 兜底、scancel）。
+- `mat_gaussian` —— **一站式 Gaussian**：一次调用 prepare（单命令打包 mkdir/heredoc/
+  三 json/落盘校验）→ pre → run → sbatch 秒级返回 slurm job id + 后台作业 id（kind
+  `mat-slurm`）。后台 producer 服务端监控至终态，**COMPLETED 自动 post 并解析物性**
+  （energy/converged/frequencies_cm-1/imaginary_frequency_count + files 进 `job_output`）；
+  非 COMPLETED 跳过 post 带 log_tail 诊断；post 失败不判作业失败。默认 B3LYP/6-31G(d)、
+  32 核/64GB、Agent0；`options` 透传 pre_json/run_json/workflow_env/g16_env/poll_seconds/
+  max_wait_seconds（默认 1800s）。多波组合（opt+sp、aea）不适用，走分步链路。
+- `mat_upload` / `mat_download` —— efile 文件传输（token 流 HMAC-SHA256 签名 →
+  按集群取 token/efile 地址 → curl 子进程 multipart 上传 / content-type 分流下载）。
+  凭证环境变量 `MAT_ACCESS_KEY` / `MAT_SECRET_KEY` / `MAT_USER`（env.local，
+  缺谁点名谁）；未配置时工具报错不崩。
+
+**核心库新增**（`packages/mat-core`）：
+
+- `slurm.ts` —— sinfo/sbatch/单作业状态命令构造与解析。
+- `gaussian.ts` —— 同步段 `runGaussianSync`、post 解析 `parsePostOutput`（首个可解析 `{` 行）、
+  producer `createGaussianProducerHooks`。
+- `watch-loop.ts` —— 新增 `onAllSettled` 钩子（仅全部终态路径触发；detailSuffix/extraLines
+  并入结算；钩子抛错吞入诊断行不炸结算）。
+- `token.ts` / `efile.ts` —— 开放 API token 客户端与 efile 客户端（runner/fetch 全注入可测）。
+
+**回放契约**（`packages/mat-core/test/contract/`）：真实录制 fixtures（M1 evidence 逐字
+转录）回放进解析器与 watch 全链路，行为漂移即红；来源与 synthetic 标注见
+`PROVENANCE.md`（sinfo 5 列与 gaussian/exec fixtures 待实弹回填）。
+
+证据：`docs/evidence/m2/`。
+

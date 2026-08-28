@@ -7,7 +7,7 @@ version: 0.7.1-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/other-projects/vasp-matstream-agent/skills/debug-gaussian-calc@0.7.1-demo
-  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）
+  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道
 ---
 
 # Gaussian 工作流
@@ -51,7 +51,8 @@ aea           绝热电子亲和能（多步）
 - 环境门禁、`bootstrap`、workflow `pre/post`、只读检查：`mat_exec` 直接执行对应命令。
 - 查询集群/队列（sinfo）、写输入文件（heredoc/cat）、提交 Slurm（sbatch）：同样经 `mat_exec`。
 - **提交后的作业监控用 `mat_job_watch` 异步批量监控**：一次注册全部 job_id，不要手动 squeue/sacct 轮询（见"提交和监控"节）。
-- 需要读取集群上的文件时：`mat_exec` 执行 `cat`/`tail` 取回内容，不另行下载通道。
+- **选项齐备的单作业计算优先 `mat_gaussian` 一站式**：一次调用完成输入落盘→pre→run→sbatch→监控→自动 post（见"一站式路径"节）；分步链路用于交互确认、多波组合与诊断。
+- 需要读取集群上的文件时：`mat_exec` 执行 `cat`/`tail` 取回内容；需要把文件落到本机时用 `mat_download`（efile 通道，需 MAT 凭证环境变量），上传用 `mat_upload`。
 
 HPC 凭据由工具管理，本 skill 不记录密码、AK/SK、服务器地址。
 
@@ -107,6 +108,28 @@ g16 < input_file > output_file
 ```
 
 不依赖 `g16_run.sh`、Apptainer、SIF 或外层 `srun`。Gaussian 并行由输入文件 `%nprocshared` 控制。
+
+## 一站式路径（mat_gaussian，选项齐备的单发计算）
+
+上述链路逐步走 `mat_exec` 的形态适用于需要逐步确认/核查的交互流程。当**任务类型、结构、工作目录、（可选）分区与参数覆盖都已确定**，且属于**单作业形态**（单步 task 或 `opt+freq` 单作业组合）时，优先用一站式工具 `mat_gaussian`，一次调用覆盖 prepare→pre→run→sbatch→监控→post：
+
+```json
+mat_gaussian({
+  "cluster_id": "11250",
+  "task": "opt+freq",
+  "structure": "3\n\nO 0.000000 0.000000 0.117790\nH 0.000000 0.757160 -0.470790\nH 0.000000 -0.757160 -0.470790\n",
+  "workdir": "$HOME/workspace/h2o-run1",
+  "partition": "Agent0",
+  "options": {"max_wait_seconds": 3600}
+})
+```
+
+- **前提**：环境门禁已通过且 g16 已 bootstrap（与分步链路同一条门禁，见上文）；一站式命令使用与本 skill 相同的 `workflow_env`/`GAUSSIAN_ENV_SCRIPT` 默认值，可用 `options.workflow_env`/`options.g16_env` 覆盖。
+- **参数默认**：pre.json 默认 B3LYP/6-31G(d)、charge 0/mult 1、opt ["Tight","CalcFC"]、freq "HPModes"、32 核/64GB；run.json 默认 Agent0/1 节点/32 核/00:30:00/64GB。需要不同方法基组或资源时，经 `options.pre_json`/`options.run_json` 传**完整** phase 配置（结构同上文 pre.json/run.json 节；注意 `resources.ncores ≤ slurm.ntasks_per_node`、`resources.memory ≤ slurm.mem` 校验仍生效）。
+- **返回即离手**：工具返回 slurm job id 与后台作业 id 后本轮即可结束；后台 producer 服务端轮询 sacct（无模型请求），**终态后自动执行 post 并解析**，会话内收到完成通知。
+- **读结果**：通知后 `job_output({"job_id": "<background job id>"})` 一次拿到：`properties`（energy、converged、`frequencies_cm-1`、`imaginary_frequency_count`）、`files`（如 `g16_optimized.xyz`、`job.log`）与逐作业终态行。**无需再跑 `cat result.json`**——post 结果已由 producer 解析进输出；需要原始 result.json 或大文件时再经 `mat_exec`/`mat_download` 取。
+- **失败语义**：slurm 作业非 COMPLETED → 不跑 post，`job_output` 里带 `log_tail`（job.log 尾部 50 行）供诊断；COMPLETED 但 post 失败 → 作业仍按完成结算，输出里标注 `post failed` 与 log_tail。
+- **边界**：多波组合（`opt+sp`、`aea` 等需要分波提交/二次 run 的形态）**不支持**一站式，仍走分步链路；每个 `mat_gaussian` 占用一个后台作业配额（owner 上限 10），批量独立计算 = 多次调用；`max_wait_seconds` 默认 1800，超时按 max-wait 结算、不跑 post——续盯或重新评估，不是错误。
 
 `aea` 保留其专用多步行为：
 
@@ -305,7 +328,24 @@ resources.memory <= slurm.mem
 {}
 ```
 
-`post` 从 `{work_dir}/<task>/.calcflow-phase.json` 恢复参数和结构副本，读取完成的 log。它只在正常终止且所需收敛存在时报告结果。每个 phase 均向 stdout 输出一个 JSON 对象；其中至少包含 `software`、`task`、`phase`、`status`、`files`、`slurm`、`properties`、`error`。错误结果仍保留 CLI 的完整 `task`，且 `files`/`images` 为空。
+`post` 从 `{work_dir}/<task>/.calcflow-phase.json` 恢复参数和结构副本，读取完成的 log。它只在正常终止且所需收敛存在时报告结果。每个 phase 均向 stdout 输出一个 JSON 对象，**同时写入 `{work_dir}/result.json`**——这是 `calcflow.result.v1` 规范化的结构化结果，agent 应**优先读取 `result.json`** 获取所有物性、状态和产物路径，而不是直接解析 `job.log`。
+
+结果 JSON 至少包含 `software`、`task`、`phase`、`status`、`execution`、`workflow`、`science`、`properties`、`files`、`slurm`、`error`、`warnings`。错误结果仍保留 CLI 的完整 `task`，且 `files`/`images` 为空。
+
+`result.json` 关键字段速查：
+
+| 字段 | 含义 |
+|---|---|
+| `status` | `"ok"` / `"error"` |
+| `execution.status` | `"completed"` / `"failed"` / `"blocked"` |
+| `workflow.status` | `"completed"` / `"needs_review"` / `"blocked"` / `"failed"` |
+| `workflow.next_action` | 当 status 非 completed 时的建议动作 |
+| `science.status` | `"not_evaluated"` / `"passed"` / `"failed"` |
+| `properties` | 所有物性（energy、converged、frequencies_cm-1、imaginary_frequency_count 等） |
+| `warnings` | 非致命警告列表 |
+| `files` | 生成的所有产物文件绝对路径 |
+| `error` / `error_detail` | 错误信息与建议 |
+| `steps` | 多步组合的每步详情（pre/run/post 状态） |
 
 ## Slurm 产物契约
 
@@ -350,7 +390,7 @@ Gaussian 在同一作业内优化收敛后自动接频率分析（route `opt fre
 
 ## HPC 完整执行链路
 
-完整链路：**上传 → pre → run（生成 slurm.sh）→ sbatch 提交 → mat_job_watch 异步批量监控 → post → 下载**。其中 bootstrap、pre/run/post 与只读核查均经 `mat_exec` 执行业务命令；查询集群/队列、上传文件（heredoc 写入）、提交作业（sbatch）同样经 `mat_exec`，作业监控经 `mat_job_watch`（完成通知到达前不手动轮询）。**HPC 凭据由 mat_exec 自管，本 skill 不写死任何 AK/SK/用户名/服务器地址。**
+完整链路：**上传 → pre → run（生成 slurm.sh）→ sbatch 提交 → mat_job_watch 异步批量监控 → post → 下载**。其中 bootstrap、pre/run/post 与只读核查均经 `mat_exec` 执行业务命令；查询集群/队列、上传文件（heredoc 写入）、提交作业（sbatch）同样经 `mat_exec`，作业监控经 `mat_job_watch`（完成通知到达前不手动轮询）。**选项齐备的单作业计算（单步或 opt+freq）优先走上文「一站式路径（mat_gaussian）」，下述 Step 0–6 是分步/交互形态。** **HPC 凭据由 mat_exec 自管，本 skill 不写死任何 AK/SK/用户名/服务器地址。**
 
 ### 约定
 
@@ -500,7 +540,21 @@ job_output({"job_id": "mat-watch-N"})
 mat_exec({"cluster_id": "{cluster_id}", "command": 'cd "{work_dir}" && source "$workflow_env" && gaussian-workflow -t opt -p post -i molecule.xyz -w "{work_dir}" --json post.json', "timeout_seconds": 300})
 ```
 
-读取 stdout 的结果 JSON。对于 JSON 以外的默认参数，可省略 `--json`，但 `-t/-p/-i/-w` 仍必须提供。
+`post` 的 stdout 即为结果 JSON，同时写入 `{work_dir}/result.json`。**agent 必须读取 `result.json` 作为结果权威来源**，无需再读 `job.log` 做解析：
+
+```bash
+mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/result.json", "timeout_seconds": 30})
+```
+
+从 `result.json` 获取所有信息：
+
+- **计算是否成功**：`status`、`execution.status`、`workflow.status`
+- **物性**：`properties.*`（energy、converged、frequencies_cm-1、imaginary_frequency_count 等）
+- **产物文件**：`files` 数组列出所有生成文件的绝对路径
+- **警告/错误**：`warnings`、`error`、`error_detail`
+- **多步组合**：`steps` 数组，核对每步 `stages.post.status == "ok"`
+
+对于 JSON 以外的默认参数，可省略 `--json`，但 `-t/-p/-i/-w` 仍必须提供。
 
 ### 6. 下载产物（经 `mat_exec`）
 
