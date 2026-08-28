@@ -23,6 +23,18 @@
     provider: mat
     model: !!js process.env.LLM_MODEL_ID
 
+# web 客户端（模型选择/会话初始化）引用 llm-deepseek 独占注册的 "deepseek-official"
+# 路由 id，绕过 agent-default-model——把该路由本身也指到 HPC 网关（2026-08-28 实测
+# 报 "no API key for provider route deepseek-official" 后补）。
+- id: llm-deepseek
+  config:
+    apiKeyEnv: LLM_API_KEY
+    baseURL: !!js process.env.LLM_BASE_URL
+    models:
+      - id: !!js process.env.LLM_MODEL_ID
+        name: HPC LLM
+        contextWindow: 128000
+
 - insert:
     - id: mat-tools
       name: '~/mat-harness/mat-dsh/packages/mat-tools/src/index.ts'
