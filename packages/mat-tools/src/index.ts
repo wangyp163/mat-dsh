@@ -32,7 +32,9 @@ export function apply(ctx: Context): void {
       'or stdout/stderr/exitCode when the command fails. ' +
       'Long-running compute (Gaussian, VASP, and similar) must run through Slurm: ' +
       'use mat_exec to inspect the environment (module avail, sinfo), write input files, ' +
-      'submit with sbatch, and poll with squeue/sacct — never run the compute synchronously.',
+      'submit with sbatch, and poll with squeue/sacct — never run the compute synchronously. ' +
+      'For Gaussian 16 calculations, load the gaussian-calc skill first (skill tool) and follow ' +
+      'its environment gate and workflow instead of searching the cluster for software yourself.',
   })
 
   ctx.tools.register(defineTool({

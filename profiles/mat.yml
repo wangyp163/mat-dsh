@@ -38,3 +38,10 @@
 - insert:
     - id: mat-tools
       name: '~/mat-harness/mat-dsh/packages/mat-tools/src/index.ts'
+
+# 本仓库 skills/ 目录进模型技能目录（gaussian-calc 等；dsh-skill-filesystem 只扫
+# 项目 .dsh/skills、$DSH_HOME/skills 等固定根，本目录不在其默认扫描范围）。
+- id: skill-filesystem
+  config:
+    customSkillDirs:
+      - ~/mat-harness/mat-dsh/skills
