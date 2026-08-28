@@ -7,16 +7,20 @@ import type {} from '@deepseek-ai/dsh-jobs'
 import { MatClient, createWatchLoop, outputText } from 'mat-core'
 import {
   SINFO_COMMAND,
+  createGaussianProducerHooks,
   parseSbatchSubmission,
   parseSinfoOutput,
   queryJobStatus,
+  runGaussianSync,
   sbatchCommand,
   scancelCommand,
 } from 'mat-core'
+import type { GaussianOptions } from 'mat-core'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
     'mat-watch': 'mat-watch'
+    'mat-slurm': 'mat-slurm'
   }
 }
 
@@ -41,6 +45,21 @@ function newWatchClient(): MatClient {
   })
 }
 
+/** mat_gaussian 的 options 透传（工具面 snake_case → 库面 camelCase）。 */
+function gaussianOptions(raw: unknown): GaussianOptions {
+  const o = (raw ?? {}) as Record<string, unknown>
+  const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === 'object' && v !== null && !Array.isArray(v)
+  return {
+    ...isPlainObject(o.pre_json) ? { preJson: o.pre_json } : {},
+    ...isPlainObject(o.run_json) ? { runJson: o.run_json } : {},
+    ...typeof o.workflow_env === 'string' ? { workflowEnv: o.workflow_env } : {},
+    ...typeof o.g16_env === 'string' ? { g16Env: o.g16_env } : {},
+    ...typeof o.poll_seconds === 'number' ? { pollSeconds: o.poll_seconds } : {},
+    ...typeof o.max_wait_seconds === 'number' ? { maxWaitSeconds: o.max_wait_seconds } : {},
+  }
+}
+
 export function apply(ctx: Context): void {
   // 工具引导段（宿主约定：tool guidance 槽位 100–199）——让模型第一时间知道
   // HPC 计算套件的存在、适用场景与 Slurm 工作流，而不是只靠工具 schema 自行发现。
@@ -62,7 +81,10 @@ export function apply(ctx: Context): void {
       'asynchronous batch monitoring instead of polling squeue/sacct yourself; ' +
       'you will receive an in-session completion notice, then read the per-job final table with job_output. ' +
       'For Gaussian 16 calculations, load the gaussian-calc skill first (skill tool) and follow ' +
-      'its environment gate and workflow instead of searching the cluster for software yourself.',
+      'its environment gate and workflow instead of searching the cluster for software yourself. ' +
+      'When all calculation options are already known, prefer the one-shot mat_gaussian tool: ' +
+      'it prepares inputs, runs pre/run, submits, and a background producer runs the post phase ' +
+      'automatically at terminal state — properties arrive via job_output after the completion notice.',
   })
 
   ctx.tools.register(defineTool({
@@ -244,6 +266,79 @@ export function apply(ctx: Context): void {
         `watching ${jobIds.length} Slurm job(s) on ${args.cluster_id}: ${jobIds.join(', ')}`,
         `background job ${id} registered; completion notice will arrive in-session.`,
         `Read incremental status with job_output; cancel monitoring with job_kill (the jobs themselves keep running).`,
+      ].join(' ')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'mat_gaussian',
+    description:
+      'One-stop Gaussian workflow on an HPC cluster: writes inputs (molecule.xyz / pre.json / run.json / post.json), ' +
+      'runs the pre and run phases, submits via sbatch, and returns immediately with the slurm job id and a ' +
+      'background job id. The background producer polls sacct server-side (no model requests) and automatically ' +
+      'runs the post phase at terminal state — final properties (energy, converged, frequencies_cm-1, ' +
+      'imaginary_frequency_count) and files are read with job_output after the in-session completion notice. ' +
+      'Defaults: B3LYP/6-31G(d), 32 cores / 64GB, Agent0 partition. Use this for single-shot calculations with ' +
+      'known options; use the gaussian-calc skill flow for interactive or step-by-step work.',
+    parameters: {
+      cluster_id: { type: 'string', required: true, description: 'HPC cluster id, e.g. 11250' },
+      task: { type: 'string', required: true, description: "Gaussian task type, e.g. 'opt', 'freq', 'opt+freq'" },
+      structure: { type: 'string', required: true, description: 'XYZ structure string (atom count line, comment line, then one atom per line)' },
+      workdir: { type: 'string', required: true, description: 'Absolute remote working directory (created if absent)' },
+      partition: { type: 'string', description: 'Slurm partition (default Agent0). Billing-relevant — follow the user\'s explicit instruction.' },
+      options: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Optional passthrough: pre_json, run_json (full phase configs overriding defaults), ' +
+          'workflow_env, g16_env (env script paths), poll_seconds (poll cap, min 10), max_wait_seconds (default 1800)',
+      },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(args, exec) {
+      const jobs = ctx.get('jobs')
+      if (jobs === undefined) {
+        throw new Error('background jobs unavailable: load @deepseek-ai/dsh-jobs and @deepseek-ai/dsh-tool-jobs')
+      }
+      if (!args.task.trim() || !args.structure.trim() || !args.workdir.trim()) {
+        throw new Error('task, structure and workdir must be non-empty')
+      }
+      const options = gaussianOptions(args.options)
+      // 同步段：独立客户端（prepare/pre/run/sbatch 四段往返）
+      const syncClient = newWatchClient()
+      const { slurmJobId } = await runGaussianSync({
+        execCommand: (clusterId, command, timeoutSeconds) => syncClient.execCommand(clusterId, command, timeoutSeconds),
+        clusterId: args.cluster_id,
+        task: args.task.trim(),
+        structure: args.structure,
+        workdir: args.workdir.trim(),
+        ...(args.partition !== undefined && args.partition !== '' ? { partition: args.partition } : {}),
+        options,
+      })
+      // producer：再一个独立客户端（终态后自动 post，与同步段/前台隔离）
+      const producerClient = newWatchClient()
+      const id = jobs.start({
+        kind: 'mat-slurm',
+        label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
+        outputLimitBytes: 8_192,
+        ...exec.agent ? { owner: exec.agent } : {},
+        run: () => createGaussianProducerHooks({
+          execCommand: (clusterId, command, timeoutSeconds) => producerClient.execCommand(clusterId, command, timeoutSeconds),
+          clusterId: args.cluster_id,
+          task: args.task.trim(),
+          workdir: args.workdir.trim(),
+          slurmJobId,
+          ...options.workflowEnv !== undefined ? { workflowEnv: options.workflowEnv } : {},
+          ...options.pollSeconds !== undefined ? { pollSeconds: options.pollSeconds } : {},
+          ...options.maxWaitSeconds !== undefined ? { maxWaitSeconds: options.maxWaitSeconds } : {},
+        }),
+      })
+      return [
+        `gaussian ${args.task.trim()} submitted on ${args.cluster_id}: slurm job ${slurmJobId} (workdir: ${args.workdir.trim()}).`,
+        `background job ${id} registered — the post phase runs automatically at terminal state;`,
+        `a completion notice will arrive in-session, then read properties/files with job_output.`,
       ].join(' ')
     },
   }))
