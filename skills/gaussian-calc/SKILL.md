@@ -49,7 +49,8 @@ aea           绝热电子亲和能（多步）
 所有集群操作统一通过 `mat_exec` 工具完成（在目标集群登录节点执行 shell 命令）。它是 JSON 参数工具，不是 shell 命令：调用形态为 `mat_exec({"cluster_id": "11250", "command": "<shell 命令>", "timeout_seconds": 30})`；下文代码块里的 `command` 值原样传给远端 shell。
 
 - 环境门禁、`bootstrap`、workflow `pre/post`、只读检查：`mat_exec` 直接执行对应命令。
-- 查询集群/队列（sinfo/squeue）、写输入文件（heredoc/cat）、提交 Slurm（sbatch）、监控作业（squeue/sacct）：同样经 `mat_exec`。
+- 查询集群/队列（sinfo）、写输入文件（heredoc/cat）、提交 Slurm（sbatch）：同样经 `mat_exec`。
+- **提交后的作业监控用 `mat_job_watch` 异步批量监控**：一次注册全部 job_id，不要手动 squeue/sacct 轮询（见"提交和监控"节）。
 - 需要读取集群上的文件时：`mat_exec` 执行 `cat`/`tail` 取回内容，不另行下载通道。
 
 HPC 凭据由工具管理，本 skill 不记录密码、AK/SK、服务器地址。
@@ -90,12 +91,13 @@ bash <GAUSSIAN_CALC>/scripts/check_environment.sh
 生产集群的 phase 生命周期由外部作业管理器串联：
 
 ```text
-pre → run → mat_exec 提交/监控 slurm.sh（sbatch / squeue / sacct）→ post
+pre → run → mat_exec 提交（sbatch）→ mat_job_watch 批量异步监控 → post
 ```
 
 - `pre`：读取结构和可选 `pre.json`，生成 Gaussian 输入及 task-local state；不提交作业，也不报告最终物性。
 - `run`：读取 state 与可选 `run.json`，仅生成或更新 `slurm.sh`；**不在登录节点执行 `g16`**。
-- `mat_exec`：提交（sbatch）并监控（squeue/sacct）已生成的 Slurm 脚本。
+- `mat_exec`：提交（sbatch）已生成的 Slurm 脚本；集群检查、文件操作也经它。
+- `mat_job_watch`：把本轮全部 job_id **一次**注册为后台批量监控（服务端自适应轮询 sacct，无模型请求），全终态后收到会内完成通知。
 - `post`：验证 Gaussian 正常终止和任务所需收敛，解析完成的输出并返回结构化结果。
 
 Slurm 脚本中的计算命令仍是：
@@ -293,7 +295,7 @@ resources.ncores <= slurm.ntasks_per_node
 resources.memory <= slurm.mem
 ```
 
-`run` 只生成或更新当前可执行步骤的 `slurm.sh`，绝不执行本地 `g16`；随后必须由 `mat_exec` 提交（sbatch）和监控（squeue/sacct）。`aea` 保留分波生成的专用行为：优化完成后再次调用 `pre`/`run` 生成后续 SCF 步骤。
+`run` 只生成或更新当前可执行步骤的 `slurm.sh`，绝不执行本地 `g16`；随后由 `mat_exec` 提交（sbatch），再由 `mat_job_watch` 异步批量监控到终态。`aea` 保留分波生成的专用行为：优化完成后再次调用 `pre`/`run` 生成后续 SCF 步骤。
 
 ### post.json：空对象
 
@@ -307,7 +309,7 @@ resources.memory <= slurm.mem
 
 ## Slurm 产物契约
 
-`run` 阶段读取 `run.json` 的 `slurm` 字段和 `GAUSSIAN_ENV_SCRIPT` 环境变量，渲染或更新 `slurm.sh`，脚本内的计算命令恒为 `g16 < input > log`。**`run` 不执行 `g16`，也不提交作业**；它的唯一产物是 `slurm.sh` 文件，提交与监控由 `mat_exec` 完成（sbatch 提交、squeue/sacct 监控）。
+`run` 阶段读取 `run.json` 的 `slurm` 字段和 `GAUSSIAN_ENV_SCRIPT` 环境变量，渲染或更新 `slurm.sh`，脚本内的计算命令恒为 `g16 < input > log`。**`run` 不执行 `g16`，也不提交作业**；它的唯一产物是 `slurm.sh` 文件，提交由 `mat_exec` 完成（sbatch），监控由 `mat_job_watch` 完成（异步批量）。
 
 `run` 一次产出 `slurm.sh` 的份数取决于 task 形态，agent 据此决定提交次数：
 
@@ -348,7 +350,7 @@ Gaussian 在同一作业内优化收敛后自动接频率分析（route `opt fre
 
 ## HPC 完整执行链路
 
-完整链路：**上传 → pre → run（生成 slurm.sh）→ 提交 → 监控 → post → 下载**。其中 bootstrap、pre/run/post 与只读核查均经 `mat_exec` 执行业务命令；查询集群/队列、上传文件（heredoc 写入）、提交作业（sbatch）、监控作业（squeue/sacct）同样经 `mat_exec`。**HPC 凭据由 mat_exec 自管，本 skill 不写死任何 AK/SK/用户名/服务器地址。**
+完整链路：**上传 → pre → run（生成 slurm.sh）→ sbatch 提交 → mat_job_watch 异步批量监控 → post → 下载**。其中 bootstrap、pre/run/post 与只读核查均经 `mat_exec` 执行业务命令；查询集群/队列、上传文件（heredoc 写入）、提交作业（sbatch）同样经 `mat_exec`，作业监控经 `mat_job_watch`（完成通知到达前不手动轮询）。**HPC 凭据由 mat_exec 自管，本 skill 不写死任何 AK/SK/用户名/服务器地址。**
 
 ### 约定
 
@@ -456,24 +458,39 @@ mat_exec({"cluster_id": "{cluster_id}", "command": 'cd "{work_dir}" && source "$
 
 产物份数见"Slurm 产物契约"：单步一份 `{work_dir}/opt/slurm.sh`；组合/AEA 每个**已就绪子目录**各一份。提交前先 `find "{work_dir}/<task>" -maxdepth 2 -name slurm.sh`，脚本数即提交次数；不要在登录节点手动跑 `g16` 或改写脚本。
 
-### 4. 提交和监控（经 `mat_exec`）
+### 4. 提交（mat_exec）与监控（mat_job_watch）
 
-对每份新生成的 `slurm.sh` 各提交一次：
+对每份新生成的 `slurm.sh` 各提交一次，收集返回的 `<job_id>`（从 stdout 解析，通常格式为 `Submitted batch job <job_id>`）：
 
 ```bash
 mat_exec({"cluster_id": "{cluster_id}", "command": 'cd {work_dir}/opt && sbatch slurm.sh', "timeout_seconds": 60})
 ```
 
-保存返回的 `<job_id>`（从 stdout 解析，通常格式为 `Submitted batch job <job_id>`），然后监控：
+**全部提交完后，把本轮所有 job_id 一次性注册异步批量监控**（多目录组合/AEA 也只此一个后台作业）：
 
-```bash
-# 作业在队列中时用 squeue
-mat_exec({"cluster_id": "{cluster_id}", "command": "squeue -j <job_id> -o '%T %M %l'", "timeout_seconds": 30})
-# 作业离队后用 sacct 查看最终状态
-mat_exec({"cluster_id": "{cluster_id}", "command": "sacct -j <job_id> -o 'JobID,State,ExitCode'", "timeout_seconds": 30})
+```json
+mat_job_watch({"cluster_id": "{cluster_id}", "job_ids": ["<job_id_1>", "<job_id_2>"]})
 ```
 
-**只有作业完成后才执行 post。** 失败、取消或超时先经 `mat_exec` 查 log（`grep "Normal termination"`），不要直接重提。
+立即返回 `background job mat-watch-N`。此后**不要手动 squeue/sacct 轮询**：服务端按自适应间隔（10–300s）批量 sacct，无模型请求；全部作业到终态后，会话内自动收到完成通知（`background job mat-watch-N (kind: ...) finished [status: completed]`）。
+
+等待方式二选一：
+
+1. **默认**：注册后直接做别的事或结束当前轮次，等完成通知唤醒会话；
+2. **必须就地等**（如 headless 单轮会话）：`job_output({"job_id": "mat-watch-N", "wait": true, "timeout_ms": 600000})` 阻塞至多 10 分钟；未终态可再调一次。
+
+收到通知后读逐作业终态表（含每作业 `State exit elapsed` 与 `N/M settled (...)` 汇总行）：
+
+```json
+job_output({"job_id": "mat-watch-N"})
+```
+
+规则与边界：
+
+- **只有全部作业终态后才执行 post。** 表里有 FAILED/CANCELLED/TIMEOUT 时先经 `mat_exec` 查 log（`grep "Normal termination"`），不要直接重提。
+- `job_kill` 只取消**监控**，不会取消集群作业本身；要终止作业必须显式 `mat_exec` 执行 `scancel <job_id>`。
+- `max_wait_seconds`（默认 86400）到点仍未全终态时监控按 `max-wait exceeded; still active: ...` 正常结束——再调一次 `mat_job_watch` 续盯即可，不是错误。
+- 同一会话连续 3 次自动唤醒后，后续完成通知会转为注入（不再新开轮次）；收尾前用 `job_list` / `job_output` 对账一次。
 
 ### 5. 远程执行 post（经 `mat_exec`）
 
