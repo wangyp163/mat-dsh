@@ -12,11 +12,16 @@
         baseURL: !!js process.env.LLM_BASE_URL
         compat:
           thinkingFormat: deepseek
+        # 路由级默认推理等级（adapter: options.reasoningEffort ?? profile.reasoning）
+        reasoning: high
+        # 双模型显式目录：名称可区分；上下文窗口 1M（插件默认仅 262144，须显式声明）
         models:
-          - id: !!js process.env.LLM_MODEL_ID
-            name: HPC LLM
-            contextWindow: 128000
-            maxTokens: 8192
+          - id: deepseek-v4-pro
+            name: DeepSeek-V4-Pro
+            contextWindow: 1000000
+          - id: deepseek-v4-flash
+            name: DeepSeek-V4-Flash
+            contextWindow: 1000000
 
 - id: agent-default-model
   config:
@@ -26,14 +31,13 @@
 # web 客户端（模型选择/会话初始化）引用 llm-deepseek 独占注册的 "deepseek-official"
 # 路由 id，绕过 agent-default-model——把该路由本身也指到 HPC 网关（2026-08-28 实测
 # 报 "no API key for provider route deepseek-official" 后补）。
+# 不要覆写 models：插件默认目录本就是 v4-flash + v4-pro 双模型（名称可区分、
+# 上下文窗口默认 1M）——此前覆写成单条 "HPC LLM" 才导致两模型无法区分。
 - id: llm-deepseek
   config:
     apiKeyEnv: LLM_API_KEY
     baseURL: !!js process.env.LLM_BASE_URL
-    models:
-      - id: !!js process.env.LLM_MODEL_ID
-        name: HPC LLM
-        contextWindow: 128000
+    reasoningEffort: high
 
 - insert:
     - id: mat-tools
