@@ -10,7 +10,8 @@ import { outputText } from './client'
 import type { ExecCommandFn } from './slurm'
 import { parseSbatchSubmission } from './slurm'
 import { createWatchLoop } from './watch-loop'
-import type { WatchLoopHooks } from './watch-loop'
+import type { SlurmJobInfo } from './job-state'
+import type { WatchLoopHooks, WatchOutcome } from './watch-loop'
 
 export const DEFAULT_WORKFLOW_ENV = '$HOME/workspace/demo/env.sh'
 export const DEFAULT_G16_ENV = '$HOME/workspace/g16-hy/scripts/env.sh'
@@ -148,6 +149,11 @@ function propertiesSummary(task: string, properties: Record<string, unknown>): s
   return `; ${task}${parts.length > 0 ? ` ${parts.join(' ')}` : ''}`
 }
 
+export interface GaussianProducerResult extends WatchOutcome {
+  properties?: Record<string, unknown>
+  files?: string[]
+}
+
 export interface GaussianProducerInput {
   /** producer 专属远程执行（独立 MatClient，与同步段/前台隔离）。 */
   execCommand: ExecCommandFn
@@ -158,6 +164,10 @@ export interface GaussianProducerInput {
   workflowEnv?: string
   pollSeconds?: number
   maxWaitSeconds?: number
+  /** 每个成功 sacct 回合后触发，用于实时状态板。 */
+  onTick?: (states: ReadonlyMap<string, SlurmJobInfo>) => void
+  /** producer 结算后触发；post 成功时携带结构化物性与文件。 */
+  onResult?: (result: GaussianProducerResult) => void
 }
 
 /**
@@ -179,7 +189,9 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
     }
   }
 
-  return createWatchLoop({
+  let resultProperties: Record<string, unknown> | undefined
+  let resultFiles: string[] | undefined
+  const loop = createWatchLoop({
     clusterId,
     jobIds: [slurmJobId],
     maxWaitMs: (input.maxWaitSeconds ?? 1_800) * 1_000,
@@ -187,6 +199,7 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
     execCommand,
     scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
     clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    ...(input.onTick !== undefined ? { onTick: input.onTick } : {}),
     onAllSettled: async (states) => {
       const state = states.get(slurmJobId)?.state ?? 'UNKNOWN'
       if (state !== 'COMPLETED') {
@@ -199,6 +212,8 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
       try {
         const r = await execCommand(clusterId, postPhaseCommand(workdir, task, workflowEnv), 60)
         const { properties, files } = parsePostOutput(outputText(r))
+        resultProperties = properties
+        resultFiles = files
         return {
           detailSuffix: propertiesSummary(task, properties),
           extraLines: [
@@ -221,6 +236,16 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
       }
     },
   })
+  if (input.onResult !== undefined) {
+    void loop.done.then((outcome) => {
+      input.onResult?.({
+        ...outcome,
+        properties: resultProperties,
+        files: resultFiles,
+      })
+    })
+  }
+  return loop
 }
 
 /**

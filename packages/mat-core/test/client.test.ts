@@ -66,8 +66,13 @@ it('三次皆失败 → MatExecError.cause 保留末次原始错误', async () =
 })
 
 it('未提供 mcp_key → 构造/调用时报凭证错误', async () => {
-  const c = new MatClient({ mcpKey: '' })
-  await expect(c.execCommand('11250', 'hostname', 30)).rejects.toThrow(/MAT_MCP_KEY/)
+  vi.stubEnv('MAT_MCP_KEY', '')
+  try {
+    const c = new MatClient({ mcpKey: '' })
+    await expect(c.execCommand('11250', 'hostname', 30)).rejects.toThrow(/MAT_MCP_KEY/)
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })
 
 it('transportKind fetch → 走 FetchMcpTransport（注入 fetchImpl 离线验证）', async () => {

@@ -322,3 +322,98 @@ describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {
     expect(commands.some((c) => c.includes('-p post'))).toBe(false)
   })
 })
+
+describe('producer 状态板喂料（onTick / onResult）', () => {
+  const row = (id: string, state: string, exit = '0:0', elapsed = '0') => `${id}|${state}|${exit}|${elapsed}\n`
+
+  function makeProducer(
+    script: Array<{ out?: string; rcFail?: boolean; throw?: string }>,
+    opts: {
+      maxWaitSeconds?: number
+      onTick?: (states: ReadonlyMap<string, import('../src/job-state').SlurmJobInfo>) => void
+      onResult?: (result: import('../src/gaussian').GaussianProducerResult) => void
+    } = {},
+  ) {
+    let i = 0
+    const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
+      void command
+      const step = script[Math.min(i++, script.length - 1)]
+      if (step.throw !== undefined) throw new Error(step.throw)
+      if (step.rcFail) return { code: 10020, data: { stdout: '', stderr: 'boom', exitCode: 1 }, message: 'remote fail' }
+      return { code: 0, data: step.out ?? '', message: 'success' }
+    }
+    const hooks = createGaussianProducerHooks({
+      execCommand,
+      clusterId: '11250',
+      task: 'opt+freq',
+      workdir: '/home/u/w',
+      slurmJobId: '700',
+      ...(opts.maxWaitSeconds !== undefined ? { maxWaitSeconds: opts.maxWaitSeconds } : {}),
+      ...(opts.onTick !== undefined ? { onTick: opts.onTick } : {}),
+      ...(opts.onResult !== undefined ? { onResult: opts.onResult } : {}),
+    })
+    return { hooks }
+  }
+
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+  const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms)
+
+  it('onTick 透传内层 watch：每成功轮触发，结算轮含终态', async () => {
+    const ticks: string[] = []
+    const { hooks } = makeProducer(
+      [{ out: row('700', 'RUNNING') }, { out: row('700', 'COMPLETED', '0:0', '30') }, { out: POST_OK_OUTPUT }],
+      { onTick: (states) => { ticks.push(states.get('700')?.state ?? 'MISSING') } },
+    )
+    await advance(0)
+    expect(ticks).toEqual(['RUNNING'])
+    await advance(10_000)
+    await hooks.done
+    expect(ticks).toEqual(['RUNNING', 'COMPLETED'])
+  })
+
+  it('onResult：COMPLETED+post 成功 → status/detail + properties/files（板终态喂料）', async () => {
+    const results: Array<import('../src/gaussian').GaussianProducerResult> = []
+    const { hooks } = makeProducer(
+      [{ out: row('700', 'RUNNING') }, { out: row('700', 'COMPLETED', '0:0', '30') }, { out: POST_OK_OUTPUT }],
+      { onResult: (r) => { results.push(r) } },
+    )
+    await advance(0)
+    await advance(10_000)
+    await hooks.done
+    expect(results).toEqual([{
+      status: 'completed',
+      detail: '1/1 settled (1 COMPLETED); opt+freq E=-76.408954 converged=true imag=0',
+      properties: { energy: -76.408954, converged: true, 'frequencies_cm-1': [1713.13, 3727.17, 3849.10], imaginary_frequency_count: 0 },
+      files: ['g16_optimized.xyz', 'job.log'],
+    }])
+  })
+
+  it('onResult：FAILED 跳过 post → 无 properties/files，detail 标注', async () => {
+    const results: Array<import('../src/gaussian').GaussianProducerResult> = []
+    const { hooks } = makeProducer(
+      [{ out: row('700', 'FAILED', '1:0', '30') }, { out: 'Error termination via Lnk1e\n' }],
+      { onResult: (r) => { results.push(r) } },
+    )
+    await advance(0)
+    await hooks.done
+    expect(results).toEqual([{
+      status: 'completed',
+      detail: '1/1 settled (1 FAILED); opt+freq FAILED, post skipped',
+      properties: undefined,
+      files: undefined,
+    }])
+  })
+
+  it('onResult：cancel 路径也触发（status=killed，无物性）', async () => {
+    const results: Array<import('../src/gaussian').GaussianProducerResult> = []
+    const { hooks } = makeProducer(
+      [{ out: row('700', 'RUNNING') }],
+      { onResult: (r) => { results.push(r) } },
+    )
+    await advance(0)
+    hooks.cancel('user asked')
+    await hooks.done
+    expect(results).toEqual([{ status: 'killed', detail: 'user asked', properties: undefined, files: undefined }])
+  })
+})

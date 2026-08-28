@@ -17,6 +17,8 @@ import {
 } from 'mat-core'
 import type { GaussianOptions } from 'mat-core'
 import { EfileClient, TokenClient } from 'mat-core'
+import { createStatusBoard } from 'mat-core'
+import type { GaussianProducerResult, SlurmJobInfo, StatusBoard } from 'mat-core'
 import { resolveEfileCredentials } from './efile-env'
 
 declare module '@deepseek-ai/dsh-jobs' {
@@ -28,6 +30,30 @@ declare module '@deepseek-ai/dsh-jobs' {
 
 export const name = 'mat-tools'
 export const inject = ['tools', 'systemPrompt']
+
+/** sacct Map → 状态板 JSON-safe 投影。 */
+function statusSlurm(states: ReadonlyMap<string, SlurmJobInfo>) {
+  return [...states.values()].map((info) => ({
+    id: info.jobId,
+    state: info.state,
+    ...(info.exitCode !== undefined ? { exitCode: info.exitCode } : {}),
+    ...(info.elapsedSeconds !== undefined ? { elapsedSeconds: info.elapsedSeconds } : {}),
+  }))
+}
+
+/** producer done 的公共结算桥；状态板异常不连坐宿主后台作业。 */
+function settleBoard(board: StatusBoard, jobId: string, result: GaussianProducerResult): void {
+  try {
+    board.settle(jobId, {
+      outcomeStatus: result.status,
+      ...(result.detail !== undefined ? { detail: result.detail } : {}),
+      ...(result.properties !== undefined ? { properties: result.properties } : {}),
+      ...(result.files !== undefined ? { files: result.files } : {}),
+    })
+  } catch {
+    // UI 状态通道是旁路，不能影响 JobHooks 的完成语义。
+  }
+}
 
 let client: MatClient | undefined
 
@@ -82,6 +108,9 @@ function gaussianOptions(raw: unknown): GaussianOptions {
 }
 
 export function apply(ctx: Context): void {
+  const statusBoard = createStatusBoard()
+  ctx.provide('mat.status', statusBoard)
+
   // 工具引导段（宿主约定：tool guidance 槽位 100–199）——让模型第一时间知道
   // HPC 计算套件的存在、适用场景与 Slurm 工作流，而不是只靠工具 schema 自行发现。
   ctx.systemPrompt.section({
@@ -275,15 +304,28 @@ export function apply(ctx: Context): void {
         label: `${args.cluster_id} ×${jobIds.length} jobs`,
         outputLimitBytes: 4_096,
         ...exec.agent ? { owner: exec.agent } : {},
-        run: () => createWatchLoop({
-          clusterId: args.cluster_id,
-          jobIds,
-          maxWaitMs,
-          ...(pollSeconds !== undefined ? { maxPollMs: pollSeconds * 1_000 } : {}),
-          execCommand: (clusterId, command, timeoutSeconds) => watchClient.execCommand(clusterId, command, timeoutSeconds),
-          scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
-          clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
-        }),
+        run: () => {
+          const loop = createWatchLoop({
+            clusterId: args.cluster_id,
+            jobIds,
+            maxWaitMs,
+            ...(pollSeconds !== undefined ? { maxPollMs: pollSeconds * 1_000 } : {}),
+            onTick: (states) => {
+              try {
+                statusBoard.upsert(id, {
+                  kind: 'mat-watch', label: `${args.cluster_id} ×${jobIds.length} jobs`,
+                  clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+                  slurm: statusSlurm(states),
+                })
+              } catch { /* 状态板旁路故障不影响监控 */ }
+            },
+            execCommand: (clusterId, command, timeoutSeconds) => watchClient.execCommand(clusterId, command, timeoutSeconds),
+            scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+            clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+          })
+          void loop.done.then((result) => settleBoard(statusBoard, id, result))
+          return loop
+        },
       })
       return [
         `watching ${jobIds.length} Slurm job(s) on ${args.cluster_id}: ${jobIds.join(', ')}`,
@@ -356,6 +398,16 @@ export function apply(ctx: Context): void {
           ...options.workflowEnv !== undefined ? { workflowEnv: options.workflowEnv } : {},
           ...options.pollSeconds !== undefined ? { pollSeconds: options.pollSeconds } : {},
           ...options.maxWaitSeconds !== undefined ? { maxWaitSeconds: options.maxWaitSeconds } : {},
+          onTick: (states) => {
+            try {
+              statusBoard.upsert(id, {
+                kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
+                clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+                task: args.task.trim(), workdir: args.workdir.trim(), slurm: statusSlurm(states),
+              })
+            } catch { /* 状态板旁路故障不影响 producer */ }
+          },
+          onResult: (result) => settleBoard(statusBoard, id, result),
         }),
       })
       return [
