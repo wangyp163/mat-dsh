@@ -15,7 +15,7 @@
 | `sbatch-ok.envelope.json` | format-probe §"sbatch（Agent0）" MCP 业务信封（code/data/message）逐字转录 |
 | `squeue-empty.envelope.json` | format-probe §"squeue 对该 RUNNING 作业返回空"（本集群 squeue 对 RUNNING 常空 → sacct 兜底的实证依据） |
 | `squeue-invalid-10020.envelope.json` | format-probe §"squeue 全部 id 不存在"（code 10020 + slurm_load_jobs error） |
-| `sinfo-5col.txt` | **synthetic**：行数据来自 format-probe §"sinfo" 的真实 `%P %a %l %D %t %N` 宽格式输出（kshctest 283 alloc / kshdtest 69 alloc+2 idle / kshdAI 35 / kshdsctest 23 / Agent0 20 idle），转置为本工具 5 列管道格式；`Agent0*` 的 `*` 保留用于剥离断言。**待 Step 7 实弹录制 `sinfo -o '%P|%a|%l|%D|%t'` 原始输出回填** |
+| `sinfo-5col.txt` | **真实录制**（M2 探针，2026-08-28，cluster 11250）：`sinfo -o '%P|%a|%l|%D|%t' | tail -n +2` 原始输出，16 行（同名分区多状态行：drain*/drng/mix/alloc/idle） |
 
 ### 录制格式说明（5 列 → 生产 4 列）
 
@@ -38,11 +38,28 @@ token 值为占位（synthetic-token-*）。**凭证到位实弹后回填真实�
 | `upload-error.json` | upload `code!=='0'` → msg |
 | `download-error.json` | download JSON 错误体（Content-Type application/json 分支） |
 
-## gaussian/ 与 exec/（待 Step 7 回填）
+## gaussian/（真实录制：M2 探针，2026-08-28，cluster 11250，水 opt+freq B3LYP/6-31G(d)）
 
-- `gaussian/`：pre_ok / MISSING / run_ok / post_ok（含 properties 行）——首次 mat_gaussian
-  实弹时录制原始 stdout 回填。
-- `exec/`：MCP SSE 报文（initialize / tools/call ok / code 10020）——tsx 探针录制
-  （M0 task12 只留存了 initialize 截断行，不足以作 verbatim fixture）。
+`scripts/probe-m2.ts`（MAT_TRANSPORT=fetch，MatClient 直连，零模型 token）录制，
+workdir `/public/home/hpc-user-a/workspace/h2o-m2-probe`，slurm job 120283614（Agent0，elapsed 13s）。
+基准值交叉验证（Python 时代实测）：E=-76.4089539792 vs -76.408954、
+freqs=[1713.1206, 3727.1534, 3849.0866] vs [1713.13, 3727.17, 3849.10]、imag=0。
 
-回填后在本文件补表，并在对应回放测试解除 skip / 替换 synthetic 断言。
+| fixture | 来源 |
+|---|---|
+| `pre-ok.stdout.txt` | `gaussian-workflow -t opt+freq -p pre` 原始 stdout（环境加载行 + 单行 calcflow.result.v1） |
+| `run-ok.stdout.txt` | `-p run` 原始 stdout（slurm 块回显 Agent0/1/32/00:30:00/64GB） |
+| `post-ok.stdout.txt` | `-p post` 原始 stdout（properties 含 energy/frequencies_cm-1/imaginary_frequency_count；files 绝对路径） |
+
+## exec/（真实录制：M2 探针，2026-08-28）
+
+MCP 业务信封（remote_shell_execute 返回的 code/data/message 原样；SSE 层解析由
+curl.test.ts / fetch-transport.test.ts 单测覆盖，信封层即 ExecResult 契约）。
+
+| fixture | 来源 |
+|---|---|
+| `sbatch-ok.envelope.json` | `cd /tmp && sbatch -p Agent0 --wrap='sleep 30' -J m2-probe` → job 120283480 |
+| `squeue-pending.envelope.json` | `squeue -j 120283480 -h -o '%T'` → PENDING（本集群 squeue 对 PENDING 可见、RUNNING 常空的补充实证） |
+
+探针顺带实证：scancel 后 queryJobStatus 返回 `COMPLETING`（sacct 过渡态，squeue 不可见）——
+单作业查询工具原样透传该串，归一判定只用于批量 watch。

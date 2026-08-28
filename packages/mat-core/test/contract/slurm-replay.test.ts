@@ -129,12 +129,17 @@ describe('契约回放：sbatch / sinfo', () => {
     expect(parseSbatchSubmission(outputText(envelope('slurm/sbatch-ok.envelope.json')))).toBe('120269511')
   })
 
-  it('sinfo 5 列（synthetic，Step 7 回填真实）：默认分区 * 剥离、行数保序', () => {
+  it('sinfo 5 列（真实录制，探针 2026-08-28）：16 行保序、状态集齐全、Agent0 idle', () => {
     const partitions = parseSinfoOutput(fx('slurm/sinfo-5col.txt'))
-    expect(partitions.map((p) => p.partition)).toEqual([
-      'kshctest', 'kshdtest', 'kshdtest', 'kshdAI', 'kshdsctest', 'Agent0',
-    ])
-    expect(partitions.at(-1)).toEqual({ partition: 'Agent0', avail: 'up', timelimit: '1-00:00:00', nodes: '20', state: 'idle' })
-    expect(partitions[0]).toMatchObject({ nodes: '283', state: 'alloc' })
+    expect(partitions).toHaveLength(16)
+    expect(partitions.at(-1)).toEqual({
+      partition: 'Agent0', avail: 'up', timelimit: '1-00:00:00', nodes: '20', state: 'idle',
+    })
+    // 真实集群同时存在 drain*/drng/mix/alloc/idle 多态行；同名分区多行保序
+    expect(partitions.filter((p) => p.partition === 'kshdtest').map((p) => p.state))
+      .toEqual(['drain*', 'drng', 'mix', 'alloc', 'idle'])
+    expect(partitions[0]).toEqual({
+      partition: 'kshctest', avail: 'up', timelimit: '3-00:00:00', nodes: '2', state: 'drain*',
+    })
   })
 })
