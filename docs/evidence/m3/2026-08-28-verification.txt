@@ -1,0 +1,41 @@
+$ pnpm build:mat-ui
+
+> mat-dsh@0.1.0 build:mat-ui ~/mat-harness/mat-dsh
+> node scripts/build-mat-ui.mjs
+
+built ~/mat-harness/mat-dsh/packages/mat-ui/lib/client.js
+$ pnpm typecheck
+
+> mat-dsh@0.1.0 typecheck ~/mat-harness/mat-dsh
+> tsc -b && tsc --noEmit -p scripts
+
+$ pnpm vitest run
+
+ RUN  v3.2.7 ~/mat-harness/mat-dsh
+
+ ✓ packages/mat-core/test/status-board.test.ts (8 tests) 13ms
+ ✓ packages/mat-core/test/slurm.test.ts (16 tests) 19ms
+ ✓ packages/mat-core/test/runner.test.ts (5 tests) 25ms
+ ✓ packages/mat-core/test/curl.test.ts (9 tests) 22ms
+ ✓ packages/mat-core/test/fetch-transport.test.ts (6 tests) 48ms
+ ✓ packages/mat-core/test/transport.test.ts (6 tests) 54ms
+ ✓ packages/mat-core/test/efile.test.ts (10 tests) 57ms
+ ✓ packages/mat-core/test/client.test.ts (8 tests) 42ms
+ ✓ packages/mat-core/test/token.test.ts (7 tests) 27ms
+ ✓ packages/mat-core/test/watch-loop.test.ts (19 tests) 83ms
+ ✓ packages/mat-core/test/contract/gaussian-replay.test.ts (4 tests) 29ms
+ ✓ packages/mat-core/test/contract/slurm-replay.test.ts (11 tests) 104ms
+ ✓ packages/mat-core/test/gaussian.test.ts (27 tests) 160ms
+ ✓ packages/mat-core/test/contract/efile-replay.test.ts (4 tests) 55ms
+ ✓ packages/mat-core/test/job-state.test.ts (13 tests) 13ms
+ ✓ packages/mat-core/test/url.test.ts (3 tests) 10ms
+ ✓ packages/mat-tools/test/efile-env.test.ts (3 tests) 8ms
+ ✓ packages/mat-ui/test/route.test.ts (1 test) 6ms
+ ✓ packages/mat-core/test/sanity.test.ts (1 test) 4ms
+ ✓ packages/mat-tools/test/status-wiring.test.ts (4 tests) 61ms
+
+ Test Files  20 passed (20)
+      Tests  165 passed (165)
+   Start at  17:54:03
+   Duration  2.38s (transform 3.26s, setup 0ms, collect 7.14s, tests 839ms, environment 18ms, prepare 7.39s)
+

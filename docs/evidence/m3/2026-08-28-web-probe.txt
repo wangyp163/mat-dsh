@@ -1,0 +1,6 @@
+/ 200 14779 text/html; charset=utf-8
+boot_has_mat_ui= True
+boot_count= 2
+/mat-status/jobs 200 11 application/json; charset=utf-8
+bundle 200 12442 module_loader= 1
+status_json= {"jobs":[]}
