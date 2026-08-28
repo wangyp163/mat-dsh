@@ -49,6 +49,12 @@ importers:
         specifier: ^22
         version: 22.20.1
 
+  packages/mat-ui:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: link:~/mat-harness/deepseek-harness/vendor/cordis
+        version: link:../../../deepseek-harness/vendor/cordis
+
 packages:
 
   '@esbuild/aix-ppc64@0.28.2':
