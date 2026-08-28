@@ -8,6 +8,7 @@
     "@deepseek-ai/cordis": "link:~/mat-harness/deepseek-harness/vendor/cordis",
     "@deepseek-ai/dsh-tools": "link:~/mat-harness/deepseek-harness/packages/core/tools",
     "@deepseek-ai/dsh-system-prompt": "link:~/mat-harness/deepseek-harness/packages/core/system-prompt",
+    "@deepseek-ai/dsh-jobs": "link:~/mat-harness/deepseek-harness/packages/jobs/jobs",
     "mat-core": "workspace:*"
   },
   "devDependencies": {

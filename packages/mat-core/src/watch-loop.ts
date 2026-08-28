@@ -25,6 +25,8 @@ export interface WatchLoopOptions {
   jobIds: string[]
   /** watch 总时限；到点仍未全部终态则按 max-wait 结算（可再 watch）。 */
   maxWaitMs: number
+  /** 轮询间隔上限（毫秒）：自适应档位超出时压到此值；缺省不封顶。 */
+  maxPollMs?: number
   /** 远程执行（通常绑定一个专属 MatClient 实例）。 */
   execCommand: (clusterId: string, command: string, timeoutSeconds?: number) => Promise<ExecResult>
   scheduleTimeout: (callback: () => void, delayMs: number) => unknown
@@ -96,6 +98,12 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
     timer = scheduleTimeout(() => { void tick() }, delayMs)
   }
 
+  /** 下一跳延迟：自适应档位，可被 maxPollMs 封顶。 */
+  function nextDelay(): number {
+    const adaptive = nextPollDelayMs(Date.now() - startedAt)
+    return options.maxPollMs !== undefined ? Math.min(adaptive, options.maxPollMs) : adaptive
+  }
+
   function settle(outcome: WatchOutcome, flushSummary: boolean): void {
     if (settled) return
     settled = true
@@ -141,7 +149,7 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
         settle({ status: 'failed', detail: `poll failed ${MAX_CONSECUTIVE_ERRORS} consecutive times: ${message}` }, true)
         return
       }
-      schedule(nextPollDelayMs(Date.now() - startedAt))
+      schedule(nextDelay())
       return
     }
 
@@ -160,7 +168,7 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
       settle({ status: 'completed', detail: summaryLine() }, true)
       return
     }
-    schedule(nextPollDelayMs(Date.now() - startedAt))
+    schedule(nextDelay())
   }
 
   schedule(0)

@@ -26,13 +26,14 @@ const row = (id: string, state: string, exit = '0:0', elapsed = '0') => `${id}|$
 function makeLoop(
   script: Array<{ out?: string; rcFail?: boolean; throw?: string }>,
   jobIds: string[],
-  opts: { maxWaitMs?: number } = {},
+  opts: { maxWaitMs?: number; maxPollMs?: number } = {},
 ) {
   const fake = fakeExec(script)
   const loop = createWatchLoop({
     clusterId: '11250',
     jobIds,
     maxWaitMs: opts.maxWaitMs ?? 86_400_000,
+    ...(opts.maxPollMs !== undefined ? { maxPollMs: opts.maxPollMs } : {}),
     execCommand: fake.execCommand,
     scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
     clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
@@ -195,6 +196,14 @@ describe('createWatchLoop', () => {
     expect(fake.commands.length).toBe(7)
     await advance(1_000) // t=120s
     expect(fake.commands.length).toBe(8)
+  })
+
+  it('maxPollMs 封顶：elapsed 超过 1800s 后，300s 自适应档被压到 60s', async () => {
+    const { fake } = makeLoop([{ out: row('100', 'RUNNING') }], ['100'], { maxPollMs: 60_000 })
+    await advance(1_800_000) // 快进过全部自适应档（脚本末条 RUNNING 重复消费）
+    const before = fake.commands.length
+    await advance(60_000) // 无封顶时此窗口在 300s 档内，不会有 tick
+    expect(fake.commands.length).toBe(before + 1) // 60s 内必有且仅有一跳
   })
 
   it('新提交作业 sacct 尚无行 → 保持 UNKNOWN，不结算', async () => {
