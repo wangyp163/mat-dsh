@@ -217,3 +217,92 @@ describe('createWatchLoop', () => {
     expect(settled).toBe(false)
   })
 })
+
+describe('onAllSettled 钩子（producer 注入点）', () => {
+  function makeLoopWithHook(
+    script: Array<{ out?: string; rcFail?: boolean; throw?: string }>,
+    hook: NonNullable<Parameters<typeof createWatchLoop>[0]['onAllSettled']>,
+    opts: { maxWaitMs?: number } = {},
+  ) {
+    const fake = fakeExec(script)
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: opts.maxWaitMs ?? 86_400_000,
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+      onAllSettled: hook,
+    })
+    return { loop, fake }
+  }
+
+  it('全部终态触发一次：detailSuffix 进 detail，extraLines 进终态首读', async () => {
+    let calls = 0
+    const seen: string[] = []
+    const { loop } = makeLoopWithHook(
+      [{ out: row('100', 'COMPLETED', '0:0', '26') }],
+      async (states) => {
+        calls += 1
+        for (const [id, info] of states) seen.push(`${id}:${info.state}`)
+        return { detailSuffix: '; opt E=-76.4 imag=0', extraLines: ['slurm_state: COMPLETED', 'properties: {"energy":-76.4}'] }
+      },
+    )
+    await advance(0)
+    const outcome = await loop.done
+    expect(calls).toBe(1)
+    expect(seen).toEqual(['100:COMPLETED'])
+    expect(outcome.status).toBe('completed')
+    expect(outcome.detail).toBe('1/1 settled (1 COMPLETED); opt E=-76.4 imag=0')
+    const finalRead = loop.readOutput()
+    expect(finalRead).toContain('slurm_state: COMPLETED')
+    expect(finalRead).toContain('properties: {"energy":-76.4}')
+    expect(finalRead).toContain('100 COMPLETED exit=0 elapsed=26s')
+  })
+
+  it('钩子抛错 → 吞入 extraLines 不炸结算，状态仍 completed', async () => {
+    const { loop } = makeLoopWithHook(
+      [{ out: row('100', 'COMPLETED') }],
+      async () => { throw new Error('post boom') },
+    )
+    await advance(0)
+    const outcome = await loop.done
+    expect(outcome.status).toBe('completed')
+    expect(outcome.detail).toBe('1/1 settled (1 COMPLETED)')
+    expect(loop.readOutput()).toContain('on-all-settled hook failed: post boom')
+  })
+
+  it('max-wait / cancel / 连续传输异常路径不触发钩子', async () => {
+    const forbidden = async () => { throw new Error('hook must not run on this path') }
+
+    const l1 = makeLoopWithHook([{ out: row('100', 'RUNNING') }], forbidden, { maxWaitMs: 5_000 })
+    await advance(0)
+    await advance(10_000)
+    expect((await l1.loop.done).detail).toContain('max-wait')
+
+    const l2 = makeLoopWithHook([{ out: row('100', 'RUNNING') }], forbidden)
+    await advance(0)
+    l2.loop.cancel('stop')
+    expect((await l2.loop.done).status).toBe('killed')
+
+    const l3 = makeLoopWithHook([{ throw: 'net' }], forbidden)
+    await advance(0)
+    for (let i = 0; i < 4; i += 1) await advance(10_000)
+    expect((await l3.loop.done).status).toBe('failed')
+  })
+
+  it('钩子执行期间被 cancel 先行结算 → 增补结果丢弃，不重复结算', async () => {
+    let releaseHook: (() => void) | undefined
+    const { loop } = makeLoopWithHook(
+      [{ out: row('100', 'COMPLETED') }],
+      () => new Promise((resolve) => { releaseHook = () => resolve({ extraLines: ['late augment'] }) }),
+    )
+    await advance(0)
+    await Promise.resolve() // 进入钩子挂起
+    loop.cancel('user beat the hook')
+    expect((await loop.done).status).toBe('killed')
+    releaseHook?.()
+    await Promise.resolve()
+    expect(loop.readOutput()).not.toContain('late augment')
+  })
+})

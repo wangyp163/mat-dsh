@@ -9,6 +9,8 @@
 import { outputText } from './client'
 import type { ExecCommandFn } from './slurm'
 import { parseSbatchSubmission } from './slurm'
+import { createWatchLoop } from './watch-loop'
+import type { WatchLoopHooks } from './watch-loop'
 
 export const DEFAULT_WORKFLOW_ENV = '$HOME/workspace/demo/env.sh'
 export const DEFAULT_G16_ENV = '$HOME/workspace/g16-hy/scripts/env.sh'
@@ -100,6 +102,125 @@ export interface GaussianSyncResult {
 /** 输出尾行（错误信息携带，便于诊断）。 */
 function tail(text: string, lines = 5): string {
   return text.trim().split('\n').slice(-lines).join('\n')
+}
+
+export function postPhaseCommand(workdir: string, task: string, workflowEnv: string): string {
+  return `cd "${workdir}" && source ${workflowEnv} && ` +
+    `gaussian-workflow -t ${task} -p post -i molecule.xyz -w "${workdir}" --json post.json`
+}
+
+/** 失败诊断：任务目录 job.log 尾行（无日志时兜底占位）。 */
+export function logTailCommand(workdir: string, task: string, lines = 50): string {
+  return `tail -n ${lines} "${workdir}/${task}/job.log" 2>/dev/null || echo '(no job.log found)'`
+}
+
+export interface GaussianPostParseResult {
+  properties: Record<string, unknown>
+  files: string[]
+}
+
+/**
+ * 解析 post 输出：取首个以 `{` 开头且可 JSON.parse 的行的 properties/files
+ * （对齐 plugin.py §751-758，非法 JSON 行继续找）；无 JSON 行抛错带输出尾部。
+ */
+export function parsePostOutput(stdout: string): GaussianPostParseResult {
+  for (const line of stdout.split('\n')) {
+    if (!line.startsWith('{')) continue
+    try {
+      const data = JSON.parse(line) as { properties?: Record<string, unknown>; files?: string[] }
+      return { properties: data.properties ?? {}, files: data.files ?? [] }
+    } catch {
+      // 首个可解析行语义
+    }
+  }
+  throw new Error(`post output has no JSON result line: ${tail(stdout)}`)
+}
+
+/** detail 摘要：能量/收敛/虚频计数（有则列，无则仅任务名）。 */
+function propertiesSummary(task: string, properties: Record<string, unknown>): string {
+  const parts: string[] = []
+  const energy = properties['energy']
+  if (typeof energy === 'number') parts.push(`E=${energy}`)
+  const converged = properties['converged']
+  if (typeof converged === 'boolean') parts.push(`converged=${converged}`)
+  const imag = properties['imaginary_frequency_count']
+  if (typeof imag === 'number') parts.push(`imag=${imag}`)
+  return `; ${task}${parts.length > 0 ? ` ${parts.join(' ')}` : ''}`
+}
+
+export interface GaussianProducerInput {
+  /** producer 专属远程执行（独立 MatClient，与同步段/前台隔离）。 */
+  execCommand: ExecCommandFn
+  clusterId: string
+  task: string
+  workdir: string
+  slurmJobId: string
+  workflowEnv?: string
+  pollSeconds?: number
+  maxWaitSeconds?: number
+}
+
+/**
+ * gaussian 后台 producer（宿主 JobHooks 同形）：sacct 监控至终态后自动执行
+ * post 段并解析物性——COMPLETED → properties/files 进终态首读；
+ * 非 COMPLETED → 跳过 post，log_tail 诊断；post 失败不判作业失败，标注即可。
+ * max-wait/传输异常路径不触发 post（对齐 watch-loop onAllSettled 语义）。
+ */
+export function createGaussianProducerHooks(input: GaussianProducerInput): WatchLoopHooks {
+  const { execCommand, clusterId, task, workdir, slurmJobId } = input
+  const workflowEnv = input.workflowEnv ?? DEFAULT_WORKFLOW_ENV
+
+  async function fetchLogTail(): Promise<string> {
+    try {
+      const r = await execCommand(clusterId, logTailCommand(workdir, task), 30)
+      return outputText(r).trim()
+    } catch {
+      return '' // 诊断性请求失败不影响主结算
+    }
+  }
+
+  return createWatchLoop({
+    clusterId,
+    jobIds: [slurmJobId],
+    maxWaitMs: (input.maxWaitSeconds ?? 1_800) * 1_000,
+    ...(input.pollSeconds !== undefined ? { maxPollMs: Math.max(10, input.pollSeconds) * 1_000 } : {}),
+    execCommand,
+    scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+    clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    onAllSettled: async (states) => {
+      const state = states.get(slurmJobId)?.state ?? 'UNKNOWN'
+      if (state !== 'COMPLETED') {
+        const logTail = await fetchLogTail()
+        return {
+          detailSuffix: `; ${task} ${state}, post skipped`,
+          extraLines: ['slurm_state: ' + state, ...(logTail !== '' ? [`log_tail: ${logTail}`] : [])],
+        }
+      }
+      try {
+        const r = await execCommand(clusterId, postPhaseCommand(workdir, task, workflowEnv), 60)
+        const { properties, files } = parsePostOutput(outputText(r))
+        return {
+          detailSuffix: propertiesSummary(task, properties),
+          extraLines: [
+            'slurm_state: COMPLETED',
+            `properties: ${JSON.stringify(properties)}`,
+            ...(files.length > 0 ? [`files: ${files.join(', ')}`] : []),
+          ],
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        const logTail = await fetchLogTail()
+        return {
+          detailSuffix: `; ${task} COMPLETED but post failed`,
+          extraLines: [
+            'slurm_state: COMPLETED',
+            `post failed: ${message}`,
+            ...(logTail !== '' ? [`log_tail: ${logTail}`] : []),
+          ],
+        }
+      }
+    },
+  })
 }
 
 /**

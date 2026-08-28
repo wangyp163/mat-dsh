@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecResult } from '../src/client'
 import {
   DEFAULT_G16_ENV,
   DEFAULT_WORKFLOW_ENV,
+  createGaussianProducerHooks,
   defaultPreJson,
   defaultRunJson,
+  logTailCommand,
+  parsePostOutput,
+  postPhaseCommand,
   prepareInputsCommand,
   prePhaseCommand,
   runGaussianSync,
@@ -178,5 +182,143 @@ describe('runGaussianSync（prepare→pre→run→sbatch 全链路）', () => {
       execCommand: f.execCommand, clusterId: '11250',
       task: 'opt', structure: XYZ, workdir: '/home/u/w',
     })).rejects.toThrow(/sbatch failed/)
+  })
+})
+
+// ===== post 段与 producer（终态自动 post）=====
+
+const POST_OK_OUTPUT = [
+  '[post] parsing job.log',
+  '{"status": "ok", "phase": "post", "properties": {"energy": -76.408954, "converged": true, "frequencies_cm-1": [1713.13, 3727.17, 3849.10], "imaginary_frequency_count": 0}, "files": ["g16_optimized.xyz", "job.log"]}',
+  '[post] done',
+].join('\n')
+
+describe('postPhaseCommand / logTailCommand', () => {
+  it('postPhaseCommand 与 pre 同形态（-p post --json post.json）', () => {
+    expect(postPhaseCommand('/home/u/w', 'opt+freq', DEFAULT_WORKFLOW_ENV))
+      .toBe(`cd "/home/u/w" && source ${DEFAULT_WORKFLOW_ENV} && ` +
+        'gaussian-workflow -t opt+freq -p post -i molecule.xyz -w "/home/u/w" --json post.json')
+  })
+
+  it('logTailCommand：tail 任务目录 job.log，无日志兜底', () => {
+    const cmd = logTailCommand('/home/u/w', 'opt', 50)
+    expect(cmd).toContain('tail -n 50 "/home/u/w/opt/job.log"')
+    expect(cmd).toContain(`echo '(no job.log found)'`)
+  })
+})
+
+describe('parsePostOutput（首个可解析 { 行，对齐 plugin.py §751-758）', () => {
+  it('日志行 + JSON 行 → properties/files', () => {
+    const r = parsePostOutput(POST_OK_OUTPUT)
+    expect(r.properties).toMatchObject({ energy: -76.408954, converged: true, imaginary_frequency_count: 0 })
+    expect(r.properties['frequencies_cm-1']).toEqual([1713.13, 3727.17, 3849.10])
+    expect(r.files).toEqual(['g16_optimized.xyz', 'job.log'])
+  })
+
+  it('首个 { 行非法 JSON → 继续找下一个', () => {
+    const out = '{ oops not json\n{"properties": {"energy": -1}}\n'
+    const r = parsePostOutput(out)
+    expect(r.properties).toEqual({ energy: -1 })
+    expect(r.files).toEqual([])
+  })
+
+  it('JSON 行缺 properties/files → 空对象/空数组', () => {
+    const r = parsePostOutput('{"status": "ok"}\n')
+    expect(r.properties).toEqual({})
+    expect(r.files).toEqual([])
+  })
+
+  it('无任何 JSON 行 → 抛错带输出尾部', () => {
+    expect(() => parsePostOutput('line1\nline2 error\n')).toThrow(/no JSON result line[\s\S]*line2 error/)
+  })
+})
+
+describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {
+  const row = (id: string, state: string, exit = '0:0', elapsed = '0') => `${id}|${state}|${exit}|${elapsed}\n`
+
+  function makeProducer(script: Array<{ out?: string; rcFail?: boolean; throw?: string }>, opts: { maxWaitSeconds?: number } = {}) {
+    let i = 0
+    const commands: string[] = []
+    const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
+      commands.push(command)
+      const step = script[Math.min(i++, script.length - 1)]
+      if (step.throw !== undefined) throw new Error(step.throw)
+      if (step.rcFail) return { code: 10020, data: { stdout: '', stderr: 'boom', exitCode: 1 }, message: 'remote fail' }
+      return { code: 0, data: step.out ?? '', message: 'success' }
+    }
+    const hooks = createGaussianProducerHooks({
+      execCommand,
+      clusterId: '11250',
+      task: 'opt+freq',
+      workdir: '/home/u/w',
+      slurmJobId: '700',
+      ...(opts.maxWaitSeconds !== undefined ? { maxWaitSeconds: opts.maxWaitSeconds } : {}),
+    })
+    return { hooks, commands }
+  }
+
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+  const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms)
+
+  it('COMPLETED → 自动 post：detail 摘要带 E/imag，终态首读带 properties/files', async () => {
+    const { hooks, commands } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'COMPLETED', '0:0', '30') },
+      { out: POST_OK_OUTPUT },
+    ])
+    await advance(0)
+    await advance(10_000)
+    const outcome = await hooks.done
+    expect(outcome.status).toBe('completed')
+    expect(outcome.detail).toBe('1/1 settled (1 COMPLETED); opt+freq E=-76.408954 converged=true imag=0')
+    expect(commands.at(-1)).toContain('-p post')
+    const out = hooks.readOutput()
+    expect(out).toContain('slurm_state: COMPLETED')
+    expect(out).toContain('"energy":-76.408954')
+    expect(out).toContain('files: g16_optimized.xyz, job.log')
+    expect(out).toContain('700 COMPLETED exit=0 elapsed=30s')
+  })
+
+  it('FAILED → 跳过 post，log_tail 进输出，detail 标注', async () => {
+    const { hooks, commands } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'FAILED', '1:0', '30') },
+      { out: 'Error termination via Lnk1e in l103.exe\n' },
+    ])
+    await advance(0)
+    await advance(10_000)
+    const outcome = await hooks.done
+    expect(outcome.detail).toBe('1/1 settled (1 FAILED); opt+freq FAILED, post skipped')
+    expect(commands.some((c) => c.includes('-p post'))).toBe(false)
+    const out = hooks.readOutput()
+    expect(out).toContain('slurm_state: FAILED')
+    expect(out).toContain('log_tail:')
+    expect(out).toContain('Lnk1e')
+  })
+
+  it('COMPLETED 但 post 输出无 JSON → post failed 标注 + log_tail，结算仍 completed', async () => {
+    const { hooks } = makeProducer([
+      { out: row('700', 'COMPLETED') },
+      { out: 'post crashed with traceback\n' },
+      { out: 'gaussian log tail line\n' },
+    ])
+    await advance(0)
+    const outcome = await hooks.done
+    expect(outcome.status).toBe('completed')
+    expect(outcome.detail).toBe('1/1 settled (1 COMPLETED); opt+freq COMPLETED but post failed')
+    const out = hooks.readOutput()
+    expect(out).toContain('post failed:')
+    expect(out).toContain('post crashed with traceback')
+    expect(out).toContain('gaussian log tail line')
+  })
+
+  it('maxWaitSeconds 透传（超时结算仍 completed，不跑 post）', async () => {
+    const { hooks, commands } = makeProducer([{ out: row('700', 'RUNNING') }], { maxWaitSeconds: 5 })
+    await advance(0)
+    await advance(10_000)
+    const outcome = await hooks.done
+    expect(outcome.detail).toContain('max-wait')
+    expect(commands.some((c) => c.includes('-p post'))).toBe(false)
   })
 })

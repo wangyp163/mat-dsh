@@ -19,6 +19,12 @@ export interface WatchOutcome {
   detail?: string
 }
 
+/** 全部终态时的结算增补（producer 注入点：终态后自动 post、物性行等）。 */
+export interface WatchSettleAugment {
+  detailSuffix?: string
+  extraLines?: string[]
+}
+
 /** createWatchLoop 的注入依赖。 */
 export interface WatchLoopOptions {
   clusterId: string
@@ -27,6 +33,11 @@ export interface WatchLoopOptions {
   maxWaitMs: number
   /** 轮询间隔上限（毫秒）：自适应档位超出时压到此值；缺省不封顶。 */
   maxPollMs?: number
+  /**
+   * 全部作业终态时、最终结算前触发（仅此路径；max-wait/传输异常/cancel 不触发）。
+   * 抛错不炸结算：吞入 extraLines 诊断行，watch 仍按 completed 结算。
+   */
+  onAllSettled?: (states: ReadonlyMap<string, SlurmJobInfo>) => Promise<WatchSettleAugment>
   /** 远程执行（通常绑定一个专属 MatClient 实例）。 */
   execCommand: (clusterId: string, command: string, timeoutSeconds?: number) => Promise<ExecResult>
   scheduleTimeout: (callback: () => void, delayMs: number) => unknown
@@ -104,11 +115,12 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
     return options.maxPollMs !== undefined ? Math.min(adaptive, options.maxPollMs) : adaptive
   }
 
-  function settle(outcome: WatchOutcome, flushSummary: boolean): void {
+  function settle(outcome: WatchOutcome, flushSummary: boolean, extraLines: readonly string[] = []): void {
     if (settled) return
     settled = true
     if (timer !== undefined) clearTimeout(timer)
     if (flushSummary) pending.push(summaryLine())
+    pending.push(...extraLines)
     pending.push(...fullTable())
     resolveDone(outcome)
   }
@@ -165,7 +177,26 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
       const info = states.get(id)
       return info !== undefined && isTerminal(info.state)
     })) {
-      settle({ status: 'completed', detail: summaryLine() }, true)
+      if (options.onAllSettled === undefined) {
+        settle({ status: 'completed', detail: summaryLine() }, true)
+        return
+      }
+      let augment: WatchSettleAugment = {}
+      try {
+        augment = (await options.onAllSettled(states)) ?? {}
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        augment = { extraLines: [`on-all-settled hook failed: ${message}`] }
+      }
+      if (settled) return // 钩子执行期间被 cancel 等先行结算，增补丢弃
+      settle(
+        {
+          status: 'completed',
+          detail: augment.detailSuffix !== undefined ? `${summaryLine()}${augment.detailSuffix}` : summaryLine(),
+        },
+        true,
+        augment.extraLines ?? [],
+      )
       return
     }
     schedule(nextDelay())
