@@ -16,6 +16,7 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "link:~/mat-harness/deepseek-harness/vendor/cordis"
+    "@deepseek-ai/cordis": "link:~/mat-harness/deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-client-ui-theme": "link:~/mat-harness/deepseek-harness/packages/client/ui-theme"
   }
 }
