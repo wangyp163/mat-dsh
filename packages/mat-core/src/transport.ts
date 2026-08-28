@@ -39,9 +39,7 @@ export class CurlMcpTransport {
       }
     }
     {
-      const err = new Error(`MCP session init failed after 3 attempts: ${last?.message ?? last}`)
-      ;(err as { cause?: unknown }).cause = last
-      throw err
+      throw new Error(`MCP session init failed after 3 attempts: ${last?.message ?? last}`, { cause: last })
     }
   }
 
@@ -86,9 +84,7 @@ export class CurlMcpTransport {
       if (err instanceof Error) {
         throw err
       }
-      const wrapped = new Error(String(err))
-      ;(wrapped as { cause?: unknown }).cause = err
-      throw wrapped
+      throw new Error(String(err), { cause: err })
     }
   }
 }

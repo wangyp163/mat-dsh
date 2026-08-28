@@ -59,7 +59,7 @@ it('三次皆失败 → MatExecError.cause 保留末次原始错误', async () =
     throw new Error('should have thrown')
   } catch (err) {
     expect(err).toBeInstanceOf(Error)
-    const error = err as Error & { cause?: Error }
+    const error = err as Error
     expect(error.cause).toBeInstanceOf(Error)
     expect(error.cause).toHaveProperty('message', 'network down')
   }
