@@ -1,0 +1,60 @@
+
+===== sinfo 5col（fixture 回填用） =====
+$ sinfo -o '%P|%a|%l|%D|%t' | tail -n +2
+{"code":0,"data":"kshctest|up|3-00:00:00|2|drain*\nkshctest|up|3-00:00:00|153|mix\nkshctest|up|3-00:00:00|281|alloc\nkshctest|up|3-00:00:00|2|idle\nkshdtest|up|3-00:00:00|2|drain*\nkshdtest|up|3-00:00:00|1|drng\nkshdtest|up|3-00:00:00|4|mix\nkshdtest|up|3-00:00:00|68|alloc\nkshdtest|up|3-00:00:00|4|idle\nkshdAI|up|2:00:00|3|drain*\nkshdAI|up|2:00:00|1|drng\nkshdAI|up|2:00:00|1|mix\nkshdAI|up|2:00:00|34|alloc\nkshdsctest|up|3-00:00:00|1|mix\nkshdsctest|up|3-00:00:00|23|alloc\nAgent0|up|1-00:00:00|20|idle","message":"success"}
+parseSinfoOutput: [{"partition":"kshctest","avail":"up","timelimit":"3-00:00:00","nodes":"2","state":"drain*"},{"partition":"kshctest","avail":"up","timelimit":"3-00:00:00","nodes":"153","state":"mix"},{"partition":"kshctest","avail":"up","timelimit":"3-00:00:00","nodes":"281","state":"alloc"},{"partition":"kshctest","avail":"up","timelimit":"3-00:00:00","nodes":"2","state":"idle"},{"partition":"kshdtest","avail":"up","timelimit":"3-00:00:00","nodes":"2","state":"drain*"},{"partition":"kshdtest","avail":"up","timelimit":"3-00:00:00","nodes":"1","state":"drng"},{"partition":"kshdtest","avail":"up","timelimit":"3-00:00:00","nodes":"4","state":"mix"},{"partition":"kshdtest","avail":"up","timelimit":"3-00:00:00","nodes":"68","state":"alloc"},{"partition":"kshdtest","avail":"up","timelimit":"3-00:00:00","nodes":"4","state":"idle"},{"partition":"kshdAI","avail":"up","timelimit":"2:00:00","nodes":"3","state":"drain*"},{"partition":"kshdAI","avail":"up","timelimit":"2:00:00","nodes":"1","state":"drng"},{"partition":"kshdAI","avail":"up","timelimit":"2:00:00","nodes":"1","state":"mix"},{"partition":"kshdAI","avail":"up","timelimit":"2:00:00","nodes":"34","state":"alloc"},{"partition":"kshdsctest","avail":"up","timelimit":"3-00:00:00","nodes":"1","state":"mix"},{"partition":"kshdsctest","avail":"up","timelimit":"3-00:00:00","nodes":"23","state":"alloc"},{"partition":"Agent0","avail":"up","timelimit":"1-00:00:00","nodes":"20","state":"idle"}]
+
+===== sbatch sleep 30（薄工具语义） =====
+$ cd /tmp && sbatch -p Agent0 --wrap='sleep 30' -J m2-probe
+{"code":0,"data":"Submitted batch job 120283480","message":"success"}
+
+===== job_status（squeue 路径/空→sacct 兜底） =====
+$ squeue -j 120283480 -h -o '%T' 2>/dev/null | head -1
+{"code":0,"data":"PENDING","message":"success"}
+
+===== queryJobStatus 归一 =====
+job 120283480 -> "RUNNING"
+
+===== scancel =====
+$ scancel 120283480
+{"code":0,"data":"","message":"success"}
+
+===== queryJobStatus（scancel 后） =====
+job 120283480 -> "COMPLETING"
+
+===== gaussian prepare（单命令打包） =====
+code=0
+PREP_READY
+
+===== gaussian pre =====
+code=0
+[GAUSSIAN-WORKFLOW-KSYZQ] Environment loaded
+{"schema_version": "calcflow.result.v1", "software": "gaussian", "task": "opt+freq", "phase": "pre", "status": "ok", "workdir": "/public/home/hpc-user-a/workspace/h2o-m2-probe", "execution": {"status": "completed"}, "workflow": {"status": "completed", "next_action": null}, "science": {"status": "not_evaluated", "acceptance": {}}, "warnings": [], "context": [], "files": ["/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/job.gjf", "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/.calcflow-phase.json"], "images": [], "slurm": null, "properties": {}, "error": null, "error_detail": null, "artifact_manifest": null, "event_log": null, "steps": [{"id": "opt+freq", "task": "opt+freq", "workdir": "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq", "input_file": "job.gjf", "log_file": "job.log", "stages": {"pre": {"status": "ok"}}}]}
+
+===== gaussian run =====
+code=0
+[GAUSSIAN-WORKFLOW-KSYZQ] Environment loaded
+{"schema_version": "calcflow.result.v1", "software": "gaussian", "task": "opt+freq", "phase": "run", "status": "ok", "workdir": "/public/home/hpc-user-a/workspace/h2o-m2-probe", "execution": {"status": "completed"}, "workflow": {"status": "completed", "next_action": null}, "science": {"status": "not_evaluated", "acceptance": {}}, "warnings": [], "context": [], "files": ["/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/slurm.sh"], "images": [], "slurm": "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/slurm.sh", "properties": {}, "error": null, "error_detail": null, "artifact_manifest": null, "event_log": null, "steps": [{"id": "opt+freq", "input_file": "job.gjf", "log_file": "job.log", "stages": {"pre": {"status": "ok"}, "run": {"status": "ok", "slurm": {"partition": "Agent0", "nodes": 1, "ntasks_per_node": 32, "time": "00:30:00", "mem": "64GB"}}}, "task": "opt+freq", "workdir": "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq"}]}
+
+===== gaussian sbatch（slurm.sh 于 workdir/task/） =====
+{"code":0,"data":"Submitted batch job 120283614","message":"success"}
+slurm job id = 120283614
+
+===== producer（watch → 终态自动 post） =====
+outcome: {"status":"completed","detail":"1/1 settled (1 COMPLETED); opt+freq E=-76.4089539792 converged=true imag=0"} (elapsed 27s)
+--- job_output 终态首读 ---
+120283614 UNKNOWN (not observed)
+120283614 PENDING exit=0 elapsed=4s
+120283614 COMPLETED exit=0 elapsed=13s
+1/1 settled (1 COMPLETED)
+slurm_state: COMPLETED
+properties: {"energy":-76.4089539792,"converged":true,"frequencies_cm-1":[1713.1206,3727.1534,3849.0866],"imaginary_frequency_count":0}
+files: /public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/g16_initial.xyz, /public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/g16_optimized.xyz, /public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/artifacts.json, /public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/events.jsonl
+120283614 COMPLETED exit=0 elapsed=13s
+
+===== post 原始输出（fixture 回填用） =====
+code=0
+[GAUSSIAN-WORKFLOW-KSYZQ] Environment loaded
+{"schema_version": "calcflow.result.v1", "software": "gaussian", "task": "opt+freq", "phase": "post", "status": "ok", "workdir": "/public/home/hpc-user-a/workspace/h2o-m2-probe", "execution": {"status": "completed"}, "workflow": {"status": "completed", "next_action": null}, "science": {"status": "not_evaluated", "acceptance": {}}, "warnings": [], "context": [], "files": ["/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/g16_initial.xyz", "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/g16_optimized.xyz", "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/artifacts.json", "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/events.jsonl"], "images": [], "slurm": null, "properties": {"energy": -76.4089539792, "converged": true, "frequencies_cm-1": [1713.1206, 3727.1534, 3849.0866], "imaginary_frequency_count": 0}, "error": null, "error_detail": null, "artifact_manifest": "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/artifacts.json", "event_log": "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq/events.jsonl", "steps": [{"id": "opt+freq", "input_file": "job.gjf", "log_file": "job.log", "stages": {"post": {"status": "ok"}, "pre": {"status": "ok"}, "run": {"slurm": {"mem": "64GB", "nodes": 1, "ntasks_per_node": 32, "partition": "Agent0", "time": "00:30:00"}, "status": "ok"}}, "task": "opt+freq", "workdir": "/public/home/hpc-user-a/workspace/h2o-m2-probe/opt+freq"}]}
+
+PROBE_DONE
