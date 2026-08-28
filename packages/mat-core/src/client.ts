@@ -1,4 +1,6 @@
 import { CurlMcpTransport } from './transport'
+import { FetchMcpTransport } from './fetch-transport'
+import type { FetchLike } from './fetch-transport'
 import { buildMcpUrl } from './url'
 
 export interface ExecResult {
@@ -19,6 +21,10 @@ export interface MatClientOptions {
   baseUrl?: string
   transport?: { callTool(name: string, args: Record<string, unknown>, timeoutSeconds?: number): Promise<Record<string, unknown>>; invalidate(): void }
   retryDelays?: [number, number]
+  /** 传输实现：'curl'（子进程，M0 实证默认）| 'fetch'（原生 fetch + 非 2xx 状态码检查）。缺省看 MAT_TRANSPORT，再缺省 curl。 */
+  transportKind?: 'curl' | 'fetch'
+  /** fetch 传输注入点（离线测试用）；transportKind 非 fetch 时忽略。 */
+  fetchImpl?: FetchLike
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
@@ -32,7 +38,10 @@ export class MatClient {
       if (!opts.mcpKey || !opts.mcpKey.startsWith('sk-')) {
         // 凭证缺失在首次使用时报清晰错误（构造仍允许，便于早暴露于 UI 提示）
       }
-      this.transport = new CurlMcpTransport({ mcpUrl: buildMcpUrl(opts.mcpKey, opts.baseUrl) })
+      const kind = opts.transportKind ?? (process.env.MAT_TRANSPORT === 'fetch' ? 'fetch' : 'curl')
+      this.transport = kind === 'fetch'
+        ? new FetchMcpTransport({ mcpUrl: buildMcpUrl(opts.mcpKey, opts.baseUrl), ...opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {} })
+        : new CurlMcpTransport({ mcpUrl: buildMcpUrl(opts.mcpKey, opts.baseUrl) })
     } else {
       this.transport = opts.transport
     }

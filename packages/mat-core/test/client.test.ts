@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { MatClient, outputText } from '../src/client'
 
 function fakeTransport(script: Array<{ ok: boolean; payload?: unknown }>) {
@@ -68,4 +68,23 @@ it('三次皆失败 → MatExecError.cause 保留末次原始错误', async () =
 it('未提供 mcp_key → 构造/调用时报凭证错误', async () => {
   const c = new MatClient({ mcpKey: '' })
   await expect(c.execCommand('11250', 'hostname', 30)).rejects.toThrow(/MAT_MCP_KEY/)
+})
+
+it('transportKind fetch → 走 FetchMcpTransport（注入 fetchImpl 离线验证）', async () => {
+  const sse = `data: ${JSON.stringify({ result: { content: [{ type: 'text', text: JSON.stringify({ code: 0, data: 'cn01', message: 'success' }) }] } })}\n\n`
+  const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (String(init!.body).includes('initialize')) {
+      return { status: 200, headers: { get: () => 'sid-f' }, text: () => Promise.resolve('') }
+    }
+    return { status: 200, headers: { get: () => null }, text: () => Promise.resolve(sse) }
+  })
+  const c = new MatClient({ mcpKey: 'sk-K', transportKind: 'fetch', fetchImpl })
+  await expect(c.execCommand('11250', 'hostname', 30)).resolves.toMatchObject({ code: 0, data: 'cn01' })
+  expect(fetchImpl.mock.calls.length).toBeGreaterThanOrEqual(2)
+})
+
+it('显式 transport 优先于 transportKind（注入即胜出）', async () => {
+  const t = fakeTransport([{ ok: true, payload: { code: 0, data: 'host', message: 'success' } }])
+  const c = new MatClient({ mcpKey: 'sk-K', transportKind: 'fetch', transport: t })
+  await expect(c.execCommand('11250', 'hostname', 30)).resolves.toMatchObject({ code: 0, data: 'host' })
 })
