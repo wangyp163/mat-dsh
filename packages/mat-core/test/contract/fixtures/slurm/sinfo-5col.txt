@@ -1,0 +1,6 @@
+kshctest|up|3-00:00:00|283|alloc
+kshdtest|up|3-00:00:00|69|alloc
+kshdtest|up|3-00:00:00|2|idle
+kshdAI|up|2:00:00|35|alloc
+kshdsctest|up|3-00:00:00|23|alloc
+Agent0*|up|1-00:00:00|20|idle
