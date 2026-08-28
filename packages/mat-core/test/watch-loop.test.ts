@@ -306,3 +306,66 @@ describe('onAllSettled 钩子（producer 注入点）', () => {
     expect(loop.readOutput()).not.toContain('late augment')
   })
 })
+
+describe('onTick 钩子（状态板喂料点）', () => {
+  it('每个成功轮询回合后触发，携带当前 states；结算回合也触发且含终态', async () => {
+    const ticks: Array<Array<[string, string]>> = []
+    const fake = fakeExec([
+      { out: row('100', 'RUNNING', '0:0', '15') },
+      { out: row('100', 'COMPLETED', '0:0', '26') },
+    ])
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: 86_400_000,
+      onTick: (states) => { ticks.push([...states.entries()].map(([id, info]) => [id, info.state])) },
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0)
+    expect(ticks).toEqual([[['100', 'RUNNING']]])
+    await advance(10_000)
+    await loop.done
+    expect(ticks).toEqual([[['100', 'RUNNING']], [['100', 'COMPLETED']]])
+  })
+
+  it('传输异常轮不触发；恢复后继续触发', async () => {
+    const ticks: number[] = []
+    const fake = fakeExec([{ throw: 'network down' }, { out: row('100', 'RUNNING') }])
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: 86_400_000,
+      onTick: () => { ticks.push(1) },
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0)
+    expect(ticks).toHaveLength(0)
+    await advance(10_000)
+    expect(ticks).toHaveLength(1)
+    loop.cancel('done observing')
+  })
+
+  it('onTick 抛错被吞：监控与结算不受影响', async () => {
+    let calls = 0
+    const fake = fakeExec([{ out: row('100', 'COMPLETED') }])
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: 86_400_000,
+      onTick: () => {
+        calls += 1
+        throw new Error('board exploded')
+      },
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0)
+    expect((await loop.done).status).toBe('completed')
+    expect(calls).toBe(1)
+  })
+})

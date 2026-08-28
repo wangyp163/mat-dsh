@@ -38,6 +38,11 @@ export interface WatchLoopOptions {
    * 抛错不炸结算：吞入 extraLines 诊断行，watch 仍按 completed 结算。
    */
   onAllSettled?: (states: ReadonlyMap<string, SlurmJobInfo>) => Promise<WatchSettleAugment>
+  /**
+   * 每个成功轮询回合后触发（结算回合也触发，含终态；传输异常轮不触发）。
+   * 抛错被吞：监控/结算不受影响（状态板喂料点，板故障不连坐 watch）。
+   */
+  onTick?: (states: ReadonlyMap<string, SlurmJobInfo>) => void
   /** 远程执行（通常绑定一个专属 MatClient 实例）。 */
   execCommand: (clusterId: string, command: string, timeoutSeconds?: number) => Promise<ExecResult>
   scheduleTimeout: (callback: () => void, delayMs: number) => unknown
@@ -170,6 +175,14 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
       if (reported.get(id) !== signature) {
         reported.set(id, signature)
         pending.push(formatLine(id, info))
+      }
+    }
+
+    if (options.onTick !== undefined) {
+      try {
+        options.onTick(states)
+      } catch {
+        // 吞掉：状态板喂料失败不连坐监控（契约：onTick 抛错不影响结算）
       }
     }
 
