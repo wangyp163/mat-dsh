@@ -16,6 +16,8 @@ import {
   scancelCommand,
 } from 'mat-core'
 import type { GaussianOptions } from 'mat-core'
+import { EfileClient, TokenClient } from 'mat-core'
+import { resolveEfileCredentials } from './efile-env'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -43,6 +45,25 @@ function newWatchClient(): MatClient {
     mcpKey: process.env.MAT_MCP_KEY ?? '',
     baseUrl: process.env.MAT_MCP_BASE_URL || undefined,
   })
+}
+
+/** efile 客户端按集群缓存（token + efile 地址一次取定；失败不缓存，下次重建重试）。 */
+const efileClients = new Map<string, Promise<EfileClient>>()
+
+function getEfileClient(clusterId: string): Promise<EfileClient> {
+  const cached = efileClients.get(clusterId)
+  if (cached !== undefined) return cached
+  const pending = (async () => {
+    // 凭证门在前：缺谁点名谁（MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER）
+    const tokenClient = new TokenClient(resolveEfileCredentials(process.env))
+    const info = await tokenClient.getClusterInfo(clusterId)
+    return new EfileClient({ token: info.token, efileUrl: info.efileUrl })
+  })().catch((err: unknown) => {
+    efileClients.delete(clusterId)
+    throw err
+  })
+  efileClients.set(clusterId, pending)
+  return pending
 }
 
 /** mat_gaussian 的 options 透传（工具面 snake_case → 库面 camelCase）。 */
@@ -84,7 +105,9 @@ export function apply(ctx: Context): void {
       'its environment gate and workflow instead of searching the cluster for software yourself. ' +
       'When all calculation options are already known, prefer the one-shot mat_gaussian tool: ' +
       'it prepares inputs, runs pre/run, submits, and a background producer runs the post phase ' +
-      'automatically at terminal state — properties arrive via job_output after the completion notice.',
+      'automatically at terminal state — properties arrive via job_output after the completion notice. ' +
+      'Move files between this machine and a cluster with mat_upload/mat_download ' +
+      '(efile API, needs MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER credentials).',
   })
 
   ctx.tools.register(defineTool({
@@ -340,6 +363,61 @@ export function apply(ctx: Context): void {
         `background job ${id} registered — the post phase runs automatically at terminal state;`,
         `a completion notice will arrive in-session, then read properties/files with job_output.`,
       ].join(' ')
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'mat_upload',
+    description:
+      'Upload a local file to an HPC cluster via the efile API (multipart, overwrites by default). ' +
+      'Use for sending structure/input files to the cluster shared filesystem; requires ' +
+      'MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER credentials in the harness environment.',
+    parameters: {
+      cluster_id: { type: 'string', required: true, description: 'HPC cluster id, e.g. 11250' },
+      local_path: { type: 'string', required: true, description: 'Absolute local file path to upload' },
+      remote_path: { type: 'string', required: true, description: 'Absolute destination path on the cluster shared filesystem' },
+      cover: { type: 'string', description: "Overwrite policy: 'cover' (default) or 'skip'" },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(args) {
+      if (!args.local_path.trim() || !args.remote_path.trim()) {
+        throw new Error('local_path and remote_path must be non-empty absolute paths')
+      }
+      const cover = args.cover !== undefined && args.cover.trim() !== '' ? args.cover.trim() : 'cover'
+      if (cover !== 'cover' && cover !== 'skip') {
+        throw new Error(`cover must be 'cover' or 'skip', got '${cover}'`)
+      }
+      const client = await getEfileClient(args.cluster_id)
+      const r = await client.uploadFile(args.local_path.trim(), args.remote_path.trim(), cover)
+      return `uploaded ${args.local_path.trim()} → ${args.cluster_id}:${r.path} (cover=${cover})`
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'mat_download',
+    description:
+      'Download a file from an HPC cluster via the efile API to a local path. ' +
+      'Use for fetching result artifacts (optimized structures, logs) from the cluster shared filesystem; ' +
+      'requires MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER credentials in the harness environment.',
+    parameters: {
+      cluster_id: { type: 'string', required: true, description: 'HPC cluster id, e.g. 11250' },
+      remote_path: { type: 'string', required: true, description: 'Absolute file path on the cluster shared filesystem' },
+      local_path: { type: 'string', required: true, description: 'Absolute local destination path (parent directory must exist)' },
+    },
+    output: {
+      schema: { type: 'string' },
+      render: (_args, value) => [{ type: 'text', text: value }],
+    },
+    async execute(args) {
+      if (!args.remote_path.trim() || !args.local_path.trim()) {
+        throw new Error('remote_path and local_path must be non-empty absolute paths')
+      }
+      const client = await getEfileClient(args.cluster_id)
+      const r = await client.downloadFile(args.remote_path.trim(), args.local_path.trim())
+      return `downloaded ${args.cluster_id}:${args.remote_path.trim()} → ${r.path} (${r.bytes} bytes)`
     },
   }))
 }
