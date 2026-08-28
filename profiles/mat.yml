@@ -14,14 +14,28 @@
           thinkingFormat: deepseek
         # 路由级默认推理等级（adapter: options.reasoningEffort ?? profile.reasoning）
         reasoning: high
-        # 双模型显式目录：名称可区分；上下文窗口 1M（插件默认仅 262144，须显式声明）
+        # 双模型显式目录：名称可区分；上下文窗口 1M（插件默认仅 262144，须显式声明）。
+        # reasoningEfforts 必须逐模型声明：本路由是 hand-declared（不在 pi-ai 内置目录），
+        # 缺省时模型无 reasoning 能力 → resolveModelInfo 不含 reasoning 元数据，
+        # /model 弹窗就没有推理等级可选（2026-08-28 用户实测反馈）。
+        # 等级集对齐 deepseek 家族（llm-deepseek 插件枚举 off/low/high/max）；off 为空值=不发送。
         models:
           - id: deepseek-v4-pro
             name: DeepSeek-V4-Pro
             contextWindow: 1000000
+            reasoningEfforts:
+              off:
+              low: low
+              high: high
+              max: max
           - id: deepseek-v4-flash
             name: DeepSeek-V4-Flash
             contextWindow: 1000000
+            reasoningEfforts:
+              off:
+              low: low
+              high: high
+              max: max
 
 - id: agent-default-model
   config:
