@@ -27,6 +27,7 @@ module.exports = __toCommonJS(index_exports);
 
 // packages/mat-ui/src/client/StatusDock.tsx
 var import_react = require("react");
+var import_jsx_runtime = require("react/jsx-runtime");
 function statusTone(job) {
   if (job.phase === "settled") return job.outcomeStatus === "completed" ? "complete" : "attention";
   return "active";
@@ -58,12 +59,49 @@ function StatusDock() {
       window.clearInterval(timer);
     };
   }, []);
-  if (jobs.length === 0) return /* @__PURE__ */ React.createElement("div", { className: "mat-status-dock mat-status-dock--empty" }, "No active HPC jobs");
-  return /* @__PURE__ */ React.createElement("section", { className: "mat-status-dock", "aria-label": "HPC job status" }, /* @__PURE__ */ React.createElement("header", { className: "mat-status-dock__header" }, /* @__PURE__ */ React.createElement("span", { className: "mat-status-dock__eyebrow" }, "COMPUTATIONAL MONITOR"), /* @__PURE__ */ React.createElement("span", { className: "mat-status-dock__count" }, jobs.length, " tracked")), /* @__PURE__ */ React.createElement("div", { className: "mat-status-dock__jobs" }, jobs.map((job) => /* @__PURE__ */ React.createElement("article", { className: "mat-status-card", key: job.jobId }, /* @__PURE__ */ React.createElement("div", { className: "mat-status-card__topline" }, /* @__PURE__ */ React.createElement("span", { className: `mat-status-chip mat-status-chip--${statusTone(job)}` }, job.phase), /* @__PURE__ */ React.createElement("code", null, job.jobId), /* @__PURE__ */ React.createElement("span", { className: "mat-status-card__elapsed" }, elapsed(job))), /* @__PURE__ */ React.createElement("strong", null, job.label), /* @__PURE__ */ React.createElement("div", { className: "mat-status-card__meta" }, "cluster ", job.clusterId, job.task ? ` \xB7 ${job.task}` : ""), job.slurm?.length ? /* @__PURE__ */ React.createElement("table", { className: "mat-status-table" }, /* @__PURE__ */ React.createElement("tbody", null, job.slurm.map((s) => /* @__PURE__ */ React.createElement("tr", { key: s.id }, /* @__PURE__ */ React.createElement("th", null, s.id), /* @__PURE__ */ React.createElement("td", null, s.state), /* @__PURE__ */ React.createElement("td", null, s.elapsedSeconds ?? "\u2014", "s"), /* @__PURE__ */ React.createElement("td", null, s.exitCode ?? "\u2014"))))) : null, job.detail ? /* @__PURE__ */ React.createElement("p", { className: "mat-status-card__detail" }, job.detail) : null, job.properties ? /* @__PURE__ */ React.createElement("div", { className: "mat-status-card__properties" }, Object.entries(job.properties).slice(0, 3).map(([key, value]) => /* @__PURE__ */ React.createElement("span", { key }, /* @__PURE__ */ React.createElement("b", null, key), " ", String(value)))) : null))));
+  if (jobs.length === 0) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mat-status-dock mat-status-dock--empty", children: "No active HPC jobs" });
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", { className: "mat-status-dock", "aria-label": "HPC job status", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", { className: "mat-status-dock__header", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "mat-status-dock__eyebrow", children: "COMPUTATIONAL MONITOR" }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { className: "mat-status-dock__count", children: [
+        jobs.length,
+        " tracked"
+      ] })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mat-status-dock__jobs", children: jobs.map((job) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("article", { className: "mat-status-card", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mat-status-card__topline", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: `mat-status-chip mat-status-chip--${statusTone(job)}`, children: job.phase }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: job.jobId }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "mat-status-card__elapsed", children: elapsed(job) })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: job.label }),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "mat-status-card__meta", children: [
+        "cluster ",
+        job.clusterId,
+        job.task ? ` \xB7 ${job.task}` : ""
+      ] }),
+      job.slurm?.length ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("table", { className: "mat-status-table", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("tbody", { children: job.slurm.map((s) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("th", { children: s.id }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: s.state }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("td", { children: [
+          s.elapsedSeconds ?? "\u2014",
+          "s"
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", { children: s.exitCode ?? "\u2014" })
+      ] }, s.id)) }) }) : null,
+      job.detail ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { className: "mat-status-card__detail", children: job.detail }) : null,
+      job.properties ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "mat-status-card__properties", children: Object.entries(job.properties).slice(0, 3).map(([key, value]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("b", { children: key }),
+        " ",
+        String(value)
+      ] }, key)) }) : null
+    ] }, job.jobId)) })
+  ] });
 }
 
 // packages/mat-ui/src/client/ResultTail.tsx
 var import_react2 = require("react");
+var import_jsx_runtime2 = require("react/jsx-runtime");
 function ResultTail() {
   const [job, setJob] = (0, import_react2.useState)();
   (0, import_react2.useEffect)(() => {
@@ -77,10 +115,24 @@ function ResultTail() {
     };
   }, []);
   if (!job) return null;
-  return /* @__PURE__ */ React.createElement("aside", { className: "mat-result-tail" }, /* @__PURE__ */ React.createElement("span", { className: "mat-status-dock__eyebrow" }, "LATEST COMPUTATION"), /* @__PURE__ */ React.createElement("strong", null, job.label), job.detail ? /* @__PURE__ */ React.createElement("p", null, job.detail) : null, job.properties ? /* @__PURE__ */ React.createElement("div", { className: "mat-status-card__properties" }, Object.entries(job.properties).slice(0, 4).map(([k, v]) => /* @__PURE__ */ React.createElement("span", { key: k }, /* @__PURE__ */ React.createElement("b", null, k), " ", String(v)))) : null, job.files?.length ? /* @__PURE__ */ React.createElement("small", null, "files \xB7 ", job.files.join(", ")) : null);
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("aside", { className: "mat-result-tail", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "mat-status-dock__eyebrow", children: "LATEST COMPUTATION" }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("strong", { children: job.label }),
+    job.detail ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { children: job.detail }) : null,
+    job.properties ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "mat-status-card__properties", children: Object.entries(job.properties).slice(0, 4).map(([k, v]) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("b", { children: k }),
+      " ",
+      String(v)
+    ] }, k)) }) : null,
+    job.files?.length ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("small", { children: [
+      "files \xB7 ",
+      job.files.join(", ")
+    ] }) : null
+  ] });
 }
 
 // packages/mat-ui/src/client/MatToolView.tsx
+var import_jsx_runtime3 = require("react/jsx-runtime");
 function outputOf(block) {
   if (!("kind" in block)) return "Running\u2026";
   return block.content.map((part) => part.type === "text" ? part.text : JSON.stringify(part)).join("\n");
@@ -91,7 +143,18 @@ function rows(text) {
 }
 function MatToolView({ toolName, block, inspect }) {
   const table = rows(outputOf(block));
-  return /* @__PURE__ */ React.createElement("article", { className: "mat-toolview", onClick: inspect, role: inspect ? "button" : void 0 }, /* @__PURE__ */ React.createElement("header", null, /* @__PURE__ */ React.createElement("span", { className: "mat-status-dock__eyebrow" }, "MAT"), /* @__PURE__ */ React.createElement("strong", null, toolName.replace("mat_", "").replaceAll("_", " "))), /* @__PURE__ */ React.createElement("table", null, /* @__PURE__ */ React.createElement("tbody", null, table.slice(0, 12).map((cells, i) => /* @__PURE__ */ React.createElement("tr", { key: i }, cells.map((cell, j) => j === 0 ? /* @__PURE__ */ React.createElement("th", { key: j }, cell) : /* @__PURE__ */ React.createElement("td", { key: j }, cell)))))), table.length > 12 ? /* @__PURE__ */ React.createElement("small", null, "+ ", table.length - 12, " rows") : null);
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("article", { className: "mat-toolview", onClick: inspect, role: inspect ? "button" : void 0, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("header", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-status-dock__eyebrow", children: "MAT" }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("strong", { children: toolName.replace("mat_", "").replaceAll("_", " ") })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("table", { children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("tbody", { children: table.slice(0, 12).map((cells, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("tr", { children: cells.map((cell, j) => j === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("th", { children: cell }, j) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("td", { children: cell }, j)) }, i)) }) }),
+    table.length > 12 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("small", { children: [
+      "+ ",
+      table.length - 12,
+      " rows"
+    ] }) : null
+  ] });
 }
 
 // packages/mat-ui/src/client/OutputVisibilityAction.tsx
@@ -154,6 +217,7 @@ function observeOutputVisibility(root, getState) {
 }
 
 // packages/mat-ui/src/client/OutputVisibilityAction.tsx
+var import_jsx_runtime4 = require("react/jsx-runtime");
 var MODES = [
   { value: "hidden", label: "\u9690\u85CF" },
   { value: "summary", label: "\u6458\u8981" },
@@ -192,36 +256,54 @@ function OutputVisibilityAction(_props) {
     setOpen(false);
     triggerRef.current?.focus();
   };
-  return /* @__PURE__ */ React.createElement("div", { ref: rootRef, className: "mat-output-manager", onKeyDown }, /* @__PURE__ */ React.createElement(
-    "button",
-    {
-      ref: triggerRef,
-      type: "button",
-      className: "mat-output-manager__trigger",
-      "aria-label": "\u7BA1\u7406\u63A8\u7406\u4E0E\u5DE5\u5177\u8C03\u7528\u663E\u793A",
-      "aria-expanded": open,
-      onClick: () => {
-        setOpen((value) => !value);
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { ref: rootRef, className: "mat-output-manager", onKeyDown, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+      "button",
+      {
+        ref: triggerRef,
+        type: "button",
+        className: "mat-output-manager__trigger",
+        "aria-label": "\u7BA1\u7406\u63A8\u7406\u4E0E\u5DE5\u5177\u8C03\u7528\u663E\u793A",
+        "aria-expanded": open,
+        onClick: () => {
+          setOpen((value) => !value);
+        },
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives.IconSettingsOutline16, { size: 14 }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { children: "\u8F93\u51FA" })
+        ]
       }
-    },
-    /* @__PURE__ */ React.createElement(import_dsh_client_ui_primitives.IconSettingsOutline16, { size: 14 }),
-    /* @__PURE__ */ React.createElement("span", null, "\u8F93\u51FA")
-  ), open ? /* @__PURE__ */ React.createElement("div", { className: "mat-output-manager__menu", role: "dialog", "aria-label": "\u8F93\u51FA\u663E\u793A\u8BBE\u7F6E" }, /* @__PURE__ */ React.createElement("header", null, /* @__PURE__ */ React.createElement("span", { className: "mat-status-dock__eyebrow" }, "OUTPUT DISPLAY"), /* @__PURE__ */ React.createElement("strong", null, "\u4FE1\u606F\u5BC6\u5EA6")), [["thinking", "\u63A8\u7406"], ["tools", "\u5DE5\u5177\u8C03\u7528"]].map(([scope, label]) => /* @__PURE__ */ React.createElement("section", { key: scope }, /* @__PURE__ */ React.createElement("span", { className: "mat-output-manager__label" }, label), /* @__PURE__ */ React.createElement("div", { className: "mat-output-manager__segments", role: "group", "aria-label": `${label}\u663E\u793A\u65B9\u5F0F` }, MODES.map((mode) => /* @__PURE__ */ React.createElement(
-    "button",
-    {
-      key: mode.value,
-      type: "button",
-      "aria-pressed": state[scope] === mode.value,
-      onClick: () => {
-        setMode(scope, mode.value);
-      }
-    },
-    mode.label
-  ))))), /* @__PURE__ */ React.createElement("footer", null, /* @__PURE__ */ React.createElement("button", { type: "button", onClick: () => {
-    update({ ...DEFAULT_OUTPUT_VISIBILITY });
-  } }, "\u6574\u6D01\u6A21\u5F0F"), /* @__PURE__ */ React.createElement("button", { type: "button", onClick: () => {
-    update({ thinking: "expanded", tools: "expanded" });
-  } }, "\u5168\u90E8\u5C55\u5F00"))) : null);
+    ),
+    open ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "mat-output-manager__menu", role: "dialog", "aria-label": "\u8F93\u51FA\u663E\u793A\u8BBE\u7F6E", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("header", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "mat-status-dock__eyebrow", children: "OUTPUT DISPLAY" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("strong", { children: "\u4FE1\u606F\u5BC6\u5EA6" })
+      ] }),
+      [["thinking", "\u63A8\u7406"], ["tools", "\u5DE5\u5177\u8C03\u7528"]].map(([scope, label]) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("section", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("span", { className: "mat-output-manager__label", children: label }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "mat-output-manager__segments", role: "group", "aria-label": `${label}\u663E\u793A\u65B9\u5F0F`, children: MODES.map((mode) => /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          "button",
+          {
+            type: "button",
+            "aria-pressed": state[scope] === mode.value,
+            onClick: () => {
+              setMode(scope, mode.value);
+            },
+            children: mode.label
+          },
+          mode.value
+        )) })
+      ] }, scope)),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("footer", { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", onClick: () => {
+          update({ ...DEFAULT_OUTPUT_VISIBILITY });
+        }, children: "\u6574\u6D01\u6A21\u5F0F" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { type: "button", onClick: () => {
+          update({ thinking: "expanded", tools: "expanded" });
+        }, children: "\u5168\u90E8\u5C55\u5F00" })
+      ] })
+    ] }) : null
+  ] });
 }
 
 // packages/mat-ui/src/client/style.ts
@@ -259,7 +341,8 @@ function apply(ctx) {
     order: 15
   }, StatusDock));
   ctx.slots.inject("conversation.chat.turnTail", () => ctx.slots.register({
-    name: "conversation.chat.turnTail"
+    name: "conversation.chat.turnTail",
+    select: () => true
   }, ResultTail));
   ctx.slots.inject("tool.call.toolview", function* () {
     for (const key of ["mat_partitions", "mat_sbatch", "mat_job_status", "mat_job_watch", "mat_gaussian", "mat_upload", "mat_download"]) {

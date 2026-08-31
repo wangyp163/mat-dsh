@@ -8,6 +8,7 @@ const id = resolve(root, 'packages/mat-ui')
 
 await build({
   entryPoints: [entry], outfile, bundle: true, format: 'cjs', platform: 'browser', target: 'es2022',
+  jsx: 'automatic',
   external: [
     'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
     '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-slots',

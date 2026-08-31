@@ -30,6 +30,7 @@ export function apply(ctx: ClientContext): void {
   }, StatusDock))
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail',
+    select: () => true,
   }, ResultTail))
   ctx.slots.inject('tool.call.toolview', function* () {
     for (const key of ['mat_partitions', 'mat_sbatch', 'mat_job_status', 'mat_job_watch', 'mat_gaussian', 'mat_upload', 'mat_download']) {

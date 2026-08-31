@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 describe('mat-ui client bundle', () => {
   it('ModuleLoader factory 自包含 CommonJS module，并返回 apply/inject 导出', async () => {
     const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+    expect(source).not.toContain('React.createElement')
     let factory: ((require: (id: string) => unknown) => unknown) | undefined
     const context = {
       window: {
