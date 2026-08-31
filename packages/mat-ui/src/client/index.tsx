@@ -6,7 +6,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { StatusDock } from './StatusDock.tsx'
 import { ResultTail } from './ResultTail.tsx'
 import { MatToolView } from './MatToolView.tsx'
-import { OutputVisibilityAction } from './OutputVisibilityAction.tsx'
 import { installStyle } from './style.ts'
 
 export const inject = ['slots', 'theme']
@@ -18,11 +17,6 @@ export function apply(ctx: ClientContext): void {
     '--dsw-alias-brand-primary': { light: '#35658f', dark: '#8eb9df' },
     '--dsw-alias-bg-base': { light: '#f7f9fc', dark: '#111823' },
   }), 'mat-ui: academic theme tokens')
-  ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
-    name: 'conversation.session.header.actions',
-    id: 'mat-output-visibility',
-    order: 30,
-  }, OutputVisibilityAction))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock',
     id: 'mat-status',

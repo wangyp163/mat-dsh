@@ -23,23 +23,6 @@ describe('mat-ui client bundle', () => {
     expect(exported.apply).toBeTypeOf('function')
     expect(exported.inject).toEqual(['slots', 'theme'])
 
-    const registrations: Array<Record<string, unknown>> = []
-    const ctx = {
-      effect: () => {},
-      theme: { overrideTokens: () => () => {} },
-      slots: {
-        inject: (_name: string, callback: () => unknown) => {
-          const value = callback()
-          if (value && typeof (value as Generator).next === 'function') [...value as Generator]
-        },
-        register: (options: Record<string, unknown>) => { registrations.push(options); return () => {} },
-      },
-    }
-    ;(exported.apply as (ctx: unknown) => void)(ctx)
-    expect(registrations).toContainEqual({
-      name: 'conversation.session.header.actions',
-      id: 'mat-output-visibility',
-      order: 30,
-    })
+    expect(source).not.toContain('mat-output-visibility')
   })
 })
