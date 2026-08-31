@@ -1,0 +1,12 @@
+$ pnpm build:mat-ui
+PASS — built packages/mat-ui/lib/client.js
+
+$ pnpm typecheck
+PASS — tsc -b && tsc --noEmit -p scripts
+
+$ pnpm vitest run
+PASS — Test Files 22 passed (22); Tests 172 passed (172)
+
+Focused TDD:
+- output-visibility.test.ts: initial RED (module absent), then 6/6 GREEN
+- bundle.test.ts: factory executes and registers conversation.session.header.actions id=mat-output-visibility order=30
