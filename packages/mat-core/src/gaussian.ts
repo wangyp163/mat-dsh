@@ -34,6 +34,7 @@ export interface GaussianOptions {
   maxWaitSeconds?: number
 }
 
+// 不含 task 路由键（opt/freq/td/...）：路由身份由 -t task 决定（压测 2026-09-01 P4：默认模板的 opt/freq 把 -t tddft 污染成三合一）。
 export function defaultPreJson(): Record<string, unknown> {
   return {
     schema_version: 'gaussian_workflow.pre.v1',
@@ -42,7 +43,6 @@ export function defaultPreJson(): Record<string, unknown> {
     ase: {
       calculator_kwargs: {
         method: 'B3LYP', basis: '6-31G(d)', charge: 0, mult: 1,
-        opt: ['Tight', 'CalcFC'], freq: 'HPModes',
       },
     },
     output: { input_file: 'job.gjf' },

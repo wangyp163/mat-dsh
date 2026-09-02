@@ -51,11 +51,17 @@ describe('默认配置', () => {
       ase: {
         calculator_kwargs: {
           method: 'B3LYP', basis: '6-31G(d)', charge: 0, mult: 1,
-          opt: ['Tight', 'CalcFC'], freq: 'HPModes',
         },
       },
       output: { input_file: 'job.gjf' },
     })
+  })
+
+  it('defaultPreJson：不含任何 task 路由键（task 即路由身份，压测 P4 根因）', () => {
+    const kwargs = (defaultPreJson().ase as { calculator_kwargs: Record<string, unknown> }).calculator_kwargs
+    for (const key of ['opt', 'freq', 'td', 'irc', 'polar', 'force', 'scan']) {
+      expect(kwargs).not.toHaveProperty(key)
+    }
   })
 
   it('defaultRunJson：仅 slurm 块，分区缺省 Agent0', () => {
