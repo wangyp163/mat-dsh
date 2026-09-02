@@ -42,7 +42,7 @@ metadata:
 - 单作业且参数齐备：优先 `mat_gaussian` 一站式。
 - 用户要查看每一步输入/Slurm 脚本、多波任务、二次 run 或诊断：使用 `pre → run → sbatch → mat_job_watch → post` 分步链路。
 - 至少安排一个新会话验证冷启动；追加 case 只复用健康会话。
-- 光谱/优化/TS/IRC 等可视化任务验收 `result.json.plots`；纯数值任务允许 `plots: []` 或旧部署无 `plots` 键。
+- 光谱/优化/TS/IRC 等可视化任务验收 `job_output` 的 `plots:` 行优先，无则 `result.json` 兜底；纯数值任务允许 `plots: []` 或旧部署无 `plots` 键。
 - 多阶段任务必须把上游明确完成的结果作为下游输入；不得猜测、伪造或静默改变任务范围。
 
 常见 kind：`scf_convergence`、`ir_spectrum`、`uvvis_spectrum`、`emission_spectrum`、`irc_profile`。完整映射和数据行断言查 SOP，不要凭记忆扩大断言。
@@ -59,7 +59,7 @@ metadata:
 
 2. 一站式任务由 `gaussian-calc` 调用 `mat_gaussian`；记录 Slurm job id 和 background job id，等待终态后用一次 `job_output`。
 3. 分步任务严格保持 phase 边界：`pre` 只生成并检查输入，`run` 只生成脚本，提交后一次性使用 `mat_job_watch`，终态后才 `post`。
-4. `job_output` 没有 `plots` 时，按 `gaussian-calc` 0.7.8 契约只读 `{workdir}/result.json` 的 `plots` 字段；报告 kind、PNG 和 CSV 路径。不要 cat PNG 或通读 CSV。
+4. 按 `gaussian-calc` 0.7.9+ 契约：`job_output` 直读 `plots:` 行优先，无则只读 `{workdir}/result.json` 的 `plots` 字段；报告 kind、PNG 和 CSV 路径。不要 cat PNG 或通读 CSV。
 5. 重试优先复用原 workdir；必须换目录时说明旧/新路径和原因。失败现场、result、job id 和 session trace 不得清理。
 6. 不手动循环 `squeue`/`sacct`；不未经用户确认执行 `rm`、`rm -rf`、`mv` 或覆盖/清空既有目录；不把凭据写入文件、prompt 或报告。
 7. 区分 workflow 已完成、结果解析成功、文件已生成、agent 已向用户交付和 session turn 已完成这五个层次；任一层失败都要单独记录。
