@@ -8,6 +8,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-jobs'
 import { MatClient, createWatchLoop, outputText } from 'mat-core'
 import {
+  DEFAULT_PRODUCER_POLL_SECONDS,
   SINFO_COMMAND,
   createGaussianProducerHooks,
   parseSbatchSubmission,
@@ -459,7 +460,7 @@ export function apply(ctx: Context): void {
         type: 'object',
         additionalProperties: true,
         description: 'Optional passthrough: pre_json, run_json (full phase configs overriding defaults), ' +
-          'workflow_env, g16_env (env script paths), poll_seconds (poll cap, min 10), max_wait_seconds (default 1800)',
+          'workflow_env, g16_env (env script paths), poll_seconds (poll cap, min 10, default 30), max_wait_seconds (default 1800)',
       },
     },
     output: {
@@ -531,7 +532,7 @@ export function apply(ctx: Context): void {
           workdir: args.workdir.trim(),
           slurmJobId,
           ...options.workflowEnv !== undefined ? { workflowEnv: options.workflowEnv } : {},
-          ...options.pollSeconds !== undefined ? { pollSeconds: options.pollSeconds } : {},
+          pollSeconds: options.pollSeconds ?? DEFAULT_PRODUCER_POLL_SECONDS,
           ...options.maxWaitSeconds !== undefined ? { maxWaitSeconds: options.maxWaitSeconds } : {},
           onTick: (states) => {
             try {

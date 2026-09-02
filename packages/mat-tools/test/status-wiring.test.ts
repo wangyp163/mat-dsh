@@ -293,4 +293,30 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       { kind: 'scf_convergence', image: null, data: '/home/u/w/freq/scf_convergence.csv' },
     ])
   })
+
+  it('mat_gaussian：producer 轮询默认封顶 30s（DEFAULT_PRODUCER_POLL_SECONDS 接线）', async () => {
+    const { ctx, tools } = makeCtx()
+    apply(ctx)
+    let sacctCalls = 0
+    vi.spyOn(MatClient.prototype, 'execCommand').mockImplementation(async (_c, command) => {
+      if (command.includes('sacct -j 703')) {
+        sacctCalls += 1
+        return { code: 0, data: '703|RUNNING|0:0|15\n', message: '' }
+      }
+      if (command.includes('PREP_READY') || command.includes('mkdir -p')) return { code: 0, data: 'PREP_READY\n', message: '' }
+      if (command.includes('-p pre')) return { code: 0, data: '{"status": "ok", "phase": "pre"}\n', message: '' }
+      if (command.includes('-p run')) return { code: 0, data: '{"status": "ok", "phase": "run"}\n', message: '' }
+      if (command.includes('sbatch slurm.sh')) return { code: 0, data: 'Submitted batch job 703\n', message: '' }
+      throw new Error(`unexpected command: ${command.slice(0, 90)}`)
+    })
+    await tools.get('mat_gaussian')!.execute(
+      { cluster_id: '11250', task: 'opt', structure: XYZ, workdir: '/home/u/pollcap' },
+      {},
+    )
+    // 时间线（cap 30s）：t=0 首 + 首 60s 内 10s×6 跳（10..60），elapsed≥60s 后 60s 自适应档被 30s 封顶
+    // → 0,10,20,30,40,50,60,90,120 共 9 跳；无封顶时 60s 档生效只有 8 跳——
+    // 回退调用处的 `?? DEFAULT_PRODUCER_POLL_SECONDS` 此断言即红。
+    await advance(120_000)
+    expect(sacctCalls).toBe(9)
+  })
 })

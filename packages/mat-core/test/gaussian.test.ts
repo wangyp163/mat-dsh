@@ -59,6 +59,8 @@ describe('默认配置', () => {
 
   it('defaultPreJson：不含任何 task 路由键（task 即路由身份，压测 P4 根因）', () => {
     const kwargs = (defaultPreJson().ase as { calculator_kwargs: Record<string, unknown> }).calculator_kwargs
+    // 7 键清单的单一权威在 Python 侧（mat-aitool 仓）gaussian-workflow/gaussian_workflow/calculator.py 的
+    // _COMPUTATION_ROUTE_KEYS；两侧若不同步，以 Python 侧为准更新本清单。
     for (const key of ['opt', 'freq', 'td', 'irc', 'polar', 'force', 'scan']) {
       expect(kwargs).not.toHaveProperty(key)
     }
@@ -69,6 +71,11 @@ describe('默认配置', () => {
       slurm: { partition: 'Agent0', nodes: 1, ntasks_per_node: 32, time: '00:30:00', mem: '64GB' },
     })
     expect(defaultRunJson('CPU64').slurm).toMatchObject({ partition: 'CPU64' })
+  })
+
+  it('DEFAULT_PRODUCER_POLL_SECONDS = 30：一站式 producer 终态反映延迟封顶', async () => {
+    const { DEFAULT_PRODUCER_POLL_SECONDS } = await import('../src/gaussian')
+    expect(DEFAULT_PRODUCER_POLL_SECONDS).toBe(30)
   })
 })
 

@@ -19,6 +19,11 @@ import type { PlotEntry } from './status-board.ts'
 export const DEFAULT_WORKFLOW_ENV = '$HOME/workspace/demo/env.sh'
 export const DEFAULT_G16_ENV = '$HOME/workspace/g16-hy/scripts/env.sh'
 
+/** mat_gaussian producer 的默认轮询封顶（秒）：终态在 job_output 的可见
+ *  延迟收紧到 ≤30s（压测 P6：sacct 已 COMPLETED 而 job_output 仍是上一跳
+ *  快照的竞态；服务端轮询无模型请求，30s 的 sacct 负担可忽略）。 */
+export const DEFAULT_PRODUCER_POLL_SECONDS = 30
+
 /** 透传项（缺省值对齐 plugin.py gaussian_calc）。 */
 export function createLegacyGaussianWorkflowAdapter(options: {
   execute: (request: RemoteWorkflowRequest) => Promise<RemoteWorkflowResult>
@@ -36,6 +41,11 @@ export interface GaussianOptions {
 }
 
 // 不含 task 路由键（opt/freq/td/...）：路由身份由 -t task 决定（压测 2026-09-01 P4：默认模板的 opt/freq 把 -t tddft 污染成三合一）。
+// 显式 pre_json 里的路由键，三段事实：
+//   1) workflow 1.3.1+（mat-aitool 943a5b1）：calculator.py 剥离「异 task」路由键（_COMPUTATION_ROUTE_KEYS 减去 task 自身
+//      route，大小写不敏感），只有 task 自身的路由键保持 JSON 权威（选项级精调；大小写变体胜出且不重复注入）；
+//   2) <1.3.1 的已部署集群没有这层剥离，异 task 键照常参与 route 合成并掩蔽 task 路由（irc 被 opt 掩蔽即此 case）；
+//   3) TS 侧不感知远端部署版本，故显式 pre_json 一律不要携带路由键——路由身份必须由 -t task 决定。
 export function defaultPreJson(): Record<string, unknown> {
   return {
     schema_version: 'gaussian_workflow.pre.v1',
