@@ -3,11 +3,11 @@ name: gaussian-calc
 # description 必须整体加引号：值里含 "CLI: sp"（冒号+空格），裸标量会被 YAML frontmatter
 # 解析器拒掉，整个 skill 静默跳过（2026-08-28 e2e 排障定位）。
 description: 'Use this skill for Gaussian 16 calculations through the calcflow-based gaussian-workflow CLI: sp, opt, freq, dipole, polar, tddft, fluorescence, resp, ts, irc, aea, and valid task compositions such as opt+sp and opt+freq. Generates Gaussian inputs, uses HPC tools to execute pre/post commands, upload files, submit and monitor Slurm jobs, and retrieves results.'
-version: 0.7.8-demo
+version: 0.7.9-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/other-projects/vasp-matstream-agent/skills/debug-gaussian-calc@0.7.1-demo
-  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号
+  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9
 ---
 
 # Gaussian 工作流
@@ -156,13 +156,20 @@ mat_gaussian({
 ```
 
 - **前提**：环境门禁已通过且 g16 已 bootstrap（与分步链路同一条门禁，见上文）；一站式命令使用与本 skill 相同的 `workflow_env`/`GAUSSIAN_ENV_SCRIPT` 默认值，可用 `options.workflow_env`/`options.g16_env` 覆盖。
-- **参数默认**：pre.json 默认 B3LYP/6-31G(d)、charge 0/mult 1、opt ["Tight","CalcFC"]、freq "HPModes"、32 核/64GB；run.json 默认 Agent0/1 节点/32 核/00:30:00/64GB。需要不同方法基组或资源时，经 `options.pre_json`/`options.run_json` 传**完整** phase 配置（结构同上文 pre.json/run.json 节；注意 `resources.ncores ≤ slurm.ntasks_per_node`、`resources.memory ≤ slurm.mem` 校验仍生效）。
+- **参数默认**：pre.json 默认 B3LYP/6-31G(d)、charge 0/mult 1、32 核/64GB，**不含任何 task 路由关键字**——opt/freq/td/irc 等路由身份由 `task` 参数唯一决定，`pre_json` 携带的异 task 路由键会被 workflow 剥离（1.3.1+）；run.json 默认 Agent0/1 节点/32 核/00:30:00/64GB。需要不同方法基组或资源时，经 `options.pre_json`/`options.run_json` 传**完整** phase 配置（结构同上文 pre.json/run.json 节；注意 `resources.ncores ≤ slurm.ntasks_per_node`、`resources.memory ≤ slurm.mem` 校验仍生效；task 自身路由键可在 JSON 中精调选项，如 `-t opt` 传 `"opt": ["Tight"]`）。
+- **硬警告：显式构造 `pre_json` 时，路由键要么不写，要么只写 task 自身键且写全（JSON 值整体替换默认 route，不与默认叠加）**。两层机制要分清，后者与远端部署版本无关：
+  - **异 task 路由键**：workflow 1.3.1+ 会剥离 `pre_json` 里不属于当前 task 的路由键（opt/freq/td/irc/polar/force/scan）；但 **<1.3.1 的已部署集群没有这层剥离**，异 task 键直接混入 route——`-t tddft` 被 JSON 里的 `opt`/`freq` 混成 `opt freq td` 三合一（压测 P4 实证）。
+  - **task 自身路由键**：以 JSON 为准，**任何 workflow 版本都如此**。`-t ts` 的路由键就是 `opt`（默认 `opt(TS,CalcFC,NoEigenTest)`）、`-t irc` 就是 `irc`（默认 `irc(CalcFC,…)`）——在 `pre_json` 里写普通 `opt`/`irc` 走的是自身键精调路径，1.3.1 的异 task 剥离**不拦**，结果是把 TS/IRC 语义**静默掩蔽成普通 opt/irc**。
+  - **处置**：`ts`/`irc`/`aea` 的 `pre_json` **一律不写路由键**（自身键 JSON 权威本是精调机制，对这三个 task 是坑）；`opt`/`freq` 等要精调时只写 task 自身键且写全，如 `-t opt` 传 `"opt": ["Tight","CalcFC"]`。路由身份只由 `task` 参数决定，调用侧不感知远端部署版本，按此写法两层风险都不沾。
 - **返回即离手**：工具返回 slurm job id 与后台作业 id 后本轮即可结束；后台 producer 服务端轮询 sacct（无模型请求），**终态后自动执行 post 并解析**，会话内收到完成通知。
-- **读结果**：通知后 `job_output({"job_id": "<background job id>"})` 一次拿到：`properties`（energy、converged、`frequencies_cm-1`、`imaginary_frequency_count`）、`files`（如 `g16_optimized.xyz`、`job.log`）与逐作业终态行。**无需再跑 `cat result.json`**——post 结果已由 producer 解析进输出；需要原始 result.json 或大文件时再经 `mat_exec`/`mat_download` 取。
-- **`job_output` 即终点**：`properties` 与终态行已足够判定成败并向用户汇报；**不要为"呈现完整结果"主动 `cat` `files` 里的原始产物**（`g16_optimized.xyz`、`job.log`、几何坐标全文都算）——产物路径已列在 `files`，用户明确要看优化几何或原始输出时再按需取回。仅当需要 `properties` 之外的字段（`steps`、`warnings`、`science`、`error_detail`、`plots`）或诊断失败时，才 `mat_exec` 执行 `cat {work_dir}/result.json`。
-- **图与绘图数据（`plots`）**：freq/tddft/fluorescence/opt/ts/opt+freq/irc 的 post 会在 `result.json` 生成 `plots` 数组（`{"kind", "image", "data"}`，图 PNG + 绘图数据 CSV 两类路径）。用户要看图/拿绘图数据时：先看 `job_output` 是否已带 plots 路径，没有则 `cat {work_dir}/result.json` 取 `plots` 字段，向用户报告图的类型与两个路径（PNG 给直觉、CSV 可复绘后处理），取回走 `mat_download`。`image=null` = 该环境缺 matplotlib、图未渲染，告知用户完整数据在 `data` 指向的 CSV；`result.json` **无 `plots` 键 = 旧版部署，正常继续不报错**（纯数值任务本就没有）。不要 `cat`/下载 PNG 内容做分析，不要通读 CSV 全文。
+- **读结果**：通知后 `job_output({"job_id": "<background job id>"})` 一次拿到：`properties`（energy、converged、`frequencies_cm-1`、`imaginary_frequency_count`）、`files`（如 `g16_optimized.xyz`、`job.log`）与逐作业终态行、`plots`（绘图任务返回 `kind` + PNG/CSV 两路径的 JSON 行）。**无需再跑 `cat result.json`**——post 结果已由 producer 解析进输出；需要原始 result.json 或大文件时再经 `mat_exec`/`mat_download` 取。
+- **`job_output` 即终点**：`properties` 与终态行已足够判定成败并向用户汇报；**不要为"呈现完整结果"主动 `cat` `files` 里的原始产物**（`g16_optimized.xyz`、`job.log`、几何坐标全文都算）——产物路径已列在 `files`，用户明确要看优化几何或原始输出时再按需取回。仅当需要 `properties` 之外的字段（`steps`、`warnings`、`science`、`error_detail`）或诊断失败时，才 `mat_exec` 执行 `cat {work_dir}/result.json`（`plots` 直读见下条，旧版部署才回退 result.json）。
+- **图与绘图数据（`plots`）**：freq/tddft/fluorescence/opt/ts/opt+freq/irc 的 post 会生成 `plots` 数组（`{"kind", "image", "data"}`，图 PNG + 绘图数据 CSV 两类路径）。**本版本 dsh 起（0.7.9）`job_output` 输出直接带 `plots:` 行**（含全部路径；远端 1.3.0/1.3.1 均适用——该行来自 dsh 侧透传，与 workflow 版本无关），无需再读 `result.json`；仅当**绘图任务的** `job_output` 未带（旧 dsh 部署）时才 `cat {work_dir}/result.json` 取 `plots` 字段兜底。向用户报告图的类型与两个路径（PNG 给直觉、CSV 可复绘后处理），取回走 `mat_download`。`image=null` = 该环境缺 matplotlib、图未渲染，告知用户完整数据在 `data` 指向的 CSV；`result.json` 里 `plots` 为 `[]` 或无该键（纯数值任务、出错时被清空、或极旧部署）都**正常继续、不报错**。不要 `cat`/下载 PNG 内容做分析，不要通读 CSV 全文。
 - **失败语义**：slurm 作业非 COMPLETED → 不跑 post，`job_output` 里带 `log_tail`（job.log 尾部 50 行）供诊断；COMPLETED 但 post 失败 → 作业仍按完成结算，输出里标注 `post failed` 与 log_tail。
 - **边界**：多波组合（`opt+sp`、`aea` 等需要分波提交/二次 run 的形态）**不支持**一站式，仍走分步链路；每个 `mat_gaussian` 占用一个后台作业配额（owner 上限 10），批量独立计算 = 多次调用；`max_wait_seconds` 默认 1800，超时按 max-wait 结算、不跑 post——续盯或重新评估，不是错误。
+- **全程异步，不碰调度器**：提交后**不要手动 `squeue`/`sacct` 轮询**（与分步链路同一红线）。`job_output` 返回的是**最近一次服务端轮询快照**——作业刚结束时它可能仍显示 running，这是正常竞态；完成通知（in-session notice）才是终态权威。非终态期间就地等待用 `job_output({"job_id": ..., "wait": true, "timeout_ms": 600000})`，不要为"确认状态"绕过监控去查调度器（压测 P6 教训：producer 轮询已默认封顶 30s，可见延迟有界）。
+- **诊断不读 log 原文**：`job_output` 已内嵌 `properties`/`log_tail`/`plots`。对 `job.log` 施加 `cat`/`grep`/`awk`/`sed`/`tail`/`head` **都算读原文**，一律禁止；仅当 `result.json` 的 `status == "error"` 且结构化字段不足以定位问题时，才回退读 log 尾部（压测 P6 教训）。
+- **task 即计算范围**：用户要 `freq` 就提交 `freq`，不擅自扩成 `opt+freq`；要 `sp` 不加 `opt`。需要更大计算范围（如先优化再算频率）时先向用户说明并确认（压测 P1 教训：范围漂移即使结果可用也属违约）。
 - **重试 workdir 语义**：重跑同一计算优先复用原 workdir（phase state 幂等，重复调用会重建 `.calcflow-phase.json` 并覆盖同名产物）；确需换新 workdir（如排查 workdir 污染）时，在回复中明确告知新命名与理由，**禁止静默 `_v2`/`_v3` 后缀漂移**。
 
 `aea` 保留其专用多步行为：
@@ -273,6 +280,8 @@ cd "{work_dir}" && source "$workflow_env" && gaussian-workflow ...
   "output": {"input_file": "job.gjf"}
 }
 ```
+
+> **适用范围**：上面这个示例带 `opt` 路由键，**仅适用 `-t opt` / `-t opt+freq`**（task 自身路由键的选项精调）；其他 task（sp/ts/tddft/irc/...）的 `pre.json` **不得携带任何路由键**——见「一站式路径」节的硬警告。
 
 `pre.json` 不得含 `task`、`structure`、`id` 或 `parameters` 包装；这些路由信息只能来自 CLI。`resources` 是 **Gaussian 专属** 输入字段，必须同时提供正整数 `ncores` 与带 `MB`、`GB` 或 `TB` 单位的正内存值：
 
@@ -424,6 +433,8 @@ mat_exec({"cluster_id": "{cluster_id}", "command": "cat > {work_dir}/molecule.xy
 EOF", "timeout_seconds": 30})
 
 # 写入 pre.json（如需自定义参数）
+# 适用范围：下面的示例带 "opt" 路由键，仅适用 -t opt / -t opt+freq（task 自身路由键精调）；
+# 其他 task（sp/ts/tddft/irc/...）的 pre.json 不得携带任何路由键——见「一站式路径」节硬警告。
 mat_exec({"cluster_id": "{cluster_id}", "command": "cat > {work_dir}/pre.json <<'EOF'
 {
   "schema_version": "gaussian_workflow.pre.v1",

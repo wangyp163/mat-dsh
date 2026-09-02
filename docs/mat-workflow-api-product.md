@@ -130,6 +130,8 @@ Content-Type: application/json
 }
 ```
 
+> **路由键说明**：示例 `pre` 块里的 `opt`/`freq` 是 `gaussian-opt-freq` 这个 task **自身的路由键精调**（声明式请求须与 workflow id 一致）。路由键必须与 task 匹配——**异 task 路由键在 workflow 1.3.1+ 会被剥离，旧版部署则会污染 route**；因此声明式请求里不要携带与 task 无关的路由键（opt/freq/td/irc/polar/force/scan），路由身份只由 `workflow.id` 决定。
+
 重要约束：`inputs` 是声明式控制数据，不是 workflow 包。请求不得要求服务端执行客户端上传的任意脚本，也不得绕过 workflow 的 schema、资源策略和路径策略。
 
 成功创建时建议返回 `202 Accepted`：
