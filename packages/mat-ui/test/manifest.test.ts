@@ -11,6 +11,8 @@ describe('mat-ui browser manifest', () => {
       '@deepseek-ai/dsh-client-ui-conversation',
       '@deepseek-ai/dsh-client-ui-theme',
       '@deepseek-ai/dsh-client-ui-tool',
+      '@deepseek-ai/dsh-client-ui-layout',
+      '@deepseek-ai/dsh-client-ui-primitives',
     ])
   })
 })

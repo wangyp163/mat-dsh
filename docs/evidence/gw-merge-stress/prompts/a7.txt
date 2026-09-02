@@ -1,0 +1,1 @@
+帮我算甲醛分子的前几个激发态（TDDFT），B3LYP/6-31G(d)，目录 ~/workspace/stress/a7-tddft/，告诉我最低激发能。

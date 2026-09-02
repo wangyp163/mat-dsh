@@ -6,7 +6,7 @@
  * 单作业状态查询以 sacct 兜底为主路径；squeue→sacct 两段结构与 Python 版保持一致。
  */
 
-import type { ExecResult } from './client'
+import type { ExecResult } from './client.ts'
 
 /** 与 watch-loop 同形的注入式远程执行（通常绑定一个 MatClient 实例）。 */
 export type ExecCommandFn = (clusterId: string, command: string, timeoutSeconds?: number) => Promise<ExecResult>

@@ -26,10 +26,11 @@
 
 ## efile/（synthetic，2026-08-28）
 
-凭证（MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER）尚未到位，无法实弹录制；
-结构按 plugin.py `_get_tokens`(§199-237)/`upload_file`(§591)/`download_file`(§623)
-的响应处理逻辑构造（字段名 code/msg/data、clusterId/token/hpcUrls/efileUrls、data.path）。
-token 值为占位（synthetic-token-*）。**凭证到位实弹后回填真实响应**（去敏保留结构）。
+2026-08-28 脱敏探针确认 AK/SK 签名成功，但该账号对真实计算集群未获 OpenAPI token/efile
+授权，无法录制成功传输；结构按 plugin.py `_get_tokens`(§199-237)、center discovery
+(§240-262)、`upload_file`(§591)/`download_file`(§623) 构造（字段名 code/msg/data、
+clusterId/token、center.data.efileUrls、data.path）。token 值为占位（synthetic-token-*）。
+**账号获得 OpenAPI 文件权限后回填真实响应**（去敏保留结构）。
 
 | fixture | 结构依据 |
 |---|---|

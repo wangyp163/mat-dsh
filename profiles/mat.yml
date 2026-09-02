@@ -56,14 +56,18 @@
 - insert:
     - id: mat-tools
       name: '~/mat-harness/mat-dsh/packages/mat-tools/src/index.ts'
-    # 目录 entry：loader 按 package.json main 导入节点半；client-modules 注册表按
-    # entry name 解析 package.json 的 dsh.client 声明进 boot 图（id=该绝对路径）。
+    # 显式根入口兼容 Harmony 的原生 ESM loader；同目录 package.json 仍供
+    # client-modules 注册表解析 dsh.client 声明。
     - id: mat-ui
-      name: '~/mat-harness/mat-dsh/packages/mat-ui'
+      # 使用 bare package 名让 Harmony 同时发现 mat-ui 的 Source Patches；
+      # dsh-web.sh 将 profile 的 node_modules/mat-ui 链到本地开发包。
+      name: 'mat-ui'
 
 # 本仓库 skills/ 目录进模型技能目录（gaussian-calc 等；dsh-skill-filesystem 只扫
 # 项目 .dsh/skills、$DSH_HOME/skills 等固定根，本目录不在其默认扫描范围）。
 - id: skill-filesystem
   config:
+    # 只从本仓库发现 skill，避免旧 DSH_HOME 或临时目录成为候选根。
+    includeDefaultRoots: false
     customSkillDirs:
       - ~/mat-harness/mat-dsh/skills

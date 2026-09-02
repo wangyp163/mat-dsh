@@ -1,0 +1,1 @@
+用 ~/workspace/stress/f3-bad/broken.xyz 这个结构文件做优化（文件我放好了），目录 ~/workspace/stress/f3-bad/。

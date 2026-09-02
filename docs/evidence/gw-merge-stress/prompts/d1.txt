@@ -1,0 +1,1 @@
+给我算苯分子的 RESP 电荷，B3LYP/def2TZVP 水相，目录 ~/workspace/stress/d1-resp/，报每个原子的电荷。

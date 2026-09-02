@@ -1,0 +1,1 @@
+帮我跑一个 opt;freq 组合任务，水分子，目录 ~/workspace/stress/f1-semicolon/。

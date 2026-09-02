@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-WORKFLOW_ROOT="${1:-$HOME/workspace/demo}"
+skill_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 环境常量来自本 skill 的 env_profile.sh；SKILL_ENV_PROFILE 仅供测试注入 override。
+# shellcheck disable=SC1090
+. "${SKILL_ENV_PROFILE:-$skill_dir/scripts/env_profile.sh}"
+
+WORKFLOW_ROOT="${1:-$WORKFLOW_ROOT_DEFAULT}"
 G16_HOME="${2:-$HOME/workspace/g16-hy}"
 WORKFLOW_ENV="$WORKFLOW_ROOT/env.sh"
 G16_ENV="$G16_HOME/scripts/env.sh"
-PYTHON_BIN="$WORKFLOW_ROOT/bin/python"
-CLI="$WORKFLOW_ROOT/bin/gaussian-workflow"
+PYTHON_BIN="$WORKFLOW_ROOT/$PYTHON_BIN_SUBDIR/python"
+CLI="$WORKFLOW_ROOT/$PYTHON_BIN_SUBDIR/gaussian-workflow"
 REQUIRED_TASKS=(aea dipole fluorescence freq irc opt polar resp sp tddft ts)
 
 protocol=unknown
@@ -59,12 +64,44 @@ elif ! ( export G16_HOME LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"; . "$G16_ENV" >/
   errors+=(g16_unavailable)
 fi
 
+# 版本锚：部署侧的 VERSION 文件（安装脚本落盘）与 skill 侧记录的期望比对，
+# 让"文档/期望 vs 实际部署"的漂移在门禁处可见（wheel 元数据版本不可信，恒为 0.1.0）。
+deployed_version=""
+[ -f "$WORKFLOW_ROOT/VERSION" ] && deployed_version=$(head -n1 "$WORKFLOW_ROOT/VERSION" | tr -d '[:space:]')
+expected_version="${WORKFLOW_VERSION:-}"
+if [ -n "$expected_version" ]; then
+  if [ -z "$deployed_version" ]; then
+    errors+=(version_unpinned)
+  elif [ "$deployed_version" != "$expected_version" ]; then
+    errors+=(version_mismatch)
+  fi
+fi
+
+# 新鲜度提醒（warning，不进 errors、不影响 ok）：兄弟 v* 部署目录里存在比期望
+# 更高且部署完整（VERSION + env.sh）的版本时上报，防止"新版本部署在旁边而
+# skill 仍安静使用旧版"的盲区。没有更高候选时为空串。
+newer_version=""
+if [ -n "$expected_version" ]; then
+  newer_vers=()
+  for cand in "$(dirname "$WORKFLOW_ROOT")"/v*/; do
+    [ -f "${cand}VERSION" ] && [ -f "${cand}env.sh" ] || continue
+    cv=$(head -n1 "${cand}VERSION" | tr -d '[:space:]')
+    [ -n "$cv" ] || continue
+    [ "$cv" != "$expected_version" ] || continue
+    [ "$(printf '%s\n' "$expected_version" "$cv" | sort -V | tail -n1)" = "$cv" ] || continue
+    newer_vers+=("$cv")
+  done
+  if [ "${#newer_vers[@]}" -gt 0 ]; then
+    newer_version=$(printf '%s\n' "${newer_vers[@]}" | sort -V | tail -n1)
+  fi
+fi
+
 ok=false
 [ "${#errors[@]}" -eq 0 ] && ok=true
 errors_json=$(json_array ${errors[@]+"${errors[@]}"})
 task_count=$(printf '%s' "$tasks_json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
 
-printf '{"schema":"gaussian-env-gate.v2","ok":%s,"workflow":"%s","python":"%s","cli":"%s","module":"%s","protocol":"%s","required_tasks":%s,"tasks":%s,"missing_tasks":%s,"task_count":%s,"g16":"%s","errors":%s}\n' \
-  "$ok" "$WORKFLOW_ROOT" "$PYTHON_BIN" "$CLI" "$module_file" "$protocol" "$required_json" "$tasks_json" "$missing_json" "$task_count" "$G16_ENV" "$errors_json"
+printf '{"schema":"gaussian-env-gate.v2","ok":%s,"workflow":"%s","python":"%s","cli":"%s","module":"%s","protocol":"%s","deployed_version":"%s","expected_version":"%s","newer_version":"%s","required_tasks":%s,"tasks":%s,"missing_tasks":%s,"task_count":%s,"g16":"%s","errors":%s}\n' \
+  "$ok" "$WORKFLOW_ROOT" "$PYTHON_BIN" "$CLI" "$module_file" "$protocol" "$deployed_version" "$expected_version" "$newer_version" "$required_json" "$tasks_json" "$missing_json" "$task_count" "$G16_ENV" "$errors_json"
 
 [ "$ok" = true ]

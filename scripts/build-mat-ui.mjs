@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 const root = resolve(new URL('..', import.meta.url).pathname)
 const entry = resolve(root, 'packages/mat-ui/src/client/index.tsx')
 const outfile = resolve(root, 'packages/mat-ui/lib/client.js')
-const id = resolve(root, 'packages/mat-ui')
+const id = 'mat-ui'
 
 await build({
   entryPoints: [entry], outfile, bundle: true, format: 'cjs', platform: 'browser', target: 'es2022',

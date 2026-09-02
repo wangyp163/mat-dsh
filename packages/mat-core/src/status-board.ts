@@ -27,6 +27,8 @@ export interface MatJobStatus {
   phase: 'monitoring' | 'settled'
   task?: string
   workdir?: string
+  partition?: string
+  converged?: boolean
   slurm?: SlurmEntrySnapshot[]
   settledAt?: number
   outcomeStatus?: 'completed' | 'killed' | 'failed'
@@ -38,6 +40,7 @@ export interface MatJobStatus {
 /** settle 一次写入的终态信息。 */
 export interface StatusSettle {
   outcomeStatus: 'completed' | 'killed' | 'failed'
+  converged?: boolean
   detail?: string
   properties?: Record<string, unknown>
   files?: string[]
@@ -52,6 +55,10 @@ export interface StatusBoardOptions {
   now?: () => number
   /** settled 条目保留上限（默认 20，防无界增长；monitoring 永不裁剪）。 */
   maxSettled?: number
+  /** 启动时恢复的 JSON-safe 快照。 */
+  initialEntries?: MatJobStatus[]
+  /** 状态变化后的旁路通知；不得影响状态板主流程。 */
+  onChange?: (entries: MatJobStatus[]) => void
 }
 
 /** 状态板句柄。 */
@@ -71,7 +78,23 @@ export interface StatusBoard {
 export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard {
   const now = options.now ?? Date.now
   const maxSettled = options.maxSettled ?? 20
-  const entries = new Map<string, MatJobStatus>()
+  const entries = new Map<string, MatJobStatus>(
+    (options.initialEntries ?? []).map((entry): [string, MatJobStatus] => [entry.jobId, {
+      ...entry,
+      slurm: entry.slurm?.map((item) => ({ ...item })),
+    }]),
+  )
+
+  function snapshot(): MatJobStatus[] {
+    return [...entries.values()].map((entry) => ({
+      ...entry,
+      slurm: entry.slurm?.map((item) => ({ ...item })),
+    }))
+  }
+
+  function changed(): void {
+    try { options.onChange?.(snapshot()) } catch { /* 旁路持久化失败不影响状态板 */ }
+  }
 
   function pruneSettled(): void {
     const settledIds = [...entries.values()]
@@ -82,6 +105,8 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
       entries.delete(id)
     }
   }
+
+  pruneSettled()
 
   return {
     upsert(jobId, patch) {
@@ -98,6 +123,7 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
           phase: 'monitoring',
           ...clean(patch),
         })
+        changed()
         return
       }
       // settled 后不复活：phase/settledAt/outcome 保持，其余字段照常合并
@@ -115,6 +141,7 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
         merged.files = existing.files
       }
       entries.set(jobId, merged)
+      changed()
     },
 
     settle(jobId, settle) {
@@ -131,17 +158,15 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
         updatedAt: settledAt,
       })
       pruneSettled()
+      changed()
     },
 
     remove(jobId) {
-      entries.delete(jobId)
+      if (entries.delete(jobId)) changed()
     },
 
     list() {
-      return [...entries.values()].map((e) => ({
-        ...e,
-        slurm: e.slurm === undefined ? undefined : e.slurm.map((s) => ({ ...s })),
-      }))
+      return snapshot()
     },
   }
 }

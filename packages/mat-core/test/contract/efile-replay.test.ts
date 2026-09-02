@@ -9,7 +9,7 @@ import { EfileClient, TokenClient } from '../../src/index'
 /**
  * 回放契约（synthetic，凭证未到位）：fixtures/efile/ 的响应结构按 plugin.py
  * 的处理逻辑构造（PROVENANCE.md 记录依据）。断言钉的是**字段名与分支语义**——
- * code/data/msg、data[].clusterId/token/efileUrls、data.path——凭证到位实弹
+ * code/data/msg、data[].clusterId/token、center.data.efileUrls、data.path——凭证到位实弹
  * 回填真实响应后，这些断言无需变化。
  */
 

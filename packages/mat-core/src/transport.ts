@@ -1,5 +1,5 @@
-import { buildCurlArgs, curlWithRetry, defaultRunner, extractSessionId, parseToolCallResponse } from './curl'
-import type { CommandRunner } from './curl'
+import { buildCurlArgs, curlWithRetry, defaultRunner, extractSessionId, parseToolCallResponse } from './curl.ts'
+import type { CommandRunner } from './curl.ts'
 
 export interface TransportOptions {
   mcpUrl: string

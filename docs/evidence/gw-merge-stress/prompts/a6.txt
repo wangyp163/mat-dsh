@@ -1,0 +1,1 @@
+我需要一氧化碳的极化率，B3LYP/def2SVP，工作目录 ~/workspace/stress/a6-polar/。

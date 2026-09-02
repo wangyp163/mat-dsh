@@ -9,9 +9,9 @@
  * 结算时把摘要 + 完整终态表压入待读，终态后首读即拿全表。
  */
 
-import type { ExecResult } from './client'
-import { isTerminal, nextPollDelayMs, parseSacctBatch } from './job-state'
-import type { SlurmJobInfo, SlurmJobState } from './job-state'
+import type { ExecResult } from './client.ts'
+import { isTerminal, nextPollDelayMs, parseSacctBatch } from './job-state.ts'
+import type { SlurmJobInfo, SlurmJobState } from './job-state.ts'
 
 /** watch 结算结果；status 取值与宿主 JobOutcome 三终态一一对应。 */
 export interface WatchOutcome {

@@ -1,7 +1,7 @@
-import { CurlMcpTransport } from './transport'
-import { FetchMcpTransport } from './fetch-transport'
-import type { FetchLike } from './fetch-transport'
-import { buildMcpUrl } from './url'
+import { CurlMcpTransport } from './transport.ts'
+import { FetchMcpTransport } from './fetch-transport.ts'
+import type { FetchLike } from './fetch-transport.ts'
+import { buildMcpUrl } from './url.ts'
 
 export interface ExecResult {
   code: number
@@ -31,9 +31,11 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /** HPC remote-shell 客户端（M0 范围：execCommand）。 */
 export class MatClient {
+  private readonly opts: MatClientOptions
   private readonly transport: NonNullable<MatClientOptions['transport']>
 
-  constructor(private readonly opts: MatClientOptions) {
+  constructor(opts: MatClientOptions) {
+    this.opts = opts
     if (!opts.transport) {
       if (!opts.mcpKey || !opts.mcpKey.startsWith('sk-')) {
         // 凭证缺失在首次使用时报清晰错误（构造仍允许，便于早暴露于 UI 提示）

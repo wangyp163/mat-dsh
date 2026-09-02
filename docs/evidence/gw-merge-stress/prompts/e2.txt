@@ -1,0 +1,1 @@
+从上面那个没收敛的构型出发做 IRC 计算，目录 ~/workspace/stress/e2-irc/。

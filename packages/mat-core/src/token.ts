@@ -4,14 +4,15 @@
  * POST https://mcp-gateway.example.internal/api/user/v3/tokens，四请求头 {user, accessKey, signature, timestamp}；
  * signature = HMAC-SHA256(secretKey, `{"accessKey":"…","timestamp":"…","user":"…"}`) hex 小写
  * （键序 accessKey→timestamp→user，值为 Python _escape_json 语义的 JSON 字符串）。
- * 响应 code==='0' → data[] 每项 {clusterId, clusterName, token, hpcUrls, efileUrls}；内存缓存。
+ * 响应 code==='0' → data[] 每项 {clusterId, clusterName, token}；再以集群 token 调
+ * GET /ac/openapi/v2/center，从 enable==='true' 的 efileUrls 中发现文件服务地址；token 列表内存缓存。
  *
  * token 端点是 mcp-gateway.example.internal（M0 实测 Node fetch 3/3 通），用 fetch 而非 curl 子进程；
  * efile 域走 curl（见 efile.ts）。
  */
 
 import { createHmac } from 'node:crypto'
-import type { FetchLike } from './fetch-transport'
+import type { FetchLike } from './fetch-transport.ts'
 
 /** Python _escape_json：先反斜杠后引号（顺序不可换，否则 \" 双重转义）。 */
 function escapeJson(value: string): string {
@@ -83,15 +84,38 @@ export class TokenClient {
     this.cache = undefined
   }
 
-  /** 按 clusterId 取 token 与首个 efile 地址（efile 缺失的集群无法文件传输）。 */
+  /** 按 clusterId 取 token，并通过 center discovery 定位首个启用的 efile 地址。 */
   async getClusterInfo(clusterId: string): Promise<ClusterInfo> {
     const tokens = await this.getTokens()
     const hit = tokens.find((t) => t.clusterId === clusterId)
     if (hit === undefined) throw new Error(`cluster ${clusterId} not found in token response (available: ${tokens.map((t) => t.clusterId).join(', ')})`)
     if (!hit.token) throw new Error(`cluster ${clusterId} returned an empty token`)
-    const efileUrl = hit.efileUrls?.[0]?.url
-    if (!efileUrl) throw new Error(`cluster ${clusterId} has no efile endpoint`)
+    const efileUrl = hit.efileUrls?.[0]?.url ?? await this.fetchEfileUrl(hit.token)
+    if (!efileUrl) throw new Error(`cluster ${clusterId} has no efile endpoint enabled`)
     return { clusterId, ...(hit.clusterName !== undefined ? { clusterName: hit.clusterName } : {}), token: hit.token, efileUrl }
+  }
+
+  private async fetchEfileUrl(token: string): Promise<string | undefined> {
+    const fetch = this.opts.fetchImpl ?? (globalThis.fetch as FetchLike)
+    const centerUrl = new URL('../ac/openapi/v2/center', `${this.opts.baseUrl.replace(/\/$/, '')}/`).toString()
+    const response = await fetch(centerUrl, {
+      method: 'GET',
+      headers: { token, 'Content-Type': 'application/json' },
+    })
+    const text = await response.text()
+    if (response.status < 200 || response.status >= 300) {
+      throw new Error(`center endpoint HTTP ${response.status}: ${text.slice(0, 200)}`)
+    }
+    let body: { code?: string | number; msg?: string; data?: { efileUrls?: Array<{ enable?: string | boolean; url?: string }> } }
+    try {
+      body = JSON.parse(text) as typeof body
+    } catch {
+      throw new Error(`center endpoint returned non-JSON: ${text.slice(0, 200)}`)
+    }
+    if (String(body.code) !== '0' && String(body.code) !== '200') {
+      throw new Error(`center endpoint failed: code=${body.code ?? '(none)'} msg=${body.msg ?? '(none)'}`)
+    }
+    return body.data?.efileUrls?.find((entry) => String(entry.enable).toLowerCase() === 'true' && Boolean(entry.url))?.url
   }
 
   private async fetchTokens(): Promise<ClusterToken[]> {

@@ -1,0 +1,1 @@
+帮我算一氧化碳的绝热电子亲和势（AEA），目录 ~/workspace/stress/c1-aea/，算完汇报中性和阴离子的能量以及 AEA（eV）。

@@ -1,0 +1,1 @@
+算一下氟化氢（HF）的偶极矩，B3LYP/def2SVP，输出到 ~/workspace/stress/a5-dipole/。

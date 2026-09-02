@@ -3,14 +3,20 @@ name: gaussian-calc
 # description 必须整体加引号：值里含 "CLI: sp"（冒号+空格），裸标量会被 YAML frontmatter
 # 解析器拒掉，整个 skill 静默跳过（2026-08-28 e2e 排障定位）。
 description: 'Use this skill for Gaussian 16 calculations through the calcflow-based gaussian-workflow CLI: sp, opt, freq, dipole, polar, tddft, fluorescence, resp, ts, irc, aea, and valid task compositions such as opt+sp and opt+freq. Generates Gaussian inputs, uses HPC tools to execute pre/post commands, upload files, submit and monitor Slurm jobs, and retrieves results.'
-version: 0.7.1-demo
+version: 0.7.8-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/other-projects/vasp-matstream-agent/skills/debug-gaussian-calc@0.7.1-demo
-  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道
+  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号
 ---
 
 # Gaussian 工作流
+
+## 产品边界：本地 skill 与 HPC 远端 workflow
+
+本 skill 是本地 dsh 插件的一部分，负责理解用户意图、校验并生成声明式的 `pre.json`/`run.json`/`post.json` 控制数据，以及解释 `result.json` 和 artifact manifest。Gaussian workflow 的执行包、软件环境、许可证和 Slurm 运行时属于 HPC 一侧的商品，**不得把 workflow 源码或执行包上传到远端**。本地只提交结构与控制输入，并调用 HPC 上已部署且有版本契约的 workflow；当前 `mat_gaussian` 的命令式路径是该远端 workflow 契约尚未提供统一 API 时的兼容适配器。
+
+计算完成后，优先把结构化结果和轻量 artifact 同步到本地；大型 checkpoint、波函数、轨迹和中间文件只保留远端映射，除非用户或 Agent 明确按需同步。skill、schema、validator、结果解释器和 HPC adapter 可以独立随 dsh 插件版本发布，不等同于远端 workflow 执行包。
 
 ## 环境激活（先读）
 
@@ -48,6 +54,7 @@ aea           绝热电子亲和能（多步）
 
 所有集群操作统一通过 `mat_exec` 工具完成（在目标集群登录节点执行 shell 命令）。它是 JSON 参数工具，不是 shell 命令：调用形态为 `mat_exec({"cluster_id": "11250", "command": "<shell 命令>", "timeout_seconds": 30})`；下文代码块里的 `command` 值原样传给远端 shell。
 
+- **破坏性命令必须先经用户确认**：任何 `rm`、`rm -rf`、`mv`（删除、覆盖或挪走既有文件/目录），以及清空 scratch、清理历史 workdir 等，**无论出现在哪个环节**（故障排查、磁盘空间不足、重试前清场）都一律先把目标路径列给用户、取得确认后再执行；未确认前只报告建议、不动手。非本会话创建的目录一律视为他人数据，同样不得自行删除。
 - 环境门禁、`bootstrap`、workflow `pre/post`、只读检查：`mat_exec` 直接执行对应命令。
 - 查询集群/队列（sinfo）、写输入文件（heredoc/cat）、提交 Slurm（sbatch）：同样经 `mat_exec`。
 - **提交后的作业监控用 `mat_job_watch` 异步批量监控**：一次注册全部 job_id，不要手动 squeue/sacct 轮询（见"提交和监控"节）。
@@ -58,23 +65,47 @@ HPC 凭据由工具管理，本 skill 不记录密码、AK/SK、服务器地址�
 
 ## 环境门禁（第一条业务命令）
 
-不要分别搜索 Python、CLI、workflow 源码、协议、task registry 或 `g16` 路径。开始任何队列查询、上传、pre/run/post 前，先通过 `mat_exec` 在目标集群执行一次：
+不要分别搜索 Python、CLI、workflow 源码、协议、task registry 或 `g16` 路径。开始任何队列查询、上传、pre/run/post 前，先通过 `mat_exec` 在目标集群执行一次门禁脚本。
+
+门禁脚本**常驻远端家目录**：`$HOME/workspace/.gaussian-calc/scripts/`（`check_environment.sh` + `env_profile.sh`，与本机 `<GAUSSIAN_CALC>/scripts/` 同版）。直达执行（冷启动可近 1 分钟，timeout 给足）：
 
 ```bash
-bash <GAUSSIAN_CALC>/scripts/check_environment.sh
+mat_exec({"cluster_id": "{cluster_id}", "command": "bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh", "timeout_seconds": 180})
+```
+
+**仅当脚本缺失或代数旧时播种/刷新一次**：`mat_upload` 依赖 MAT 凭证不能作主通道，heredoc 是唯一无凭证内容通道。判旧标准：报 `SCRIPT_NOT_FOUND`，或 stdout JSON 不是 `gaussian-env-gate.v2`、缺 `deployed_version`/`expected_version`/`newer_version` 字段——字段集即脚本代数。刷新时 read 取本机 `<GAUSSIAN_CALC>/scripts/` 两个文件全文（仅为原样传输），heredoc 落到同一远端目录后重跑：
+
+```bash
+mat_exec({"cluster_id": "{cluster_id}", "command": "mkdir -p $HOME/workspace/.gaussian-calc/scripts && cat > $HOME/workspace/.gaussian-calc/scripts/env_profile.sh <<'GATE_EOF'
+<env_profile.sh 全文，原样粘贴，不改一行>
+GATE_EOF
+cat > $HOME/workspace/.gaussian-calc/scripts/check_environment.sh <<'GATE_EOF'
+<check_environment.sh 全文，原样粘贴，不改一行>
+GATE_EOF
+bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh", "timeout_seconds": 180})
 ```
 
 脚本只做无副作用检查，不运行 `g16`、不提交 Slurm，stdout 只返回一个 `gaussian-env-gate.v2` 单行 JSON。例如：
 
 ```json
-{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","required_tasks":["freq","opt"],"tasks":["freq","opt"],"missing_tasks":[],"task_count":2,"g16":"$HOME/workspace/g16-hy/scripts/env.sh","errors":[]}
+{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.2.3","expected_version":"1.2.3","newer_version":"","required_tasks":["aea",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":11,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
 ```
 
 `required_tasks` 是 skill 要求的公开 task 集，`missing_tasks` 是运行时实际缺失的 task；任何 `missing_tasks` 都会使 `ok=false`。
 
+`deployed_version`/`expected_version` 是部署版本锚：前者读部署侧 `<workflow_root>/VERSION`，后者是 skill 侧 `env_profile.sh` 的期望。二者不等 → `errors` 含 `version_mismatch`；期望非空而部署侧无 VERSION → `version_unpinned`。两者都说明「本文档 vs 实际部署」已漂移：立即停止，先对齐再执行，不得带着版本漂移继续干活。
+
+`newer_version` 是新鲜度提醒（warning，不影响 `ok`）：非空说明旁边有部署完整的更高版本而 skill 期望仍锚在旧版——当前会话继续按本文档执行，但把该提醒原样转告用户，由用户决定是否升级期望。
+
 - `ok=true`：环境门禁通过；保存结果，本次会话不再查找环境或阅读源码，直接进入队列选择和计算。
 - `ok=false`：立即停止。只根据 `errors` 报告缺失项；不得继续搜索源码、猜测 fallback、提交作业。若错误是 `g16_env_missing`/`g16_unavailable`，可按本文 bootstrap 指令修复一次，然后只重跑门禁。
-- 可显式覆盖默认路径：`bash check_environment.sh <workflow_root> <g16_home>`。
+- 可显式覆盖默认路径：`bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh <workflow_root> <g16_home>`。
+
+门禁是黑盒，只看 stdout 的单行 JSON：
+
+- **不要读脚本内容来理解它检查什么**——read 全文只为 heredoc 传输；判定一律以输出 JSON 为准，不复刻脚本内部的逐项检查（`--help`、python 探针、`inspect.getsource` 都算违规探测）。
+- 远端报找不到脚本（如 `SCRIPT_NOT_FOUND`）或 JSON 缺版本字段时，唯一动作是按上述播种步骤 heredoc 落盘重跑门禁；不是降级为手工逐项检查环境。
+- **不要用 python 探针自查 task registry**：task 注册是 `import gaussian_workflow` 的副作用，裸 `from calcflow.task.registry import list_tasks` **恒返回 `[]`**，据此判定"部署缺 task"必然误判。task 集只能信门禁 JSON 的 `tasks`/`missing_tasks`。
 
 ## 最小决策树
 
@@ -84,8 +115,8 @@ bash <GAUSSIAN_CALC>/scripts/check_environment.sh
 2. 任务能力必须与部署一致：skill 声明支持 `freq` 时，若 registry 缺少 `freq`，立即停止并报告部署版本漂移，不能静默改用旧实现。
 3. `opt+freq` 必须使用公开的 composition DSL；不得退化为 `-t opt` 加隐藏的 `calculator_kwargs.freq` route hack。只有用户明确要求兼容旧部署时，才可说明该差异，不得自动执行 fallback。
 4. 结构或配置文件上传前先做一次远端存在性和内容校验；若共享文件系统已可见，跳过上传，不重复复制。
-5. 计算完成后默认返回结构化结果和关键产物路径；只有用户明确要求正式报告时，才生成额外 Markdown 报告。
-6. 队列查询只需一次。若返回不完整，使用一次明确的只读 fallback（例如 `sinfo`），仍无法确认时交给用户选择，不循环尝试。
+5. 计算完成后从 `result.json` 获取结构化结果（properties、status、warnings、files、plots）；可可视化任务把 `plots` 的图与绘图数据路径一并报告；只有用户明确要求正式报告时，才生成额外 Markdown 报告。
+6. 队列查询只需一次 `sinfo`。若输出不完整，使用一次明确的只读 fallback（如 `scontrol show partitions`），仍无法确认时交给用户选择，不循环尝试。
 
 ## 执行模型
 
@@ -99,7 +130,7 @@ pre → run → mat_exec 提交（sbatch）→ mat_job_watch 批量异步监控 
 - `run`：读取 state 与可选 `run.json`，仅生成或更新 `slurm.sh`；**不在登录节点执行 `g16`**。
 - `mat_exec`：提交（sbatch）已生成的 Slurm 脚本；集群检查、文件操作也经它。
 - `mat_job_watch`：把本轮全部 job_id **一次**注册为后台批量监控（服务端自适应轮询 sacct，无模型请求），全终态后收到会内完成通知。
-- `post`：验证 Gaussian 正常终止和任务所需收敛，解析完成的输出并返回结构化结果。
+- `post`：验证 Gaussian 正常终止和任务所需收敛，解析完成的输出并返回结构化结果，同时写入 `{work_dir}/result.json`（`calcflow.result.v1`）。
 
 Slurm 脚本中的计算命令仍是：
 
@@ -128,8 +159,11 @@ mat_gaussian({
 - **参数默认**：pre.json 默认 B3LYP/6-31G(d)、charge 0/mult 1、opt ["Tight","CalcFC"]、freq "HPModes"、32 核/64GB；run.json 默认 Agent0/1 节点/32 核/00:30:00/64GB。需要不同方法基组或资源时，经 `options.pre_json`/`options.run_json` 传**完整** phase 配置（结构同上文 pre.json/run.json 节；注意 `resources.ncores ≤ slurm.ntasks_per_node`、`resources.memory ≤ slurm.mem` 校验仍生效）。
 - **返回即离手**：工具返回 slurm job id 与后台作业 id 后本轮即可结束；后台 producer 服务端轮询 sacct（无模型请求），**终态后自动执行 post 并解析**，会话内收到完成通知。
 - **读结果**：通知后 `job_output({"job_id": "<background job id>"})` 一次拿到：`properties`（energy、converged、`frequencies_cm-1`、`imaginary_frequency_count`）、`files`（如 `g16_optimized.xyz`、`job.log`）与逐作业终态行。**无需再跑 `cat result.json`**——post 结果已由 producer 解析进输出；需要原始 result.json 或大文件时再经 `mat_exec`/`mat_download` 取。
+- **`job_output` 即终点**：`properties` 与终态行已足够判定成败并向用户汇报；**不要为"呈现完整结果"主动 `cat` `files` 里的原始产物**（`g16_optimized.xyz`、`job.log`、几何坐标全文都算）——产物路径已列在 `files`，用户明确要看优化几何或原始输出时再按需取回。仅当需要 `properties` 之外的字段（`steps`、`warnings`、`science`、`error_detail`、`plots`）或诊断失败时，才 `mat_exec` 执行 `cat {work_dir}/result.json`。
+- **图与绘图数据（`plots`）**：freq/tddft/fluorescence/opt/ts/opt+freq/irc 的 post 会在 `result.json` 生成 `plots` 数组（`{"kind", "image", "data"}`，图 PNG + 绘图数据 CSV 两类路径）。用户要看图/拿绘图数据时：先看 `job_output` 是否已带 plots 路径，没有则 `cat {work_dir}/result.json` 取 `plots` 字段，向用户报告图的类型与两个路径（PNG 给直觉、CSV 可复绘后处理），取回走 `mat_download`。`image=null` = 该环境缺 matplotlib、图未渲染，告知用户完整数据在 `data` 指向的 CSV；`result.json` **无 `plots` 键 = 旧版部署，正常继续不报错**（纯数值任务本就没有）。不要 `cat`/下载 PNG 内容做分析，不要通读 CSV 全文。
 - **失败语义**：slurm 作业非 COMPLETED → 不跑 post，`job_output` 里带 `log_tail`（job.log 尾部 50 行）供诊断；COMPLETED 但 post 失败 → 作业仍按完成结算，输出里标注 `post failed` 与 log_tail。
 - **边界**：多波组合（`opt+sp`、`aea` 等需要分波提交/二次 run 的形态）**不支持**一站式，仍走分步链路；每个 `mat_gaussian` 占用一个后台作业配额（owner 上限 10），批量独立计算 = 多次调用；`max_wait_seconds` 默认 1800，超时按 max-wait 结算、不跑 post——续盯或重新评估，不是错误。
+- **重试 workdir 语义**：重跑同一计算优先复用原 workdir（phase state 幂等，重复调用会重建 `.calcflow-phase.json` 并覆盖同名产物）；确需换新 workdir（如排查 workdir 污染）时，在回复中明确告知新命名与理由，**禁止静默 `_v2`/`_v3` 后缀漂移**。
 
 `aea` 保留其专用多步行为：
 
@@ -147,65 +181,23 @@ AEA = E(neutral) - E(anion)
 
 | 角色 | 位置 / 入口 | 说明 |
 |---|---|---|
-| 集群 pre/post 环境 | `$HOME/workspace/demo/env.sh` | **双 wheel 新协议部署（demo debug 环境）**：与 141 的 `/public` 公共部署不同，workflow 不放 public，而是**与 bootstrap 后的 g16 同在用户 workspace**。conda-pack 环境 + 两个独立 wheel（先装 `calcflow`，再装 `gaussian-workflow`）；source 后 `gaussian-workflow` 跑新协议（顶层对象 pre.json / 禁 `--idempotency-id` / AEA 子目录各份 slurm / post `{}`）。无需上传源码或手动设 `PYTHONPATH` |
+| 集群 pre/post 环境 | `$HOME/workspace/demo/env.sh` | 部署在用户 workspace 的 workflow Python 环境；source 后 `gaussian-workflow` 进 PATH，无需上传源码或设 `PYTHONPATH` |
 | g16 runtime | `$HOME/workspace/g16-hy/scripts/env.sh` | bootstrap 后的用户副本；**仅**经 `GAUSSIAN_ENV_SCRIPT` 由 `run` 写入 slurm.sh，pre/post 不 source |
 
 两类环境互不混淆：pre/post 用部署的 workflow Python 环境（下文记作变量 `workflow_env`）；g16 计算用用户副本（仅 slurm 作业内 source，经 `GAUSSIAN_ENV_SCRIPT` 传入）。`workflow_env` 与 `GAUSSIAN_ENV_SCRIPT` 指代的是**两个不同的 env.sh**，不可互换。
 
-### demo debug 集群（直连，不走 HPC）
-
-> **mat-dsh 适用范围（2026-08-28）**：以下为上游作者的 ssh 直连调试环境。本 harness 的集群通道是 mat_exec（HPC 集群，如 11250）；仅当用户明确要求操作 demo 调试机且本机已配 ssh 时才按下述直连方式执行。
-
-本 debug skill 部署在 **demo**（`cancon.internal-hpc.example:65023`，user `hpc-user-a`，登录节点 login01，CentOS 7 / glibc 2.17，Slurm 在 `/opt/gridview/slurm/bin`）。开发机 `~/.ssh/config` 已配别名，**所有远程命令、部署更新、文件传输、作业提交监控一律直连 `ssh demo`**，HPC 工具链（mat-command-executor / mat-job-manager / mat-chat）在本集群不可用。与下文"HPC 完整执行链路"的对应关系：
-
-| HPC 工具动作 | demo 直连等价命令 |
-|---|---|
-| `mat-command-executor` 执行远程命令 | `ssh demo '<command>'` |
-| `mat-job-manager upload-file` | `scp <local> demo:{work_dir}/` |
-| `mat-job-manager submit-job` | `ssh demo 'cd {work_dir}/<task> && sbatch slurm.sh'` |
-| `mat-job-manager monitor-job` | `ssh demo 'squeue -j <job_id>'`（离开队列后用 `sacct -j <job_id>`） |
-| `mat-chat` 下载产物 | `scp demo:<remote_path> <local>` |
-
-布局约定（debug 环境命名 `demo`）：g16 副本与 workflow 同在用户 workspace，**不放 `/public` 公共目录**：
-
-```text
-$HOME/workspace/g16-hy/          # bootstrap 后的 g16 副本（scripts/env.sh）
-$HOME/workspace/demo/           # 本 debug 环境：conda-pack + 双 wheel
-├── env.sh                       # source 后 gaussian-workflow 进 PATH
-├── bin/python                   # conda-pack Python 3.11
-└── wheels/                      # calcflow + gaussian-workflow 双 wheel 离线副本
-```
-
-**更新 workflow（开发机 → demo）**：在 `mat-aitool` 仓库根构建双 wheel 并 conda-pack，scp 上传后解包到 `$HOME/workspace/demo`，用 `$HOME/workspace/demo/bin/python` 离线安装（`calcflow` 在前、`gaussian-workflow` 在后），再重跑环境门禁确认。日常 debug 迭代只需**轻量更新**（只换 wheel，不动 conda-pack 环境）：
-
-```bash
-# 开发机：重建 wheel → 传到集群 staging（注意用 $HOME 下的共享目录）
-./scripts/build_workflow_wheels.sh gaussian-workflow /tmp/demo-wheels
-scp /tmp/demo-wheels/*.whl demo:workspace/.demo-deploy/
-# 集群：覆盖 wheels/ 副本并强制重装（CalcFlow 在前）
-ssh demo 'set -e; cp ~/workspace/.demo-deploy/*.whl ~/workspace/demo/wheels/ &&
-  ~/workspace/demo/bin/python -m pip install --no-index --no-deps --force-reinstall ~/workspace/demo/wheels/calcflow-*.whl &&
-  ~/workspace/demo/bin/python -m pip install --no-index --no-deps --force-reinstall ~/workspace/demo/wheels/gaussian_workflow-*.whl'
-```
-
-**坑：cancon.internal-hpc.example 轮询解析多个登录节点（login01/03/09...），`/tmp` 是节点本地的**——两次 ssh 可能落在不同节点。任何要跨命令/跨会话存活的文件（上传、staging、工作目录）放 `$HOME`（共享存储），不要放 `/tmp`。
-
-CLI 是否可用、支持哪些 task、是否新协议，都由环境门禁一次性回答，**不要**再用 `--help` 或试跑命令逐项探测。
-
 ### 协议判定
 
-本文档描述的是 gaussian-workflow **新协议**：`pre.json` 顶层对象、`post.json` 空对象 `{}`、禁用 `--idempotency-id`、AEA 每个就绪子目录各一份 `slurm.sh`、无 manifest 缓存。**集群部署版可能滞后于此**（旧版为顶层列表、`post.json` 空列表 `[]`、需 `--idempotency-id`、AEA 顶层单脚本 + manifest 缓存）。两套协议不兼容——按新文档跑旧部署版会每一步报错（`must be a top-level list`、顶层 `slurm.sh` 指向不存在的 `job.gjf`、第二波被 manifest 挡住等）。
-
-**协议由环境门禁的 `protocol` 字段判定**：`check_environment.sh` 返回 `"protocol":"new"` 即新协议，按本文档继续；`"protocol":"old"` 或 `protocol_not_new` 错误 → 部署版为**旧协议**，**立即停止**，告知用户：集群 gaussian-workflow 需**升级**到新协议版本后方可按本 skill 执行。**不要**为此读 workflow 源码、跑自定义 python 探针或做等价性试验——门禁已经给出答案。
-
-**旧协议下禁止**：不得用 `edit_file` 改 `slurm.sh`、`mv manifest.json`、把 `pre.json`/`post.json` 临时改成顶层列表等手段把旧部署版**硬适配**成本文档流程——那只是掩盖协议漂移、结果不可复现。唯一正确处置是先升级部署版，再按本文档从头执行。
+**协议由环境门禁的 `protocol` 字段判定**：返回 `"protocol":"new"` 即按本文档继续；`"protocol":"old"` 或 `protocol_not_new` 错误 → 部署版为**旧协议**，**立即停止**，告知用户：集群 gaussian-workflow 需**升级**到新协议版本后方可按本 skill 执行。**不要**为此读 workflow 源码、跑自定义 python 探针或做等价性试验——门禁已经给出答案；也**不得**用改 `slurm.sh`、挪 `manifest.json`、临时改 phase JSON 形态等手段把旧部署版硬适配成本文档流程——唯一正确处置是先升级部署版，再按本文档从头执行。
 
 Gaussian 频率结果可通过 `properties.frequencies_cm-1` 和 `properties.imaginary_frequency_count` 消费；若请求 acceptance `imaginary_frequency_count.equals = 0` 失败，执行状态仍可为 completed，但 workflow 状态为 needs_review，必须检查虚频后再决定是否继续。
 
 Gaussian 16 需要用户目录副本。首次使用时，通过 `mat_exec` 执行：
 
 ```bash
-mat_exec({"cluster_id": "{cluster_id}", "command": "bash <GAUSSIAN_CALC>/scripts/bootstrap_g16.sh", "timeout_seconds": 600})
+# bootstrap_g16.sh 是本机 skill 文件：先 read 全文，heredoc 落盘到 $HOME/workspace/.skill-gate/
+# 再执行（heredoc 模式见「环境门禁」播种用法）：
+mat_exec({"cluster_id": "{cluster_id}", "command": "bash $HOME/workspace/.skill-gate/bootstrap_g16.sh", "timeout_seconds": 600})
 ```
 
 默认路径：
@@ -330,7 +322,7 @@ resources.memory <= slurm.mem
 
 `post` 从 `{work_dir}/<task>/.calcflow-phase.json` 恢复参数和结构副本，读取完成的 log。它只在正常终止且所需收敛存在时报告结果。每个 phase 均向 stdout 输出一个 JSON 对象，**同时写入 `{work_dir}/result.json`**——这是 `calcflow.result.v1` 规范化的结构化结果，agent 应**优先读取 `result.json`** 获取所有物性、状态和产物路径，而不是直接解析 `job.log`。
 
-结果 JSON 至少包含 `software`、`task`、`phase`、`status`、`execution`、`workflow`、`science`、`properties`、`files`、`slurm`、`error`、`warnings`。错误结果仍保留 CLI 的完整 `task`，且 `files`/`images` 为空。
+结果 JSON 至少包含 `software`、`task`、`phase`、`status`、`execution`、`workflow`、`science`、`properties`、`files`、`slurm`、`error`、`warnings`。错误结果仍保留 CLI 的完整 `task`，且 `files`/`images`/`plots` 为空。
 
 `result.json` 关键字段速查：
 
@@ -344,6 +336,7 @@ resources.memory <= slurm.mem
 | `properties` | 所有物性（energy、converged、frequencies_cm-1、imaginary_frequency_count 等） |
 | `warnings` | 非致命警告列表 |
 | `files` | 生成的所有产物文件绝对路径 |
+| `plots` | 可可视化任务的图与绘图数据：`[{"kind", "image", "data"}]`（kind 与 task 对应：`ir_spectrum` / `uvvis_spectrum` / `emission_spectrum` / `scf_convergence` / `irc_profile`）；`image` 为 PNG 绝对路径、`data` 为 CSV 绝对路径（原始绘图数据，可复绘/后处理）；`image=null` = 该环境缺 matplotlib、图未渲染，数据仍在 CSV；**无 `plots` 键 = 旧版部署，属正常不报错**；sp/dipole/polar/resp/aea 纯数值任务本就没有 |
 | `error` / `error_detail` | 错误信息与建议 |
 | `steps` | 多步组合的每步详情（pre/run/post 状态） |
 
@@ -395,12 +388,13 @@ Gaussian 在同一作业内优化收敛后自动接频率分析（route `opt fre
 ### 约定
 
 - `{work_dir}`：本 skill 所涉计算的工作目录（系统给定，**绝对路径**）。存为变量后，**全流程 Step 0–6 用同一值、原样复用**——远端 shell 无持久 cwd，故每条远程命令前置 `cd "{work_dir}" &&`。子目录（`opt/`、`aea/01-neutral-opt/` 等）由 gaussian-workflow 自建。
+- **重试 workdir 语义**：重跑同一计算优先复用原 `{work_dir}`（phase state 幂等，重复 `pre`/`run` 安全、同名产物覆盖）；确需换新 `{work_dir}` 时，在回复中明确告知新命名与理由，禁止静默 `_v2`/`_v3` 后缀漂移。
 - `{cluster_id}`：HPC 集群 ID（示例 11250，华东一区昆山），从对话/上下文获取，**永久保存到上下文**，后续直接复用、不再询问。
 - `{partition}`：SLURM 分区（队列），**涉及计费，不写死、不自动选**——Step 0 经 `sinfo` 采集、由用户确认后保存。它仅写进 `run.json.slurm.partition`，由 `run` 渲染进 `slurm.sh` 的 `#SBATCH -p`。
-- `workflow_env`：部署的 workflow Python 环境（值见"环境与部署"，`$HOME/workspace/demo/env.sh`，新协议双 wheel 部署）。pre/run/post 命令前 `source "$workflow_env"` 拿到跑新协议的 `gaussian-workflow`。
+- `workflow_env`：部署的 workflow Python 环境（值见"环境与部署"，`$HOME/workspace/demo/env.sh`）。pre/run/post 命令前 `source "$workflow_env"` 拿到 `gaussian-workflow`。
 - `GAUSSIAN_ENV_SCRIPT`：g16 runtime（bootstrap 后的 `$HOME/workspace/g16-hy/scripts/env.sh`），**仅**由 `run` 写进 slurm.sh 供作业内 source；pre/post 不 source 它。
 - **所有命令经 `mat_exec` 在目标集群登录节点执行**，无 MAT_SANDBOX 路由概念，也无 access-key/secret-key/user 参数。
-- **下载产物**：需将 log、优化结构、RESP 电荷、光谱文件取回本地时，经 `mat_exec` 执行 `cat`/`tail` 读取内容（文本产物）。
+- **下载产物**：post 完成后优先读取 `{work_dir}/result.json`（`calcflow.result.v1` 结构化结果）；仅在用户明确要求或 `result.json` 不足以定位问题时，才经 `mat_exec` 执行 `cat`/`tail` 读取原始产物（log、优化结构、RESP 电荷、光谱文件等）。
 
 ### 0. 确认集群和队列（确定 `{cluster_id}` + `{partition}`，完成后永久保存）
 
@@ -411,6 +405,8 @@ Gaussian 在同一作业内优化收敛后自动接频率分析（route `opt fre
 # 队列：查询选定集群的可用队列，交用户确认（涉及计费，勿自动选）
 mat_exec({"cluster_id": "{cluster_id}", "command": "sinfo -o '%P %a %l %D %t %N'", "timeout_seconds": 30})
 ```
+
+输出字段依次为：分区（`%P`）、可用性（`%a` up/down）、时限（`%l`）、节点数（`%D`）、状态（`%t`）、节点列表（`%N`）。`%t` 常见值：`idle` 全空闲、`mix` 部分空闲、`alloc` 占满、`drain*` 故障。向用户呈报时按此解读：只有 `alloc` 的分区要提示排队等待，`drain*` 节点不计入可用；分区仍由用户确认，不自动选。
 
 **无需任何 AK/SK/user 参数**——凭据由 `mat_exec` 自管，本 skill 不写死。
 
@@ -527,7 +523,7 @@ job_output({"job_id": "mat-watch-N"})
 
 规则与边界：
 
-- **只有全部作业终态后才执行 post。** 表里有 FAILED/CANCELLED/TIMEOUT 时先经 `mat_exec` 查 log（`grep "Normal termination"`），不要直接重提。
+- **只有全部作业终态后才执行 post。** 表里有 FAILED/CANCELLED/TIMEOUT 时，先执行 post（它可能仍能产出部分结果），再根据 `result.json` 的 `error` 和 `execution.status` 判断是否需要重提。
 - `job_kill` 只取消**监控**，不会取消集群作业本身；要终止作业必须显式 `mat_exec` 执行 `scancel <job_id>`。
 - `max_wait_seconds`（默认 86400）到点仍未全终态时监控按 `max-wait exceeded; still active: ...` 正常结束——再调一次 `mat_job_watch` 续盯即可，不是错误。
 - 同一会话连续 3 次自动唤醒后，后续完成通知会转为注入（不再新开轮次）；收尾前用 `job_list` / `job_output` 对账一次。
@@ -556,30 +552,22 @@ mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/result.json",
 
 对于 JSON 以外的默认参数，可省略 `--json`，但 `-t/-p/-i/-w` 仍必须提供。
 
-### 6. 下载产物（经 `mat_exec`）
+### 6. 获取产物（经 `mat_exec`，优先 `result.json`）
 
-需将 log、优化结构、RESP 电荷、光谱文件等取回本地时，通过 `mat_exec` 执行 `cat` 命令读取内容（文本产物）：
+**优先从 `result.json` 获取结果**：`result.json` 的 `properties` 包含所有物性，`files` 列出全部产物路径。仅当用户明确要求查看原始输出（log、结构等）时，才按需读取 `files` 中列出的文件：
 
 ```bash
-# 读取 log 文件（检查正常终止、SCF 收敛等）
-mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/opt/job.log", "timeout_seconds": 60})
+# 始终先读 result.json——这是规范化的结构化结果
+mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/result.json", "timeout_seconds": 30})
 
-# 读取优化后的结构
+# 仅在用户要求时，才按需读取单个产物（路径来自 result.json 的 files 列表）
+# 例如：优化结构、RESP 电荷、光谱文件等
 mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/opt/g16_optimized.xyz", "timeout_seconds": 30})
-
-# 读取 RESP 电荷文件
 mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/opt/*_resp.chg", "timeout_seconds": 30})
-
-# 读取光谱文件
 mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/opt/spectrum_curve.txt", "timeout_seconds": 30})
 ```
 
-对于大文件，可使用 `tail` 读取末尾部分：
-
-```bash
-# 只读取 log 文件的末尾 100 行（通常包含收敛信息和正常终止标记）
-mat_exec({"cluster_id": "{cluster_id}", "command": "tail -n 100 {work_dir}/opt/job.log", "timeout_seconds": 30})
-```
+> **禁止**：post 完成后直接 `cat job.log` 或 `grep "Normal termination"` 来解析结果——这些信息已在 `result.json` 中结构化呈现（`execution.status`、`properties.converged` 等），重复解析浪费 token 且容易出错。仅当 `result.json` 的 `status == "error"` 且 `error_detail` 不足以定位问题时，才回退到读取原始 log 尾部。
 
 ## 特殊 task
 
@@ -666,9 +654,12 @@ TS/IRC 不自动完成 TS→IRC；普通稳定分子不能直接作为 IRC 起�
 
 ## 故障排查
 
+**优先检查 `result.json`**：`status`、`execution.status`、`workflow.status`、`error`、`warnings` 已涵盖绝大多数故障场景。仅当 `result.json` 信息不足时才回退到原始 log：
+
 ```bash
-grep -n "Normal termination of Gaussian" {work_dir}/<task>/*.log
-grep -n "SCF Done:" {work_dir}/<task>/*.log | tail
+# 仅在 result.json 不足以定位问题时，才检查原始 log
+mat_exec({"cluster_id": "{cluster_id}", "command": "grep -n \"Normal termination of Gaussian\" {work_dir}/<task>/*.log", "timeout_seconds": 30})
+mat_exec({"cluster_id": "{cluster_id}", "command": "grep -n \"SCF Done:\" {work_dir}/<task>/*.log | tail", "timeout_seconds": 30})
 ```
 
 - `g16` 找不到：确认 `GAUSSIAN_ENV_SCRIPT` 指向已 bootstrap 的 `$HOME/workspace/g16-hy/scripts/env.sh`。

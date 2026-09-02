@@ -1,0 +1,1 @@
+用 gaussian-calc 技能对一氧化碳分子做单点能计算，B3LYP/def2SVP，工作目录用 ~/workspace/stress/a2-sp/，完成后汇报能量（Hartree）。

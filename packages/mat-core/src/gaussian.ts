@@ -6,17 +6,25 @@
  * 返回 slurmJobId。post 段与终态物性解析由 producer 增补（见 watch-loop 钩子）。
  */
 
-import { outputText } from './client'
-import type { ExecCommandFn } from './slurm'
-import { parseSbatchSubmission } from './slurm'
-import { createWatchLoop } from './watch-loop'
-import type { SlurmJobInfo } from './job-state'
-import type { WatchLoopHooks, WatchOutcome } from './watch-loop'
+import { outputText } from './client.ts'
+import type { ExecCommandFn } from './slurm.ts'
+import { parseSbatchSubmission } from './slurm.ts'
+import { createWatchLoop } from './watch-loop.ts'
+import type { SlurmJobInfo } from './job-state.ts'
+import type { WatchLoopHooks, WatchOutcome } from './watch-loop.ts'
+import { createGaussianMatAdapter } from './workflow-contract.ts'
+import type { RemoteWorkflowAdapter, RemoteWorkflowRequest, RemoteWorkflowResult } from './workflow-contract.ts'
 
 export const DEFAULT_WORKFLOW_ENV = '$HOME/workspace/demo/env.sh'
 export const DEFAULT_G16_ENV = '$HOME/workspace/g16-hy/scripts/env.sh'
 
 /** 透传项（缺省值对齐 plugin.py gaussian_calc）。 */
+export function createLegacyGaussianWorkflowAdapter(options: {
+  execute: (request: RemoteWorkflowRequest) => Promise<RemoteWorkflowResult>
+}): RemoteWorkflowAdapter {
+  return createGaussianMatAdapter(options.execute)
+}
+
 export interface GaussianOptions {
   preJson?: Record<string, unknown>
   runJson?: Record<string, unknown>

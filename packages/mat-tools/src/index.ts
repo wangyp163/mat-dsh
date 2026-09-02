@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 // 引入 dsh-system-prompt 的 Context 声明合并（仅类型）。
@@ -12,14 +14,20 @@ import {
   parseSinfoOutput,
   queryJobStatus,
   runGaussianSync,
+  createLegacyGaussianWorkflowAdapter,
+  createRemoteWorkflowRequest,
+  defaultPreJson,
+  defaultRunJson,
   sbatchCommand,
   scancelCommand,
 } from 'mat-core'
 import type { GaussianOptions } from 'mat-core'
-import { EfileClient, TokenClient } from 'mat-core'
+import { EfileClient, ShellFileTransferClient, TokenClient } from 'mat-core'
 import { createStatusBoard } from 'mat-core'
-import type { GaussianProducerResult, SlurmJobInfo, StatusBoard } from 'mat-core'
-import { resolveEfileCredentials } from './efile-env'
+import type { GaussianProducerResult, RemoteWorkflowAdapter, MatJobStatus, SlurmJobInfo, StatusBoard } from 'mat-core'
+import { MatFileServiceImpl } from './file-service.ts'
+import type { SettledFileJob } from './file-service.ts'
+import { resolveEfileCredentials } from './efile-env.ts'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -30,6 +38,14 @@ declare module '@deepseek-ai/dsh-jobs' {
 
 export const name = 'mat-tools'
 export const inject = ['tools', 'systemPrompt']
+
+export interface MatFileService {
+  listFiles(clusterId: string, path: string, options?: import('mat-core').ListFilesOptions): Promise<import('mat-core').RemoteFilePage>
+  syncFile?(jobId: string, clusterId: string, workdir: string, remotePath: string, conflictPolicy: 'keep-both' | 'overwrite'): Promise<unknown>
+  listSyncs?(): unknown[]
+  getPreferences?(jobId: string): Promise<{ autoSync: boolean }>
+  setPreferences?(jobId: string, value: { autoSync: boolean }): Promise<void>
+}
 
 /** sacct Map → 状态板 JSON-safe 投影。 */
 function statusSlurm(states: ReadonlyMap<string, SlurmJobInfo>) {
@@ -42,14 +58,23 @@ function statusSlurm(states: ReadonlyMap<string, SlurmJobInfo>) {
 }
 
 /** producer done 的公共结算桥；状态板异常不连坐宿主后台作业。 */
-function settleBoard(board: StatusBoard, jobId: string, result: GaussianProducerResult): void {
+function settleBoard(board: StatusBoard, jobId: string, result: GaussianProducerResult, fileService?: MatFileServiceImpl): void {
   try {
     board.settle(jobId, {
       outcomeStatus: result.status,
+      ...(typeof result.properties?.['converged'] === 'boolean' ? { converged: result.properties['converged'] } : {}),
       ...(result.detail !== undefined ? { detail: result.detail } : {}),
       ...(result.properties !== undefined ? { properties: result.properties } : {}),
       ...(result.files !== undefined ? { files: result.files } : {}),
     })
+    const snapshot = board.list().find((entry) => entry.jobId === jobId)
+    if (fileService !== undefined && snapshot?.workdir !== undefined) {
+      const job: SettledFileJob = {
+        jobId, clusterId: snapshot.clusterId, workdir: snapshot.workdir,
+        outcomeStatus: result.status, files: result.files,
+      }
+      void fileService.handleSettledJob(job).catch(() => {})
+    }
   } catch {
     // UI 状态通道是旁路，不能影响 JobHooks 的完成语义。
   }
@@ -92,6 +117,43 @@ function getEfileClient(clusterId: string): Promise<EfileClient> {
   return pending
 }
 
+function canFallBackToRemoteShell(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.startsWith('efile file transfer requires ')
+    || /cluster .* (?:returned an empty token|has no efile endpoint)/.test(message)
+}
+
+function getShellFileClient(): ShellFileTransferClient {
+  return new ShellFileTransferClient({ execClient: getClient() })
+}
+
+function createMatFileService(): MatFileServiceImpl {
+  const localRoot = process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
+  const service = new MatFileServiceImpl({
+    localRoot,
+    transferFor: (clusterId) => ({
+      async downloadFile(remotePath, localPath) {
+        try { return await (await getEfileClient(clusterId)).downloadFile(remotePath, localPath) } catch (error) {
+          if (!canFallBackToRemoteShell(error)) throw error
+          return getShellFileClient().downloadFile(clusterId, remotePath, localPath)
+        }
+      },
+    }),
+  })
+  service.listFiles = async (clusterId, path, options) => {
+    const resolvedPath = path === '$HOME' || path.startsWith('$HOME/')
+      ? path.replace(/^\$HOME(?=\/|$)/, outputText(await getClient().execCommand(clusterId, 'printf %s "$HOME"', 30)).trim())
+      : path
+    try {
+      return await (await getEfileClient(clusterId)).listFiles(resolvedPath, options)
+    } catch (error) {
+      if (!canFallBackToRemoteShell(error)) throw error
+      return getShellFileClient().listFiles(clusterId, resolvedPath, options)
+    }
+  }
+  return service
+}
+
 /** mat_gaussian 的 options 透传（工具面 snake_case → 库面 camelCase）。 */
 function gaussianOptions(raw: unknown): GaussianOptions {
   const o = (raw ?? {}) as Record<string, unknown>
@@ -107,9 +169,46 @@ function gaussianOptions(raw: unknown): GaussianOptions {
   }
 }
 
+function statusStorePath(): string {
+  const root = process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
+  return join(root, 'jobs.json')
+}
+
+function loadPersistedJobs(path: string): MatJobStatus[] {
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf8')) as { jobs?: unknown }
+    return Array.isArray(value.jobs) ? value.jobs as MatJobStatus[] : []
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    return []
+  }
+}
+
+function persistJobs(path: string, jobs: MatJobStatus[]): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  const temporary = `${path}.part`
+  writeFileSync(temporary, JSON.stringify({ jobs }), { mode: 0o600 })
+  renameSync(temporary, path)
+}
+
+function freshStatusId(board: StatusBoard, base: string): string {
+  const existing = new Set(board.list().map((entry) => entry.jobId))
+  if (!existing.has(base)) return base
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${base}-${suffix}`
+    if (!existing.has(candidate)) return candidate
+  }
+}
+
 export function apply(ctx: Context): void {
-  const statusBoard = createStatusBoard()
+  const jobsPath = statusStorePath()
+  const statusBoard = createStatusBoard({
+    initialEntries: loadPersistedJobs(jobsPath),
+    onChange: (jobs) => persistJobs(jobsPath, jobs),
+  })
   ctx.provide('mat.status', statusBoard)
+  const fileService = createMatFileService()
+  ctx.provide('mat.files', fileService)
 
   // 工具引导段（宿主约定：tool guidance 槽位 100–199）——让模型第一时间知道
   // HPC 计算套件的存在、适用场景与 Slurm 工作流，而不是只靠工具 schema 自行发现。
@@ -135,8 +234,9 @@ export function apply(ctx: Context): void {
       'When all calculation options are already known, prefer the one-shot mat_gaussian tool: ' +
       'it prepares inputs, runs pre/run, submits, and a background producer runs the post phase ' +
       'automatically at terminal state — properties arrive via job_output after the completion notice. ' +
-      'Move files between this machine and a cluster with mat_upload/mat_download ' +
-      '(efile API, needs MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER credentials).',
+      'Move files between this machine and a cluster with mat_upload/mat_download. ' +
+      'They prefer the efile API with MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER and fall back ' +
+      'to the authorized remote-shell channel when that cluster has no OpenAPI file token.',
   })
 
   ctx.tools.register(defineTool({
@@ -299,12 +399,14 @@ export function apply(ctx: Context): void {
       const maxWaitMs = (args.max_wait_seconds ?? 86_400) * 1_000
       // 每次 watch 独立客户端：后台轮询与前台 mat_exec 会话互不干扰。
       const watchClient = newWatchClient()
+      let statusId = ''
       const id = jobs.start({
         kind: 'mat-watch',
         label: `${args.cluster_id} ×${jobIds.length} jobs`,
         outputLimitBytes: 4_096,
         ...exec.agent ? { owner: exec.agent } : {},
         run: () => {
+          const statusJobId = () => statusId ||= freshStatusId(statusBoard, id)
           const loop = createWatchLoop({
             clusterId: args.cluster_id,
             jobIds,
@@ -312,7 +414,7 @@ export function apply(ctx: Context): void {
             ...(pollSeconds !== undefined ? { maxPollMs: pollSeconds * 1_000 } : {}),
             onTick: (states) => {
               try {
-                statusBoard.upsert(id, {
+                statusBoard.upsert(statusJobId(), {
                   kind: 'mat-watch', label: `${args.cluster_id} ×${jobIds.length} jobs`,
                   clusterId: args.cluster_id, ownerSession: exec.agent?.id,
                   slurm: statusSlurm(states),
@@ -323,7 +425,7 @@ export function apply(ctx: Context): void {
             scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
             clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
           })
-          void loop.done.then((result) => settleBoard(statusBoard, id, result))
+          void loop.done.then((result) => settleBoard(statusBoard, statusJobId(), result, fileService))
           return loop
         },
       })
@@ -371,25 +473,56 @@ export function apply(ctx: Context): void {
         throw new Error('task, structure and workdir must be non-empty')
       }
       const options = gaussianOptions(args.options)
+      const runSlurm = options.runJson?.['slurm']
+      const runPartition = typeof runSlurm === 'object' && runSlurm !== null
+        ? (runSlurm as Record<string, unknown>)['partition']
+        : undefined
+      // run_json 完整覆盖默认 run 配置；若提供它，实际 partition 也必须从其中投影。
+      const partition = options.runJson !== undefined
+        ? (typeof runPartition === 'string' && runPartition !== '' ? runPartition : undefined)
+        : (args.partition !== undefined && args.partition !== '' ? args.partition : 'Agent0')
       // 同步段：独立客户端（prepare/pre/run/sbatch 四段往返）
       const syncClient = newWatchClient()
-      const { slurmJobId } = await runGaussianSync({
-        execCommand: (clusterId, command, timeoutSeconds) => syncClient.execCommand(clusterId, command, timeoutSeconds),
-        clusterId: args.cluster_id,
-        task: args.task.trim(),
-        structure: args.structure,
-        workdir: args.workdir.trim(),
-        ...(args.partition !== undefined && args.partition !== '' ? { partition: args.partition } : {}),
-        options,
+      const adapter: RemoteWorkflowAdapter = createLegacyGaussianWorkflowAdapter({
+        execute: async (request) => {
+          const structure = request.inputs['structure']
+          if (typeof structure !== 'string') throw new Error('Gaussian workflow request requires structure input')
+          const result = await runGaussianSync({
+            execCommand: (clusterId, command, timeoutSeconds) => syncClient.execCommand(clusterId, command, timeoutSeconds),
+            clusterId: request.clusterId,
+            task: String(request.inputs['task'] ?? args.task.trim()),
+            structure,
+            workdir: request.workdir,
+            partition,
+            options,
+          })
+          return { executionId: result.slurmJobId, workdir: request.workdir }
+        },
       })
+      const request = createRemoteWorkflowRequest({
+        workflow: adapter.workflow,
+        clusterId: args.cluster_id,
+        workdir: args.workdir.trim(),
+        inputs: {
+          task: args.task.trim(), structure: args.structure,
+          'pre.json': options.preJson ?? defaultPreJson(),
+          'run.json': options.runJson ?? defaultRunJson(partition),
+          'post.json': {},
+        },
+        requestedOutputs: ['properties', 'artifact_manifest'],
+      })
+      const { executionId: slurmJobId } = await adapter.run(request)
       // producer：再一个独立客户端（终态后自动 post，与同步段/前台隔离）
       const producerClient = newWatchClient()
+      let statusId = ''
       const id = jobs.start({
         kind: 'mat-slurm',
         label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
         outputLimitBytes: 8_192,
         ...exec.agent ? { owner: exec.agent } : {},
-        run: () => createGaussianProducerHooks({
+        run: () => {
+          const statusJobId = () => statusId ||= freshStatusId(statusBoard, id)
+          return createGaussianProducerHooks({
           execCommand: (clusterId, command, timeoutSeconds) => producerClient.execCommand(clusterId, command, timeoutSeconds),
           clusterId: args.cluster_id,
           task: args.task.trim(),
@@ -400,15 +533,16 @@ export function apply(ctx: Context): void {
           ...options.maxWaitSeconds !== undefined ? { maxWaitSeconds: options.maxWaitSeconds } : {},
           onTick: (states) => {
             try {
-              statusBoard.upsert(id, {
+              statusBoard.upsert(statusJobId(), {
                 kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
                 clusterId: args.cluster_id, ownerSession: exec.agent?.id,
-                task: args.task.trim(), workdir: args.workdir.trim(), slurm: statusSlurm(states),
+                task: args.task.trim(), workdir: args.workdir.trim(), partition, slurm: statusSlurm(states),
               })
             } catch { /* 状态板旁路故障不影响 producer */ }
           },
-          onResult: (result) => settleBoard(statusBoard, id, result),
-        }),
+          onResult: (result) => settleBoard(statusBoard, statusJobId(), result, fileService),
+          })
+        },
       })
       return [
         `gaussian ${args.task.trim()} submitted on ${args.cluster_id}: slurm job ${slurmJobId} (workdir: ${args.workdir.trim()}).`,
@@ -421,9 +555,9 @@ export function apply(ctx: Context): void {
   ctx.tools.register(defineTool({
     name: 'mat_upload',
     description:
-      'Upload a local file to an HPC cluster via the efile API (multipart, overwrites by default). ' +
-      'Use for sending structure/input files to the cluster shared filesystem; requires ' +
-      'MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER credentials in the harness environment.',
+      'Upload a local file to an HPC cluster (efile API preferred, remote-shell fallback; overwrites by default). ' +
+      'Use for sending structure/input files to the cluster shared filesystem. efile uses ' +
+      'MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER; fallback uses MAT_MCP_KEY.',
     parameters: {
       cluster_id: { type: 'string', required: true, description: 'HPC cluster id, e.g. 11250' },
       local_path: { type: 'string', required: true, description: 'Absolute local file path to upload' },
@@ -442,18 +576,27 @@ export function apply(ctx: Context): void {
       if (cover !== 'cover' && cover !== 'skip') {
         throw new Error(`cover must be 'cover' or 'skip', got '${cover}'`)
       }
-      const client = await getEfileClient(args.cluster_id)
-      const r = await client.uploadFile(args.local_path.trim(), args.remote_path.trim(), cover)
-      return `uploaded ${args.local_path.trim()} → ${args.cluster_id}:${r.path} (cover=${cover})`
+      try {
+        const client = await getEfileClient(args.cluster_id)
+        const r = await client.uploadFile(args.local_path.trim(), args.remote_path.trim(), cover)
+        return `uploaded ${args.local_path.trim()} → ${args.cluster_id}:${r.path} (cover=${cover})`
+      } catch (error) {
+        if (!canFallBackToRemoteShell(error)) throw error
+        if (cover === 'skip') {
+          throw new Error("cover='skip' requires the efile API, but this cluster has no authorized efile token")
+        }
+        const r = await getShellFileClient().uploadFile(args.cluster_id, args.local_path.trim(), args.remote_path.trim())
+        return `uploaded via remote-shell fallback ${args.local_path.trim()} → ${args.cluster_id}:${r.path} (${r.bytes} bytes)`
+      }
     },
   }))
 
   ctx.tools.register(defineTool({
     name: 'mat_download',
     description:
-      'Download a file from an HPC cluster via the efile API to a local path. ' +
-      'Use for fetching result artifacts (optimized structures, logs) from the cluster shared filesystem; ' +
-      'requires MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER credentials in the harness environment.',
+      'Download a file from an HPC cluster to a local path (efile API preferred, remote-shell fallback). ' +
+      'Use for fetching result artifacts (optimized structures, logs) from the cluster shared filesystem. ' +
+      'efile uses MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER; fallback uses MAT_MCP_KEY.',
     parameters: {
       cluster_id: { type: 'string', required: true, description: 'HPC cluster id, e.g. 11250' },
       remote_path: { type: 'string', required: true, description: 'Absolute file path on the cluster shared filesystem' },
@@ -467,9 +610,15 @@ export function apply(ctx: Context): void {
       if (!args.remote_path.trim() || !args.local_path.trim()) {
         throw new Error('remote_path and local_path must be non-empty absolute paths')
       }
-      const client = await getEfileClient(args.cluster_id)
-      const r = await client.downloadFile(args.remote_path.trim(), args.local_path.trim())
-      return `downloaded ${args.cluster_id}:${args.remote_path.trim()} → ${r.path} (${r.bytes} bytes)`
+      try {
+        const client = await getEfileClient(args.cluster_id)
+        const r = await client.downloadFile(args.remote_path.trim(), args.local_path.trim())
+        return `downloaded ${args.cluster_id}:${args.remote_path.trim()} → ${r.path} (${r.bytes} bytes)`
+      } catch (error) {
+        if (!canFallBackToRemoteShell(error)) throw error
+        const r = await getShellFileClient().downloadFile(args.cluster_id, args.remote_path.trim(), args.local_path.trim())
+        return `downloaded via remote-shell fallback ${args.cluster_id}:${args.remote_path.trim()} → ${r.path} (${r.bytes} bytes)`
+      }
     },
   }))
 }

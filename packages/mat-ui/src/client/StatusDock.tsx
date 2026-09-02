@@ -1,34 +1,26 @@
 import { useEffect, useState } from 'react'
+import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MonitorJob } from './status-model'
 
-type Job = {
-  jobId: string
-  kind: string
-  label: string
-  clusterId: string
-  phase: 'monitoring' | 'settled'
-  updatedAt: number
-  startedAt: number
+type Job = MonitorJob & {
+  kind?: string
+  label?: string
+  clusterId?: string
   outcomeStatus?: string
-  detail?: string
-  task?: string
-  workdir?: string
-  slurm?: Array<{ id: string; state: string; elapsedSeconds?: number; exitCode?: number }>
-  properties?: Record<string, unknown>
-  files?: string[]
 }
 
-function statusTone(job: Job): string {
-  if (job.phase === 'settled') return job.outcomeStatus === 'completed' ? 'complete' : 'attention'
-  return 'active'
+function statusState(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
+  if (job.phase !== 'settled') return 'ongoing'
+  return job.outcomeStatus === 'completed' ? 'done' : 'error'
 }
 
-function elapsed(job: Job): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - job.startedAt) / 1000))
-  if (seconds < 60) return `${seconds}s`
-  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-}
-
-export function StatusDock(): JSX.Element {
+export function StatusDock({
+  openDetailsTab,
+  onOpenTask = () => { openDetailsTab?.('mat-task') },
+}: {
+  openDetailsTab?: (id: string) => void
+  onOpenTask?: () => void
+}): JSX.Element {
   const [jobs, setJobs] = useState<Job[]>([])
   useEffect(() => {
     let alive = true
@@ -45,27 +37,22 @@ export function StatusDock(): JSX.Element {
     return () => { alive = false; window.clearInterval(timer) }
   }, [])
 
-  if (jobs.length === 0) return <div className="mat-status-dock mat-status-dock--empty">No active HPC jobs</div>
-  return <section className="mat-status-dock" aria-label="HPC job status">
-    <header className="mat-status-dock__header">
-      <span className="mat-status-dock__eyebrow">COMPUTATIONAL MONITOR</span>
-      <span className="mat-status-dock__count">{jobs.length} tracked</span>
-    </header>
-    <div className="mat-status-dock__jobs">
-      {jobs.map((job) => <article className="mat-status-card" key={job.jobId}>
-        <div className="mat-status-card__topline">
-          <span className={`mat-status-chip mat-status-chip--${statusTone(job)}`}>{job.phase}</span>
-          <code>{job.jobId}</code>
-          <span className="mat-status-card__elapsed">{elapsed(job)}</span>
-        </div>
-        <strong>{job.label}</strong>
-        <div className="mat-status-card__meta">cluster {job.clusterId}{job.task ? ` · ${job.task}` : ''}</div>
-        {job.slurm?.length ? <table className="mat-status-table"><tbody>{job.slurm.map((s) => <tr key={s.id}>
-          <th>{s.id}</th><td>{s.state}</td><td>{s.elapsedSeconds ?? '—'}s</td><td>{s.exitCode ?? '—'}</td>
-        </tr>)}</tbody></table> : null}
-        {job.detail ? <p className="mat-status-card__detail">{job.detail}</p> : null}
-        {job.properties ? <div className="mat-status-card__properties">{Object.entries(job.properties).slice(0, 3).map(([key, value]) => <span key={key}><b>{key}</b> {String(value)}</span>)}</div> : null}
-      </article>)}
-    </div>
-  </section>
+  const latest = jobs[jobs.length - 1]
+  return (
+    <button
+      type="button"
+      className="mat-status-strip"
+      aria-label={latest === undefined ? 'Open HPC task details' : `Open task ${latest.jobId}`}
+      onClick={onOpenTask}
+      role="status"
+    >
+      <StateDot state={latest === undefined ? 'done' : statusState(latest)} />
+      <span className="mat-status-strip__label">
+        {latest === undefined ? 'HPC ready' : latest.phase === 'settled' ? 'Computation finished' : 'Computation running'}
+      </span>
+      {latest !== undefined && <code>{latest.jobId}</code>}
+      {jobs.length > 1 && <span className="mat-status-strip__count">{jobs.length} tasks</span>}
+      <span className="mat-status-strip__action">Details</span>
+    </button>
+  )
 }

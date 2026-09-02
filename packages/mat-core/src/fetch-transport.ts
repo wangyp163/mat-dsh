@@ -6,7 +6,7 @@
  * 会话管理/JSON 体与 curl 版一致（initialize → mcp-session-id 头 → tools/call）。
  */
 
-import { parseToolCallResponse } from './curl'
+import { parseToolCallResponse } from './curl.ts'
 
 /** fetch 的最小形状（真实 Response 满足；测试注入 fake）。 */
 export interface FetchLike {

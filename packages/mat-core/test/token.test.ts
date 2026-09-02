@@ -92,4 +92,25 @@ describe('TokenClient', () => {
     await expect(c.getClusterInfo('11100')).rejects.toThrow(/efile/)
     await expect(c.getClusterInfo('99999')).rejects.toThrow(/99999/)
   })
+
+  it('getClusterInfo：token 响应无 URL 时调用 center discovery 并筛选 enable=true 的 efile', async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = []
+    const fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      const body = url.endsWith('/user/v3/tokens')
+        ? { code: '0', data: [{ clusterId: '11250', clusterName: '华东一区', token: 'tok-a' }] }
+        : { code: '0', data: { efileUrls: [
+            { enable: 'false', url: 'https://efile-disabled' },
+            { enable: 'true', url: 'https://efile-enabled/efile' },
+          ] } }
+      return { status: 200, headers: { get: () => null }, text: () => Promise.resolve(JSON.stringify(body)) }
+    }) as FetchLike
+    const c = makeClient(fetch)
+
+    await expect(c.getClusterInfo('11250')).resolves.toMatchObject({
+      token: 'tok-a', efileUrl: 'https://efile-enabled/efile',
+    })
+    expect(calls[1]?.url).toBe('https://mcp-gateway.example.internal/ac/openapi/v2/center')
+    expect((calls[1]?.init?.headers as Record<string, string>)['token']).toBe('tok-a')
+  })
 })

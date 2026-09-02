@@ -2,6 +2,13 @@
 
 HPC 科学计算 harness（基于 DeepSeek Harness 0.1.0-rc.8，树外组合，不改宿主源码）。
 
+## 产品边界
+
+mat-dsh 采用本地控制平面、HPC 计算平面的混合架构：本地 dsh 插件维护 skill、输入 schema、validator、声明式控制文件生成、结果解释器与 artifact 同步策略；HPC 维护并执行 workflow 商品、科学软件与许可证、集群适配和 Slurm 运行时。本地只发送结构及 `pre.json`/`run.json`/`post.json` 等控制数据，不上传 workflow 实现。
+
+远端保存完整原始结果，本地默认同步结构化结果与轻量重要文件；大型 checkpoint、波函数、轨迹和中间文件保持 `remote-only` 映射，需要时再按 Job 上下文同步。当前 Gaussian 命令链通过 `RemoteWorkflowAdapter` 作为兼容执行后端，待 HPC 提供统一的 workflow API 后可替换后端而不改变 skill 和工具调用面。
+
+- HPC Workflow API 产品形态（提案）：[`docs/mat-workflow-api-product.md`](docs/mat-workflow-api-product.md)
 - 设计：`../docs/superpowers/specs/2026-08-27-mat-dsh-design.md`
 - M0 spike 计划：`../docs/superpowers/plans/2026-08-27-mat-dsh-m0-spike.md`
 
@@ -51,10 +58,11 @@ pnpm --dir ../deepseek-harness dsh web --no-open --patch "$PWD/profiles/mat.yml"
   非 COMPLETED 跳过 post 带 log_tail 诊断；post 失败不判作业失败。默认 B3LYP/6-31G(d)、
   32 核/64GB、Agent0；`options` 透传 pre_json/run_json/workflow_env/g16_env/poll_seconds/
   max_wait_seconds（默认 1800s）。多波组合（opt+sp、aea）不适用，走分步链路。
-- `mat_upload` / `mat_download` —— efile 文件传输（token 流 HMAC-SHA256 签名 →
-  按集群取 token/efile 地址 → curl 子进程 multipart 上传 / content-type 分流下载）。
-  凭证环境变量 `MAT_ACCESS_KEY` / `MAT_SECRET_KEY` / `MAT_USER`（env.local，
-  缺谁点名谁）；未配置时工具报错不崩。
+- `mat_upload` / `mat_download` —— 文件传输。首选 OpenAPI：AK/SK HMAC-SHA256
+  换取集群 token → `/ac/openapi/v2/center` 发现启用的 efile 地址 → curl multipart 上传 /
+  content-type 分流下载；凭证为 `MAT_ACCESS_KEY` / `MAT_SECRET_KEY` / `MAT_USER`。
+  当目标集群未获 OpenAPI token/efile 权限时，自动改走已有 `MAT_MCP_KEY` 授权的
+  remote-shell 分块通道，校验字节数后原子替换目标。凭证均只放 gitignored `env.local`。
 
 **核心库新增**（`packages/mat-core`）：
 

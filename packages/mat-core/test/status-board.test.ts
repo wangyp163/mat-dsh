@@ -18,6 +18,7 @@ describe('createStatusBoard', () => {
       startedAt: 500,
       task: 'opt+freq',
       workdir: '/public/home/hpc-user-a/workspace/h2o-m2-probe',
+      partition: 'Agent0',
       slurm: [{ id: '120283614', state: 'RUNNING', elapsedSeconds: 15 }],
     })
     expect(board.list()).toEqual([
@@ -32,6 +33,7 @@ describe('createStatusBoard', () => {
         phase: 'monitoring',
         task: 'opt+freq',
         workdir: '/public/home/hpc-user-a/workspace/h2o-m2-probe',
+        partition: 'Agent0',
         slurm: [{ id: '120283614', state: 'RUNNING', elapsedSeconds: 15 }],
       },
     ])
@@ -53,6 +55,7 @@ describe('createStatusBoard', () => {
     board.upsert('j1', { kind: 'mat-slurm', label: 'g', clusterId: '11250', startedAt: 500 })
     board.settle('j1', {
       outcomeStatus: 'completed',
+      converged: true,
       detail: '1/1 settled (1 COMPLETED); opt+freq E=-76.4089539792 converged=true imag=0',
       properties: { energy: -76.4089539792, converged: true },
       files: ['/h2o/g16_optimized.xyz'],
@@ -102,6 +105,61 @@ describe('createStatusBoard', () => {
     const second = board.list()
     expect(second).toHaveLength(1)
     expect(second[0].label).toBe('w')
+  })
+
+  it('从持久化快照恢复且保留时间与终态字段', () => {
+    const board = createStatusBoard({
+      now: fixedClock(),
+      initialEntries: [{
+        jobId: 'persisted-1',
+        kind: 'mat-slurm',
+        label: 'gaussian opt @11250 #700',
+        clusterId: '11250',
+        startedAt: 500,
+        updatedAt: 800,
+        phase: 'settled',
+        task: 'opt',
+        workdir: '/home/u/work',
+        settledAt: 800,
+        outcomeStatus: 'completed',
+        files: ['job.log'],
+      }],
+    })
+
+    expect(board.list()).toEqual([{
+      jobId: 'persisted-1',
+      kind: 'mat-slurm',
+      label: 'gaussian opt @11250 #700',
+      clusterId: '11250',
+      startedAt: 500,
+      updatedAt: 800,
+      phase: 'settled',
+      task: 'opt',
+      workdir: '/home/u/work',
+      settledAt: 800,
+      outcomeStatus: 'completed',
+      files: ['job.log'],
+    }])
+  })
+
+  it('恢复时仍执行 settled 保留上限', () => {
+    const entry = (jobId: string, settledAt: number) => ({
+      jobId,
+      kind: 'mat-slurm',
+      label: jobId,
+      clusterId: '11250',
+      startedAt: 1,
+      updatedAt: settledAt,
+      phase: 'settled' as const,
+      settledAt,
+      outcomeStatus: 'completed' as const,
+    })
+    const board = createStatusBoard({
+      maxSettled: 2,
+      initialEntries: [entry('a', 10), entry('b', 20), entry('c', 30)],
+    })
+
+    expect(board.list().map((item) => item.jobId)).toEqual(['b', 'c'])
   })
 
   it('remove 移除条目', () => {

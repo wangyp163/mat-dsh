@@ -4,6 +4,7 @@ import {
   DEFAULT_G16_ENV,
   DEFAULT_WORKFLOW_ENV,
   createGaussianProducerHooks,
+  createLegacyGaussianWorkflowAdapter,
   defaultPreJson,
   defaultRunJson,
   logTailCommand,
@@ -21,6 +22,25 @@ import {
 // "status": "ok" 判定、sbatch 于 workdir/task/slurm.sh。
 
 const XYZ = '3\n\nO 0.000000 0.000000 0.117790\nH 0.000000 0.757160 -0.470790\nH 0.000000 -0.757160 -0.470790\n'
+
+describe('HPC Gaussian adapter', () => {
+  it('exposes the legacy command path behind the remote workflow adapter boundary', async () => {
+    const calls: string[] = []
+    const adapter = createLegacyGaussianWorkflowAdapter({
+      execute: async (request) => {
+        calls.push(request.workflow.id)
+        return { executionId: request.workdir, workdir: request.workdir }
+      },
+    })
+    await expect(adapter.run({
+      workflow: adapter.workflow,
+      clusterId: '11250',
+      workdir: '/home/u/job',
+      inputs: { task: 'opt', structure: XYZ, 'pre.json': {}, 'run.json': {}, 'post.json': {} },
+    })).resolves.toMatchObject({ executionId: '/home/u/job' })
+    expect(calls).toEqual(['gaussian-opt-freq'])
+  })
+})
 
 describe('默认配置', () => {
   it('defaultPreJson：schema/resources/ase 方法组完整', () => {

@@ -1,0 +1,1 @@
+用 gaussian workflow 跑一个 optimize 任务，水分子，目录 ~/workspace/stress/f2-unknown/。

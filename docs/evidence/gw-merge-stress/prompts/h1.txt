@@ -1,0 +1,1 @@
+~/workspace/stress/a4-optfreq/ 之前算过 opt+freq，帮我重新走一遍预处理，参数不变。

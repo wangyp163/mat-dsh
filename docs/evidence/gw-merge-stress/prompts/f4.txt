@@ -1,0 +1,1 @@
+帮我算水三阴离子（电荷 -3、单重态）的单点能，目录 ~/workspace/stress/f4-charge/。

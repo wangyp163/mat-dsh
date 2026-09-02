@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { monitorMetadata } from './status-model'
+import type { MonitorJob } from './status-model'
 
-type Job = { jobId: string; label: string; phase: string; outcomeStatus?: string; detail?: string; properties?: Record<string, unknown>; files?: string[] }
+type Job = MonitorJob & { label: string; outcomeStatus?: string }
 
 export function ResultTail(): JSX.Element | null {
   const [job, setJob] = useState<Job | undefined>()
@@ -12,5 +14,11 @@ export function ResultTail(): JSX.Element | null {
     return () => { live = false }
   }, [])
   if (!job) return null
-  return <aside className="mat-result-tail"><span className="mat-status-dock__eyebrow">LATEST COMPUTATION</span><strong>{job.label}</strong>{job.detail ? <p>{job.detail}</p> : null}{job.properties ? <div className="mat-status-card__properties">{Object.entries(job.properties).slice(0, 4).map(([k, v]) => <span key={k}><b>{k}</b> {String(v)}</span>)}</div> : null}{job.files?.length ? <small>files · {job.files.join(', ')}</small> : null}</aside>
+  return <aside className="mat-result-tail">
+    <span className="mat-status-dock__eyebrow">LATEST COMPUTATION</span>
+    <strong>{job.label}</strong>
+    <dl className="mat-status-card__metadata">
+      {monitorMetadata(job).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+    </dl>
+  </aside>
 }

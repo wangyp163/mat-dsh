@@ -10,20 +10,30 @@
     "./package.json": "./package.json"
   },
   "dsh": {
+    "harmony": {
+      "patches": [
+        "./turn-fold-compat.patch.cjs"
+      ]
+    },
     "client": {
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-theme",
-        "@deepseek-ai/dsh-client-ui-tool"
+        "@deepseek-ai/dsh-client-ui-tool",
+      "@deepseek-ai/dsh-client-ui-layout",
+      "@deepseek-ai/dsh-client-ui-primitives"
       ]
     }
   },
   "dependencies": {
+    "mat-core": "workspace:*",
     "@deepseek-ai/cordis": "link:~/mat-harness/deepseek-harness/vendor/cordis",
     "@deepseek-ai/dsh-client-ui-theme": "link:~/mat-harness/deepseek-harness/packages/client/ui-theme",
     "@deepseek-ai/dsh-client-ui-tool": "link:~/mat-harness/deepseek-harness/packages/client/ui-tool",
-    "@deepseek-ai/dsh-client-ui-conversation": "link:~/mat-harness/deepseek-harness/packages/client/ui-conversation"
+    "@deepseek-ai/dsh-client-ui-conversation": "link:~/mat-harness/deepseek-harness/packages/client/ui-conversation",
+    "@deepseek-ai/dsh-client-ui-layout": "link:~/mat-harness/deepseek-harness/packages/client/ui-layout",
+    "@deepseek-ai/dsh-client-ui-primitives": "link:~/mat-harness/deepseek-harness/packages/client/ui-primitives"
   }
 }

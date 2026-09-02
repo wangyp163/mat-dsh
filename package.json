@@ -6,7 +6,9 @@
   "scripts": {
     "typecheck": "tsc -b && tsc --noEmit -p scripts",
     "test": "vitest run",
+    "session-debug": "tsx scripts/session-debug.ts",
     "build:mat-ui": "node scripts/build-mat-ui.mjs",
+    "debug:session": "tsx scripts/session-debug.ts",
     "dsh": "pnpm --dir ~/mat-harness/deepseek-harness dsh"
   },
   "devDependencies": {

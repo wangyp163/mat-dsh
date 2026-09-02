@@ -7,21 +7,26 @@ describe('mat-ui client bundle', () => {
   it('ModuleLoader factory 自包含 CommonJS module，并返回 apply/inject 导出', async () => {
     const source = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
     expect(source).not.toContain('React.createElement')
-    let factory: ((require: (id: string) => unknown) => unknown) | undefined
+    let registration: {
+      id: string
+      factory: ((require: (id: string) => unknown) => unknown)
+    } | undefined
     const context = {
       window: {
         __ModuleLoader__: {
-          load(entry: { factory: typeof factory }) { factory = entry.factory },
+          load(entry: typeof registration) { registration = entry },
         },
       },
     }
     vm.runInNewContext(source, context)
+    expect(registration?.id).toBe('mat-ui')
+    const factory = registration?.factory
     expect(factory).toBeTypeOf('function')
     const react = { useEffect: () => {}, useState: () => [[], () => {}] }
     const jsx = { jsx: () => null, jsxs: () => null }
     const exported = factory!((id) => id === 'react' ? react : id === 'react/jsx-runtime' ? jsx : {}) as Record<string, unknown>
     expect(exported.apply).toBeTypeOf('function')
-    expect(exported.inject).toEqual(['slots', 'theme'])
+    expect(exported.inject).toEqual(['slots', 'theme', 'layout'])
 
     expect(source).not.toContain('mat-output-visibility')
   })
