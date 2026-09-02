@@ -14,6 +14,7 @@ import type { SlurmJobInfo } from './job-state.ts'
 import type { WatchLoopHooks, WatchOutcome } from './watch-loop.ts'
 import { createGaussianMatAdapter } from './workflow-contract.ts'
 import type { RemoteWorkflowAdapter, RemoteWorkflowRequest, RemoteWorkflowResult } from './workflow-contract.ts'
+import type { PlotEntry } from './status-board.ts'
 
 export const DEFAULT_WORKFLOW_ENV = '$HOME/workspace/demo/env.sh'
 export const DEFAULT_G16_ENV = '$HOME/workspace/g16-hy/scripts/env.sh'
@@ -126,18 +127,20 @@ export function logTailCommand(workdir: string, task: string, lines = 50): strin
 export interface GaussianPostParseResult {
   properties: Record<string, unknown>
   files: string[]
+  plots: PlotEntry[]
 }
 
 /**
- * 解析 post 输出：取首个以 `{` 开头且可 JSON.parse 的行的 properties/files
+ * 解析 post 输出：取首个以 `{` 开头且可 JSON.parse 的行的 properties/files/plots
  * （对齐 plugin.py §751-758，非法 JSON 行继续找）；无 JSON 行抛错带输出尾部。
+ * plots 缺省为空数组——兼容未带绘图通道的旧版 gaussian-workflow 部署。
  */
 export function parsePostOutput(stdout: string): GaussianPostParseResult {
   for (const line of stdout.split('\n')) {
     if (!line.startsWith('{')) continue
     try {
-      const data = JSON.parse(line) as { properties?: Record<string, unknown>; files?: string[] }
-      return { properties: data.properties ?? {}, files: data.files ?? [] }
+      const data = JSON.parse(line) as { properties?: Record<string, unknown>; files?: string[]; plots?: PlotEntry[] }
+      return { properties: data.properties ?? {}, files: data.files ?? [], plots: data.plots ?? [] }
     } catch {
       // 首个可解析行语义
     }
@@ -160,6 +163,7 @@ function propertiesSummary(task: string, properties: Record<string, unknown>): s
 export interface GaussianProducerResult extends WatchOutcome {
   properties?: Record<string, unknown>
   files?: string[]
+  plots?: PlotEntry[]
 }
 
 export interface GaussianProducerInput {
@@ -199,6 +203,7 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
 
   let resultProperties: Record<string, unknown> | undefined
   let resultFiles: string[] | undefined
+  let resultPlots: PlotEntry[] | undefined
   const loop = createWatchLoop({
     clusterId,
     jobIds: [slurmJobId],
@@ -219,15 +224,17 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
       }
       try {
         const r = await execCommand(clusterId, postPhaseCommand(workdir, task, workflowEnv), 60)
-        const { properties, files } = parsePostOutput(outputText(r))
+        const { properties, files, plots } = parsePostOutput(outputText(r))
         resultProperties = properties
         resultFiles = files
+        resultPlots = plots
         return {
           detailSuffix: propertiesSummary(task, properties),
           extraLines: [
             'slurm_state: COMPLETED',
             `properties: ${JSON.stringify(properties)}`,
             ...(files.length > 0 ? [`files: ${files.join(', ')}`] : []),
+            ...(plots.length > 0 ? [`plots: ${JSON.stringify(plots)}`] : []),
           ],
         }
       } catch (err) {
@@ -250,6 +257,7 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
         ...outcome,
         properties: resultProperties,
         files: resultFiles,
+        plots: resultPlots,
       })
     })
   }

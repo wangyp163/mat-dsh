@@ -66,6 +66,7 @@ function settleBoard(board: StatusBoard, jobId: string, result: GaussianProducer
       ...(result.detail !== undefined ? { detail: result.detail } : {}),
       ...(result.properties !== undefined ? { properties: result.properties } : {}),
       ...(result.files !== undefined ? { files: result.files } : {}),
+      ...(result.plots !== undefined ? { plots: result.plots } : {}),
     })
     const snapshot = board.list().find((entry) => entry.jobId === jobId)
     if (fileService !== undefined && snapshot?.workdir !== undefined) {
@@ -444,7 +445,8 @@ export function apply(ctx: Context): void {
       'runs the pre and run phases, submits via sbatch, and returns immediately with the slurm job id and a ' +
       'background job id. The background producer polls sacct server-side (no model requests) and automatically ' +
       'runs the post phase at terminal state — final properties (energy, converged, frequencies_cm-1, ' +
-      'imaginary_frequency_count) and files are read with job_output after the in-session completion notice. ' +
+      'imaginary_frequency_count), files, and plot artifacts (plots: chart PNG + CSV paths) are read with ' +
+      'job_output after the in-session completion notice. ' +
       'Defaults: B3LYP/6-31G(d), 32 cores / 64GB, Agent0 partition. Use this for single-shot calculations with ' +
       'known options; use the gaussian-calc skill flow for interactive or step-by-step work.',
     parameters: {

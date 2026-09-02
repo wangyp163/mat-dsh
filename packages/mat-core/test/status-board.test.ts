@@ -85,6 +85,21 @@ describe('createStatusBoard', () => {
     expect(entry.slurm).toEqual([{ id: '9', state: 'COMPLETED', exitCode: 0 }])
   })
 
+  it('settle 带 plots → 快照含 plots；settled 后 upsert 带 plots 不覆盖 settled 值', () => {
+    const board = createStatusBoard({ now: () => 0 })
+    board.upsert('j1', { kind: 'mat-slurm', label: 'x', clusterId: 'c', startedAt: 0 })
+    board.settle('j1', {
+      outcomeStatus: 'completed',
+      properties: { energy: -1.5 },
+      files: ['job.log'],
+      plots: [{ kind: 'scf_convergence', image: '/w/scf.png', data: '/w/scf.csv' }],
+    })
+    expect(board.list()[0].plots).toEqual([{ kind: 'scf_convergence', image: '/w/scf.png', data: '/w/scf.csv' }])
+    // 后续 tick 误带 plots: []（想清空）→ settled 保护行胜出，终态产物不被清
+    board.upsert('j1', { detail: 'later tick', plots: [] })
+    expect(board.list()[0].plots).toEqual([{ kind: 'scf_convergence', image: '/w/scf.png', data: '/w/scf.csv' }])
+  })
+
   it('settled 保留上限：超出 maxSettled 移除最旧 settled，monitoring 永不移除', () => {
     const board = createStatusBoard({ now: fixedClock(), maxSettled: 2 })
     board.upsert('m1', { kind: 'mat-watch', label: 'live', clusterId: '11250', startedAt: 1 })

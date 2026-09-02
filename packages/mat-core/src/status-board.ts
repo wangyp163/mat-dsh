@@ -6,6 +6,14 @@
  * job_output（单消费游标归模型），状态板是前端唯一实时通道。
  */
 
+/** post 透传的单条绘图产物（与 result.json plots 元素同形）。 */
+export interface PlotEntry {
+  kind: string
+  /** PNG 路径；环境缺 matplotlib 时为 null（数据仍在 data CSV）。 */
+  image: string | null
+  data: string
+}
+
 /** 单个 slurm 作业在状态板里的投影（JSON-safe）。 */
 export interface SlurmEntrySnapshot {
   id: string
@@ -35,6 +43,7 @@ export interface MatJobStatus {
   detail?: string
   properties?: Record<string, unknown>
   files?: string[]
+  plots?: PlotEntry[]
 }
 
 /** settle 一次写入的终态信息。 */
@@ -44,6 +53,7 @@ export interface StatusSettle {
   detail?: string
   properties?: Record<string, unknown>
   files?: string[]
+  plots?: PlotEntry[]
 }
 
 /** upsert 增量补丁：首建须含 identity 字段（kind/label/clusterId/startedAt）。 */
@@ -139,6 +149,7 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
         merged.detail = patch.detail ?? existing.detail
         merged.properties = existing.properties
         merged.files = existing.files
+        merged.plots = existing.plots
       }
       entries.set(jobId, merged)
       changed()

@@ -241,6 +241,20 @@ describe('parsePostOutput（首个可解析 { 行，对齐 plugin.py §751-758�
     expect(r.files).toEqual(['g16_optimized.xyz', 'job.log'])
   })
 
+  it('JSON 行带 plots → 透传；缺 plots → 空数组（旧版部署兼容）', () => {
+    const withPlots = POST_OK_OUTPUT.replace(
+      '"files": ["g16_optimized.xyz", "job.log"]',
+      '"files": ["g16_optimized.xyz", "job.log"], ' +
+        '"plots": [{"kind":"ir_spectrum","image":"/w/freq/ir_spectrum.png","data":"/w/freq/ir_spectrum.csv"}]',
+    )
+    const r1 = parsePostOutput(withPlots)
+    expect(r1.plots).toEqual([
+      { kind: 'ir_spectrum', image: '/w/freq/ir_spectrum.png', data: '/w/freq/ir_spectrum.csv' },
+    ])
+    const r2 = parsePostOutput(POST_OK_OUTPUT)
+    expect(r2.plots).toEqual([])
+  })
+
   it('首个 { 行非法 JSON → 继续找下一个', () => {
     const out = '{ oops not json\n{"properties": {"energy": -1}}\n'
     const r = parsePostOutput(out)
@@ -304,6 +318,30 @@ describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {
     expect(out).toContain('"energy":-76.408954')
     expect(out).toContain('files: g16_optimized.xyz, job.log')
     expect(out).toContain('700 COMPLETED exit=0 elapsed=30s')
+    expect(out).not.toContain('plots: ')
+  })
+
+  it('COMPLETED 且 post 带 plots → 终态首读含可解析的 plots JSON 行', async () => {
+    const postWithPlots = POST_OK_OUTPUT.replace(
+      '"files": ["g16_optimized.xyz", "job.log"]',
+      '"files": ["g16_optimized.xyz", "job.log"], ' +
+        '"plots": [{"kind": "uvvis_spectrum", "image": "/home/u/w/spec/uvvis_spectrum.png", ' +
+        '"data": "/home/u/w/spec/uvvis_spectrum.csv"}]',
+    )
+    const { hooks } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'COMPLETED', '0:0', '30') },
+      { out: postWithPlots },
+    ])
+    await advance(0)
+    await advance(10_000)
+    await hooks.done
+    const plotsLine = hooks.readOutput().split('\n').find((l) => l.startsWith('plots: '))
+    if (plotsLine === undefined) throw new Error('terminal first-read missing plots: line')
+    expect(plotsLine).toContain('uvvis_spectrum')
+    expect(JSON.parse(plotsLine.slice('plots: '.length))).toEqual([
+      { kind: 'uvvis_spectrum', image: '/home/u/w/spec/uvvis_spectrum.png', data: '/home/u/w/spec/uvvis_spectrum.csv' },
+    ])
   })
 
   it('FAILED → 跳过 post，log_tail 进输出，detail 标注', async () => {
@@ -412,6 +450,7 @@ describe('producer 状态板喂料（onTick / onResult）', () => {
       detail: '1/1 settled (1 COMPLETED); opt+freq E=-76.408954 converged=true imag=0',
       properties: { energy: -76.408954, converged: true, 'frequencies_cm-1': [1713.13, 3727.17, 3849.10], imaginary_frequency_count: 0 },
       files: ['g16_optimized.xyz', 'job.log'],
+      plots: [],
     }])
   })
 
@@ -428,6 +467,7 @@ describe('producer 状态板喂料（onTick / onResult）', () => {
       detail: '1/1 settled (1 FAILED); opt+freq FAILED, post skipped',
       properties: undefined,
       files: undefined,
+      plots: undefined,
     }])
   })
 

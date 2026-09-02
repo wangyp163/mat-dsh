@@ -14,7 +14,7 @@ const XYZ = '3\n\nO 0.000000 0.000000 0.117790\nH 0.000000 0.757160 -0.470790\nH
 
 const POST_OK_OUTPUT = [
   '[post] parsing job.log',
-  '{"status": "ok", "phase": "post", "properties": {"energy": -76.408954, "converged": true, "frequencies_cm-1": [1713.13, 3727.17, 3849.10], "imaginary_frequency_count": 0}, "files": ["g16_optimized.xyz", "job.log"]}',
+  '{"status": "ok", "phase": "post", "properties": {"energy": -76.408954, "converged": true, "frequencies_cm-1": [1713.13, 3727.17, 3849.10], "imaginary_frequency_count": 0}, "files": ["g16_optimized.xyz", "job.log"], "plots": [{"kind": "ir_spectrum", "image": "/home/u/w/freq/ir_spectrum.png", "data": "/home/u/w/freq/ir_spectrum.csv"}, {"kind": "scf_convergence", "image": null, "data": "/home/u/w/freq/scf_convergence.csv"}]}',
   '[post] done',
 ].join('\n')
 
@@ -288,5 +288,9 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     expect(settled.converged).toBe(true)
     expect(settled.properties).toMatchObject({ energy: -76.408954, converged: true, imaginary_frequency_count: 0 })
     expect(settled.files).toEqual(['g16_optimized.xyz', 'job.log'])
+    expect(settled.plots).toEqual([
+      { kind: 'ir_spectrum', image: '/home/u/w/freq/ir_spectrum.png', data: '/home/u/w/freq/ir_spectrum.csv' },
+      { kind: 'scf_convergence', image: null, data: '/home/u/w/freq/scf_convergence.csv' },
+    ])
   })
 })
