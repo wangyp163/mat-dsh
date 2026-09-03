@@ -88,7 +88,13 @@ export function mergeWorkspaceTree(input: {
     if (!local.path || local.path.split('/').includes('..') || local.path.startsWith('/')) throw new Error('local tree path must be relative')
     nodes.set(local.path, { ...local, origin: 'local', status: local.readable ? 'local-only' : 'unreadable' })
   }
-  const completed = new Set(input.syncs.filter(sync => sync.status === 'completed').map(sync => remoteRelativePath(input.workdir, normalizeRemotePath(sync.remotePath))))
+  const completed = new Set<string>()
+  for (const sync of input.syncs) {
+    if (sync.status !== 'completed') continue
+    // A shell-style workdir or a sync outside it must not sink the whole tree
+    // (same tolerance as the downloading check below).
+    try { completed.add(remoteRelativePath(input.workdir, normalizeRemotePath(sync.remotePath))) } catch { /* sync outside the declared workdir */ }
+  }
   for (const remote of input.remote) {
     const path = remoteRelativePath(input.workdir, normalizeRemotePath(remote.path))
     const current = nodes.get(path)
@@ -134,6 +140,59 @@ export function projectPrimaryFiles(input: {
   return remotePaths
     .map(path => remoteRelativePath(input.workdir, path))
     .filter(path => !excluded.has(path))
+}
+
+/**
+ * Primary-file projection for degraded mode: the remote listing is unavailable,
+ * so known producer files and user pins are promoted without an existence check.
+ * Paths outside the workdir are skipped instead of rejecting the projection.
+ * @param input.workdir - absolute remote workdir.
+ * @param input.producerFiles - absolute or workdir-relative produced files.
+ * @param input.pins - workdir-relative user pins.
+ * @param input.exclusions - workdir-relative exclusions.
+ * @returns deduplicated workdir-relative primary paths.
+ */
+export function projectDegradedPrimary(input: {
+  workdir: string
+  producerFiles: string[]
+  pins: string[]
+  exclusions: string[]
+}): string[] {
+  const excluded = new Set(input.exclusions)
+  const primary: string[] = []
+  const add = (value: string) => {
+    const absolute = value.startsWith('/') ? value : `${input.workdir}/${value}`
+    let relative: string
+    try { relative = remoteRelativePath(input.workdir, normalizeRemotePath(absolute)) } catch { return }
+    if (!excluded.has(relative) && !primary.includes(relative)) primary.push(relative)
+  }
+  for (const value of input.producerFiles) add(value)
+  for (const value of input.pins) add(value)
+  return primary
+}
+
+/** True for the `$HOME`-prefixed shell-style workdir the agent tools record. */
+export function isShellStyleWorkdir(value: string): boolean {
+  return value === '$HOME' || value.startsWith('$HOME/')
+}
+
+/**
+ * Derive the absolute remote home prefix for a shell-style workdir from known
+ * absolute hint paths (e.g. the job's producer files persisted in jobs.json).
+ * @param workdir - shell-style workdir (`$HOME/...`).
+ * @param hints - absolute remote paths that may live under the same workdir.
+ * @returns the home prefix, or undefined when no hint matches.
+ */
+export function deriveRemoteHome(workdir: string, hints: string[]): string | undefined {
+  if (!isShellStyleWorkdir(workdir)) return undefined
+  const suffix = workdir.slice('$HOME'.length)
+  if (suffix === '') return undefined
+  for (const hint of hints) {
+    if (!hint.startsWith('/')) continue
+    const at = hint.lastIndexOf(suffix)
+    if (at > 0) return hint.slice(0, at)
+  }
+  return undefined
 }
 
 export function importantRemotePaths(input: { workdir: string; entries: RemoteFileEntry[]; producerFiles: string[]; patterns: string[]; selectedPaths: string[] }): string[] {

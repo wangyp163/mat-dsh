@@ -1,10 +1,11 @@
 ---
 name: gaussian-demo-stress
 description: 'Plan and execute authorized end-to-end stress tests for the demo Gaussian workflow through mat-dsh: decompose a user goal into cases, select one-shot or stepwise execution, validate gates, plots, results, session delivery, and produce an evidence-based report.'
-version: 0.1.0
+version: 0.2.0
 metadata:
   adapted-for: mat-dsh
   companion-sop: ~/dev/mat-aitool/docs/gaussian-demo-stress-test-sop.md
+  adaptation: 2026-09-03 M2 把 session-debug 纳入压测收口必做步骤（用户要求：压测完成后自动按 session 轨迹 debug，无需再指示）：两级模型——L0 收口必跑（对全部本轮 session 本地跑 `anomalies --json` 轻扫，零 token，产出报告 session-debug 摘要表）+ L1 异常升级（沿用最小成本顺序）。新增强制执行规则第 8 条、交付节收口程序与摘要表字段；版本 0.2.0 续跳号
 ---
 
 # demo Gaussian 压测编排
@@ -13,7 +14,7 @@ metadata:
 
 当用户要求对 demo 环境的 Gaussian workflow 做“压测、回归、端到端验证、链路验证、plots 验证、稳定性测试”或要求生成此类压测计划时使用本 skill。
 
-本 skill 负责**计划、编排、验收和证据报告**；单个 Gaussian 计算必须委派给 `gaussian-calc`。会话轨迹异常时按需使用 `session-debug`。不要把本 skill 当成普通 Gaussian 计算 skill，也不要在普通计算中主动加载它。
+本 skill 负责**计划、编排、验收和证据报告**；单个 Gaussian 计算必须委派给 `gaussian-calc`。收口时必须对全部本轮 session 跑 `session-debug` L0 轻扫，异常再按 L1 升级（见「session-debug 收口」节）——用户提出压测后无需另行指示。不要把本 skill 当成普通 Gaussian 计算 skill，也不要在普通计算中主动加载它。
 
 完整操作细节、case 库和报告模板见：
 
@@ -63,20 +64,28 @@ metadata:
 5. 重试优先复用原 workdir；必须换目录时说明旧/新路径和原因。失败现场、result、job id 和 session trace 不得清理。
 6. 不手动循环 `squeue`/`sacct`；不未经用户确认执行 `rm`、`rm -rf`、`mv` 或覆盖/清空既有目录；不把凭据写入文件、prompt 或报告。
 7. 区分 workflow 已完成、结果解析成功、文件已生成、agent 已向用户交付和 session turn 已完成这五个层次；任一层失败都要单独记录。
+8. **收口必做**：报告定稿前，对本轮全部 session（含健康 case）跑 session-debug L0 轻扫并填摘要表（见「session-debug 收口」节）；L0 命中 fatal / 未闭合 turn / 状态矛盾时升级 L1 定位后再收口。没有 session-debug 摘要表的压测报告视为未完成。
 
-## session-debug：仅异常触发
+## session-debug 收口：L0 必跑 + L1 异常升级
 
-`session-debug` 是本地离线解析器，不调用模型、不占 HPC 作业配额、不增加 LLM token。正常 case 只记录轻量统计：session id、turn/step 数、工具失败数、diagnostics 数量和最终状态。
+`session-debug` 是本地离线解析器：不调用模型、不占 HPC 作业配额、不增加 LLM token。因此收口对**本轮全部 session**（含健康 case 的会话）跑一次 L0 轻扫——这不是异常处置，而是收口的证据步骤；"case 都绿了所以不查轨迹"是错误做法，健康的结论也要有轨迹层证据。
 
-以下情况触发诊断：turn/step 未闭合、dsh/mux 中断、job/result/tool 状态矛盾、plots 未交付、gate/provider/权限异常、skill resource root 异常。按最小成本顺序：
+**L0 收口必跑**（全部 session，本地、零 token）：
 
 ```bash
-pnpm debug:session <session.jsonl.zstd> anomalies --json
-pnpm debug:session <session.jsonl.zstd> tools --json
-pnpm debug:session <session.jsonl.zstd> timeline --json
+cd ~/mat-harness/mat-dsh && pnpm exec tsx scripts/session-debug.ts anomalies <session.jsonl.zstd> --json
 ```
 
-只把脱敏后的异常类型、seq、相关 tool/turn 和最小错误片段纳入分析；禁止默认回灌完整 `report`、完整 transcript、raw log 或凭据。发现 `stale-skill-root`（`/tmp/.../skills/...`）时，按 SOP 的 skill discovery 处理，不把临时路径当作稳定证据。
+每个 session 只提取并记录：turn/step 是否闭合（缺 `turn/end` 的 turn 单列归因）、diagnostics 按类计数（fatal / benign 分列）、errors 数、读数时效（读数时点 vs 最后事件时间差）。结果填入报告的 session-debug 摘要表。注意 zstd 块延迟落盘（可滞后 15 分钟以上）：收口前确认最后一个 turn 已闭合并超过落盘延迟，读数才可信；判定 turn 活性用实时事件流，不用 zstd。
+
+**L1 异常升级**（仅异常触发，沿用最小成本顺序）：
+
+```bash
+pnpm exec tsx scripts/session-debug.ts tools <session.jsonl.zstd> --json
+pnpm exec tsx scripts/session-debug.ts timeline <session.jsonl.zstd> --json
+```
+
+触发条件：turn/step 未闭合、dsh/mux 中断、job/result/tool 状态矛盾、plots 未交付、gate/provider/权限异常、skill resource root 异常、工具返回崩溃但远端疑似已执行（需"返回层 vs 远端副作用"对账）。只把脱敏后的异常类型、seq、相关 tool/turn 和最小错误片段纳入分析；禁止默认回灌完整 `report`、完整 transcript、raw log 或凭据。发现 `stale-skill-root`（`/tmp/.../skills/...`）时，按 SOP 的 skill discovery 处理，不把临时路径当作稳定证据。
 
 ## 交付和报告
 
@@ -95,6 +104,21 @@ PNG 大小 / CSV 数据行数 / agent 交付情况
 
 ```text
 docs/<YYYY-MM-DD>-<feature>-demo-stress-report.md
+```
+
+收口程序（报告定稿前，顺序执行）：
+
+```text
+1. 停止 mux 看门狗等编排辅助进程；确认所有 case 的 turn 已闭合；
+2. 等过 zstd 落盘延迟（≥15 分钟）后，对全部 session 跑 L0 anomalies --json，填摘要表；
+3. 对 L0 命中项跑 L1 升级，归因到 skill/agent、workflow 或 deployment/provider；
+4. 摘要表与归因写入报告，本轮才算收口。
+```
+
+session-debug 摘要表字段：
+
+```text
+session_id / turns / 未闭合 turn（归因）/ tool 失败（fatal / benign 分列）/ errors / 读数时效 / L1 升级与否 / 轨迹层结论
 ```
 
 至少包含 case 矩阵、环境与门禁、链路覆盖、plots/数据抽查、兼容性、失败现场、session-debug 摘要、问题分类（skill/agent、workflow、deployment/provider）、修复建议和回滚判定。模型预算、队列延迟或单个科学任务失败不自动触发远端回滚；只有确认压测破坏部署时才执行既定回滚流程。

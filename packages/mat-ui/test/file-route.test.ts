@@ -6,7 +6,7 @@ import { apply } from '../src/index'
 function board(): StatusBoard {
   return {
     upsert: () => {}, settle: () => {}, remove: () => {},
-    list: () => [{ jobId: 'j1', kind: 'mat-slurm', label: 'g', clusterId: '11250', ownerSession: 's1', startedAt: 1, updatedAt: 2, phase: 'settled', workdir: '/remote/job', outcomeStatus: 'completed', files: ['/remote/job/result.log'] }],
+    list: () => [{ jobId: 'j1', kind: 'mat-slurm', label: 'g', clusterId: '11250', ownerSession: 's1', startedAt: 1, updatedAt: 2, phase: 'settled', workdir: '/remote/job', localWorkspace: '/local/11250/j1', outcomeStatus: 'completed', files: ['/remote/job/result.log'] }],
   }
 }
 
@@ -19,7 +19,9 @@ describe('mat file routes', () => {
     await routes.get('/mat-files/config').handler({ headers: { host: '127.0.0.1:3030' } }, response)
     expect(JSON.parse(response.body)).toMatchObject({ localRootConfigured: false, efile: { available: Boolean(process.env.MAT_ACCESS_KEY && process.env.MAT_SECRET_KEY && process.env.MAT_USER) } })
     await routes.get('/mat-files/jobs').handler({}, response)
-    expect(JSON.parse(response.body).jobs[0]).toMatchObject({ jobId: 'j1', workdir: '/remote/job' })
+    expect(JSON.parse(response.body).jobs[0]).toMatchObject({
+      jobId: 'j1', workdir: '/remote/job', localWorkspace: '/local/11250/j1',
+    })
   })
 
   it('lists only paths below the known job workdir through the server-side file service', async () => {
@@ -125,10 +127,11 @@ describe('mat file routes', () => {
 
   it('returns one reconciled local/remote tree and accepts durable pins', async () => {
     const routes = new Map<string, any>()
+    const workspaceCalls: unknown[] = []
     const ctx = {
       webServer: { register: (route: any) => { routes.set(route.path, route); return () => {} } },
       get: (key: string) => key === 'mat.status' ? board() : key === 'mat.files' ? {
-        listWorkspace: async () => ({ path: '', entries: [{ path: 'result.log', name: 'result.log', directory: false, origin: 'both', status: 'synchronized' }], primary: ['result.log'] }),
+        listWorkspace: async (request: unknown) => { workspaceCalls.push(request); return { path: '', entries: [{ path: 'result.log', name: 'result.log', directory: false, origin: 'both', status: 'synchronized' }], primary: ['result.log'] } },
         getPreferences: async () => ({ autoSync: false, pins: [], exclusions: [] }),
         setPreferences: async (_jobId: string, value: unknown) => { calls.push(value) },
       } : undefined,
@@ -139,10 +142,29 @@ describe('mat file routes', () => {
     await routes.get('/mat-files/tree').handler({ url: '/mat-files/tree?jobId=j1&path=' }, response)
     expect(response.statusCode).toBe(200)
     expect(JSON.parse(response.body).entries[0]).toMatchObject({ path: 'result.log', status: 'synchronized' })
+    expect(workspaceCalls).toEqual([expect.objectContaining({ localWorkspace: '/local/11250/j1' })])
     const req = { method: 'PUT', url: '/mat-files/preferences', async *[Symbol.asyncIterator]() { yield Buffer.from('{"jobId":"j1","pins":["result.log"],"exclusions":[]}') } }
     await routes.get('/mat-files/preferences').handler(req, response)
     expect(response.statusCode).toBe(200)
     expect(calls).toEqual([{ autoSync: false, pins: ['result.log'], exclusions: [] }])
+  })
+
+  it('materializes a safe job-relative file before the client opens it', async () => {
+    const routes = new Map<string, any>()
+    const calls: unknown[][] = []
+    const ctx = {
+      webServer: { register: (route: any) => { routes.set(route.path, route); return () => {} } },
+      get: (key: string) => key === 'mat.status' ? board() : key === 'mat.files' ? {
+        materializeFile: async (...args: unknown[]) => { calls.push(args); return '/local/11250/j1/result.log' },
+      } : undefined,
+    } as unknown as Context
+    apply(ctx)
+    const response = { statusCode: 200, headers: new Map<string, string>(), body: '', setHeader(k: string, v: string) { this.headers.set(k, v) }, end(v?: string) { this.body = v ?? '' } }
+    const req = { method: 'POST', url: '/mat-files/open', async *[Symbol.asyncIterator]() { yield Buffer.from('{"jobId":"j1","path":"result.log"}') } }
+    await routes.get('/mat-files/open').handler(req, response)
+    expect(response.statusCode).toBe(200)
+    expect(JSON.parse(response.body)).toEqual({ path: '/local/11250/j1/result.log' })
+    expect(calls).toEqual([['j1', '11250', '/remote/job', 'result.log']])
   })
 
   it('returns safe attachment downloads and rejects traversal or excessive selections', async () => {
@@ -166,5 +188,22 @@ describe('mat file routes', () => {
     const tooMany = { method: 'POST', url: '/mat-files/download', async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify({ jobId: 'j1', paths: Array.from({ length: 101 }, (_, i) => `f-${i}`) })) } }
     await routes.get('/mat-files/download').handler(tooMany, response)
     expect(response.statusCode).toBe(413)
+  })
+
+  it('supplies the job context so remote-only selections download on demand', async () => {
+    const routes = new Map<string, any>()
+    const calls: unknown[][] = []
+    const ctx = {
+      webServer: { register: (route: any) => { routes.set(route.path, route); return () => {} } },
+      get: (key: string) => key === 'mat.status' ? board() : key === 'mat.files' ? {
+        prepareDownload: async (...args: unknown[]) => { calls.push(args); return { kind: 'file' as const, filename: 'result.log', body: Buffer.from('ok') } },
+      } : undefined,
+    } as unknown as Context
+    apply(ctx)
+    const response = { statusCode: 200, headers: new Map<string, string>(), chunks: [] as Buffer[], setHeader(k: string, v: string) { this.headers.set(k, v) }, write(v: Buffer) { this.chunks.push(v) }, end(v?: Buffer) { if (v !== undefined) this.chunks.push(v) } }
+    const req = { method: 'POST', url: '/mat-files/download', async *[Symbol.asyncIterator]() { yield Buffer.from('{"jobId":"j1","paths":["result.log"]}') } }
+    await routes.get('/mat-files/download').handler(req, response)
+    expect(response.statusCode).toBe(200)
+    expect(calls).toEqual([['j1', ['result.log'], { clusterId: '11250', workdir: '/remote/job' }]])
   })
 })

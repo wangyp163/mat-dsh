@@ -3,6 +3,7 @@ export type FileManagerJob = {
   clusterId: string
   ownerSession?: string
   workdir?: string
+  localWorkspace?: string
   phase: 'monitoring' | 'settled'
   outcomeStatus?: string
   files: string[]
@@ -34,6 +35,8 @@ let selectedJobId: string | undefined
 let activeTab: FilePanelTab = 'files'
 let refresh: ActivityState = 'idle'
 let download: ActivityState = 'idle'
+let opening: string[] = []
+let expanding: string[] = []
 const jobs = new Map<string, JobViewState>()
 const listeners = new Set<Listener>()
 
@@ -54,7 +57,7 @@ function toggle(values: string[], path: string): string[] {
 }
 
 export const fileManagerState = {
-  snapshot: () => ({ open, selectedJobId, activeTab, refresh, download, ...currentJob() }),
+  snapshot: () => ({ open, selectedJobId, activeTab, refresh, download, opening, expanding, ...currentJob() }),
   subscribe(listener: Listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
   open(jobId?: string) {
     open = true
@@ -64,6 +67,7 @@ export const fileManagerState = {
   },
   close() { open = false; emit() },
   select(jobId: string) { selectedJobId = jobId; emit() },
+  selectJob(jobId: string) { selectedJobId = jobId; emit() },
   selectTab(tab: FilePanelTab) { activeTab = tab; emit() },
   toggleExpanded(path: string) { currentJob().expanded = toggle(currentJob().expanded, path); emit() },
   selectPath(path: string) { currentJob().selectedPaths = toggle(currentJob().selectedPaths, path); emit() },
@@ -76,6 +80,12 @@ export const fileManagerState = {
   setPins(paths: string[]) { currentJob().pins = [...new Set(paths)]; emit() },
   beginRefresh() { refresh = 'pending'; emit() },
   finishRefresh(error?: unknown) { refresh = error === undefined ? 'idle' : 'failed'; emit() },
+  /** 单文件打开（按需物化）在途集合：驱动 chip 级加载指示。 */
+  beginOpen(path: string) { if (!opening.includes(path)) opening = [...opening, path]; emit() },
+  finishOpen(path: string) { opening = opening.filter(value => value !== path); emit() },
+  /** 目录展开（远端子目录列表）在途集合：驱动目录下加载行。 */
+  beginExpand(path: string) { if (!expanding.includes(path)) expanding = [...expanding, path]; emit() },
+  finishExpand(path: string) { expanding = expanding.filter(value => value !== path); emit() },
   beginDownload(paths: string[]) {
     currentJob().selectedPaths = [...paths]
     refresh = 'idle'
@@ -89,6 +99,8 @@ export const fileManagerState = {
     activeTab = 'files'
     refresh = 'idle'
     download = 'idle'
+    opening = []
+    expanding = []
     jobs.clear()
     listeners.clear()
   },

@@ -12,7 +12,8 @@
   "dsh": {
     "harmony": {
       "patches": [
-        "./turn-fold-compat.patch.cjs"
+        "./turn-fold-compat.patch.cjs",
+        "./details-tab-reactivity.patch.cjs"
       ]
     },
     "client": {

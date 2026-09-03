@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { gunzipSync, gzipSync } from 'node:zlib'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ShellFileTransferClient } from '../src/shell-file-transfer'
 import type { ExecResult, MatClient } from '../src/client'
@@ -26,11 +27,11 @@ describe('ShellFileTransferClient', () => {
     return dir
   }
 
-  it('downloadFile 分块读取 base64，按字节恢复本地文件', async () => {
+  it('downloadFile 分块读取 gzip+base64，按字节恢复本地文件', async () => {
     const dir = await tempDir()
     const localPath = join(dir, 'result.bin')
     const commands: string[] = []
-    const chunks = [Buffer.from([0, 1, 2]).toString('base64'), Buffer.from('abc').toString('base64'), '']
+    const chunks = [gzipSync(Buffer.from([0, 1, 2])).toString('base64'), gzipSync(Buffer.from('abc')).toString('base64'), '']
     let chunk = 0
     const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
       commands.push(command)
@@ -44,6 +45,48 @@ describe('ShellFileTransferClient', () => {
     expect([...await readFile(localPath)]).toEqual([0, 1, 2, 97, 98, 99])
     expect(commands[0]).toContain("'/remote/a b/'\"'\"'result.bin'")
     expect(commands.filter((command) => command.includes('base64'))).toHaveLength(2)
+    expect(commands.filter((command) => command.includes('| gzip -c |'))).toHaveLength(2)
+  })
+
+  it('downloadFile 默认 512KB 大块（通道实测上限 1MiB base64 字符内）', async () => {
+    const dir = await tempDir()
+    const localPath = join(dir, 'big.bin')
+    const commands: string[] = []
+    const payload = Buffer.alloc(600 * 1024, 7)
+    const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
+      commands.push(command)
+      if (command.includes('stat -c %s')) return stdout(`${payload.length}\n`)
+      if (!command.includes('| gzip -c |')) throw new Error(`expected gzip pipeline: ${command}`)
+      const skip = Number(command.match(/skip=(\d+)/)![1])
+      const chunk = payload.subarray(skip * 524288, skip * 524288 + 524288)
+      return stdout(`${gzipSync(chunk).toString('base64')}\n`)
+    }
+    const client = new ShellFileTransferClient({ execClient: { execCommand } as MatClient })
+
+    await expect(client.downloadFile('11250', '/remote/big.bin', localPath)).resolves.toMatchObject({ bytes: payload.length })
+    expect(await readFile(localPath)).toEqual(payload)
+    expect(commands).toHaveLength(3) // 1 stat + 2 块
+    expect(commands[1]).toContain('bs=524288')
+  }, 20_000) // 600KB gzip+比对 CPU 重：满载并行下 5s 默认限时曾抖超时
+
+  it('downloadFile gzip 不可用时回退纯 base64，且只探测一次', async () => {
+    const dir = await tempDir()
+    const localPath = join(dir, 'fallback.bin')
+    const commands: string[] = []
+    const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
+      commands.push(command)
+      if (command.includes('stat -c %s')) return stdout('6\n')
+      if (command.includes('| gzip -c |')) return remoteFailure('gzip: command not found')
+      const skip = Number(command.match(/skip=(\d+)/)![1])
+      return stdout(`${Buffer.from(skip === 0 ? [0, 1, 2] : 'abc').toString('base64')}\n`)
+    }
+    const client = new ShellFileTransferClient({ execClient: { execCommand } as MatClient, chunkBytes: 3 })
+
+    await expect(client.downloadFile('11250', '/remote/fallback.bin', localPath))
+      .resolves.toEqual({ success: true, path: localPath, bytes: 6 })
+    expect([...await readFile(localPath)]).toEqual([0, 1, 2, 97, 98, 99])
+    expect(commands.filter((command) => command.includes('| gzip -c |'))).toHaveLength(1)
+    expect(commands.filter((command) => command.includes('base64'))).toHaveLength(3)
   })
 
   it('downloadFile 远端失败时删除临时文件，不覆盖既有目标', async () => {
@@ -56,6 +99,19 @@ describe('ShellFileTransferClient', () => {
 
     await expect(client.downloadFile('11250', '/remote/result.bin', localPath)).rejects.toThrow(/permission denied/)
     await expect(readFile(localPath, 'utf8')).resolves.toBe('keep')
+  })
+
+  it('statFile 返回远端字节数，非法输出报错', async () => {
+    const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
+      if (command.includes('stat -c %s')) {
+        return command.includes('/remote/ok.bin') ? stdout('12345\n') : stdout('not-a-number\n')
+      }
+      throw new Error(`unexpected command: ${command}`)
+    }
+    const client = new ShellFileTransferClient({ execClient: { execCommand } as MatClient })
+
+    await expect(client.statFile('11250', '/remote/ok.bin')).resolves.toBe(12345)
+    await expect(client.statFile('11250', '/remote/bad.bin')).rejects.toThrow(/invalid size/)
   })
 
   it('listFiles 通过受控 find 输出规范化目录条目', async () => {

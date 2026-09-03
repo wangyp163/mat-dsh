@@ -3,6 +3,7 @@
  * 状态板的快照喂给浏览器卡片。headless 无 webServer → fiber 休眠，不报错
  * （cordis 依赖等待语义，见宿主 vendor/cordis/src/fiber.ts `_refresh`）。
  */
+import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import { normalizeRemotePath, remoteRelativePath } from 'mat-core'
@@ -10,9 +11,10 @@ import type { ListFilesOptions, RemoteFilePage, StatusBoard } from 'mat-core'
 
 interface MatFileService {
   listFiles(clusterId: string, path: string, options?: ListFilesOptions): Promise<RemoteFilePage>
-  listWorkspace?(request: { jobId: string; clusterId: string; workdir: string; path: string; producerFiles?: string[] }): Promise<unknown>
-  prepareDownload?(jobId: string, paths: string[]): Promise<DownloadArtifact>
+  listWorkspace?(request: { jobId: string; clusterId: string; workdir: string; path: string; producerFiles?: string[]; localWorkspace?: string }): Promise<unknown>
+  prepareDownload?(jobId: string, paths: string[], context?: { clusterId: string; workdir: string }): Promise<DownloadArtifact>
   syncFile?(jobId: string, clusterId: string, workdir: string, remotePath: string, conflictPolicy: 'keep-both' | 'overwrite'): Promise<unknown>
+  materializeFile?(jobId: string, clusterId: string, workdir: string, path: string): Promise<string>
   listSyncs?(): unknown[]
   getPreferences?(jobId: string): Promise<{ autoSync: boolean; pins?: string[]; exclusions?: string[] }>
   setPreferences?(jobId: string, value: { autoSync: boolean; pins?: string[]; exclusions?: string[] }): Promise<void>
@@ -50,6 +52,30 @@ function json(res: ServerResponse, value: unknown, status = 200): void {
   res.end(JSON.stringify(value))
 }
 
+/**
+ * 预览白名单：扩展名 → content-type。与客户端 view-model 的判定表各自维护
+ * （服务端只关心 mime，且绝不回 text/html —— nosniff 下的预览面不容 XSS）。
+ */
+const PREVIEW_CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  pdf: 'application/pdf',
+  ...Object.fromEntries(['xyz', 'cif', 'poscar', 'vasp', 'log', 'out', 'txt', 'json', 'sh', 'com', 'gjf', 'inp', 'py', 'csv', 'md', 'yml', 'yaml', 'slurm', 'pbs', 'job']
+    .map((extension) => [extension, 'text/plain; charset=utf-8'])),
+}
+
+function previewContentType(path: string): string | undefined {
+  const base = path.split('/').at(-1) ?? path
+  if (base.toLowerCase() === 'poscar') return 'text/plain; charset=utf-8'
+  const dot = base.lastIndexOf('.')
+  const extension = dot <= 0 ? '' : base.slice(dot + 1).toLowerCase()
+  return PREVIEW_CONTENT_TYPES[extension]
+}
+
+const PREVIEW_LIMIT_BYTES = 64 * 1024 * 1024
+
+/** vendored NGL 只读一次磁盘，进程内复用。 */
+let nglBuffer: Buffer | undefined
+
 export function apply(ctx: Context): void {
   const board = ctx.get('mat.status') as StatusBoard | undefined
   if (board === undefined) return
@@ -74,7 +100,8 @@ export function apply(ctx: Context): void {
     handler: (_req: IncomingMessage, res: ServerResponse) => json(res, {
       jobs: board.list().map((job) => ({
         jobId: job.jobId, clusterId: job.clusterId, ownerSession: job.ownerSession,
-        workdir: job.workdir, phase: job.phase, outcomeStatus: job.outcomeStatus,
+        workdir: job.workdir, localWorkspace: job.localWorkspace,
+        phase: job.phase, outcomeStatus: job.outcomeStatus,
         files: job.files ?? [],
       })),
     }),
@@ -165,10 +192,41 @@ export function apply(ctx: Context): void {
       try {
         const path = url.searchParams.get('path') ?? ''
         if (path.startsWith('/') || path.split('/').includes('..') || path.includes('\\0')) throw new Error('unsafe relative path')
-        const tree = await files.listWorkspace({ jobId, clusterId: job.clusterId, workdir: job.workdir ?? '', path, producerFiles: job.files ?? [] })
+        const tree = await files.listWorkspace({
+          jobId, clusterId: job.clusterId, workdir: job.workdir ?? '', path,
+          ...(job.localWorkspace === undefined ? {} : { localWorkspace: job.localWorkspace }),
+          producerFiles: job.files ?? [],
+        })
         const preferences = files.getPreferences === undefined ? { autoSync: false, pins: [], exclusions: [] } : await files.getPreferences(jobId)
         json(res, { ...(tree as object), preferences })
       } catch (error) { json(res, { error: { code: 'tree-failed', message: error instanceof Error ? error.message : String(error) } }, 400) }
+    },
+  })
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/mat-files/open',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      if (req.method !== 'POST' || files?.materializeFile === undefined) {
+        json(res, { error: { code: 'not-configured', message: 'use POST with configured file synchronization' } }, 501)
+        return
+      }
+      try {
+        const body = await readJson(req)
+        const jobId = typeof body.jobId === 'string' ? body.jobId : ''
+        const path = typeof body.path === 'string' ? body.path : ''
+        const job = board.list().find((entry) => entry.jobId === jobId)
+        if (job === undefined || job.workdir === undefined || job.localWorkspace === undefined
+          || !job.localWorkspace.startsWith(`${process.env.MAT_FILE_ROOT || ''}`)) {
+          json(res, { error: { code: 'unknown-job', message: `unknown workspace job ${jobId}` } }, 404)
+          return
+        }
+        const localPath = await files.materializeFile(jobId, job.clusterId, job.workdir, path)
+        const expected = `${job.localWorkspace.replace(/\/$/, '')}/${path}`
+        if (localPath !== expected) throw new Error('materialized file escaped the agreed workspace')
+        json(res, { path: localPath })
+      } catch (error) {
+        json(res, { error: { code: 'open-failed', message: error instanceof Error ? error.message : String(error) } }, 400)
+      }
     },
   })
   ctx.webServer.register({
@@ -186,7 +244,7 @@ export function apply(ctx: Context): void {
         if (paths.length < 1 || paths.length > 100 || paths.some((value) => !value || value.startsWith('/') || value.split('/').includes('..') || value.includes('\\0'))) {
           json(res, { error: { code: paths.length > 100 ? 'download-limit' : 'invalid-path', message: 'paths must be safe relative paths, at most 100' } }, paths.length > 100 ? 413 : 400); return
         }
-        artifact = await files.prepareDownload(jobId, paths)
+        artifact = await files.prepareDownload(jobId, paths, { clusterId: job.clusterId, workdir: job.workdir ?? '' })
         res.statusCode = 200
         res.setHeader('content-type', artifact.contentType ?? (artifact.kind === 'zip' ? 'application/zip' : 'application/octet-stream'))
         res.setHeader('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(artifact.filename)}`)
@@ -241,6 +299,67 @@ export function apply(ctx: Context): void {
         json(res, page)
       } catch (error) {
         json(res, { error: { code: 'list-failed', message: error instanceof Error ? error.message : String(error) } }, 502)
+      }
+    },
+  })
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/mat-files/content',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      if (req.method !== 'GET') { json(res, { error: { code: 'method-not-allowed', message: 'use GET' } }, 405); return }
+      try {
+        const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+        const jobId = url.searchParams.get('jobId') ?? ''
+        const path = url.searchParams.get('path') ?? ''
+        const job = board.list().find((entry) => entry.jobId === jobId)
+        if (job === undefined || job.workdir === undefined || job.localWorkspace === undefined
+          || !job.localWorkspace.startsWith(`${process.env.MAT_FILE_ROOT || ''}`)) {
+          json(res, { error: { code: 'unknown-job', message: `unknown workspace job ${jobId}` } }, 404)
+          return
+        }
+        if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\\0')) {
+          json(res, { error: { code: 'invalid-path', message: 'path must be a safe relative path' } }, 400)
+          return
+        }
+        const contentType = previewContentType(path)
+        if (contentType === undefined) {
+          json(res, { error: { code: 'unsupported-type', message: `${path} is not previewable` } }, 415)
+          return
+        }
+        const localPath = await files?.materializeFile?.(jobId, job.clusterId, job.workdir, path)
+        if (localPath === undefined) { json(res, { error: { code: 'not-configured', message: 'file synchronization is not configured' } }, 501); return }
+        const expected = `${job.localWorkspace.replace(/\/$/, '')}/${path}`
+        if (localPath !== expected) throw new Error('materialized file escaped the agreed workspace')
+        const info = await stat(localPath)
+        if (info.size > PREVIEW_LIMIT_BYTES) { json(res, { error: { code: 'content-limit', message: 'preview supports files up to 64MB' } }, 413); return }
+        const body = await readFile(localPath)
+        res.statusCode = 200
+        res.setHeader('content-type', contentType)
+        res.setHeader('x-content-type-options', 'nosniff')
+        res.setHeader('cache-control', 'no-store')
+        res.end(body)
+      } catch (error) {
+        json(res, { error: { code: 'content-failed', message: error instanceof Error ? error.message : String(error) } }, 400)
+      }
+    },
+  })
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/mat-vendor/ngl.js',
+    handler: async (_req: IncomingMessage, res: ServerResponse) => {
+      const headers = _req.headers as Record<string, string | undefined>
+      try {
+        nglBuffer ??= await readFile(new URL('../assets/ngl.js', import.meta.url))
+        const info = await stat(new URL('../assets/ngl.js', import.meta.url))
+        const etag = `"${info.size}-${Math.round(info.mtimeMs)}"`
+        res.setHeader('content-type', 'text/javascript; charset=utf-8')
+        res.setHeader('etag', etag)
+        res.setHeader('cache-control', 'public, max-age=86400')
+        if (headers['if-none-match'] === etag) { res.statusCode = 304; res.end(); return }
+        res.statusCode = 200
+        res.end(nglBuffer)
+      } catch (error) {
+        json(res, { error: { code: 'vendor-missing', message: error instanceof Error ? error.message : String(error) } }, 500)
       }
     },
   })

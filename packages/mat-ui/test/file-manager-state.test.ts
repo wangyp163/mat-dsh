@@ -56,4 +56,17 @@ describe('file manager state', () => {
     expect(snapshots).toHaveLength(4)
     expect(fileManagerState.snapshot()).toMatchObject({ refresh: 'idle', download: 'idle' })
   })
+
+  it('tracks in-flight opens and directory expansions to drive loading indicators', () => {
+    fileManagerState.open('job-1')
+    fileManagerState.beginOpen('result.json')
+    fileManagerState.beginExpand('opt+freq')
+    expect(fileManagerState.snapshot()).toMatchObject({ opening: ['result.json'], expanding: ['opt+freq'] })
+    fileManagerState.beginOpen('run.log')
+    fileManagerState.finishOpen('result.json')
+    expect(fileManagerState.snapshot()).toMatchObject({ opening: ['run.log'] })
+    fileManagerState.finishExpand('opt+freq')
+    fileManagerState.finishOpen('run.log')
+    expect(fileManagerState.snapshot()).toMatchObject({ opening: [], expanding: [] })
+  })
 })

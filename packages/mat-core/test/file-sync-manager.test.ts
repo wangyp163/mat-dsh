@@ -69,6 +69,20 @@ describe('FileSyncManager', () => {
     expect(duplicate.syncId).toBe(failed.syncId)
     expect(attempts).toBe(2)
   })
+
+  it('re-runs a failed record on re-enqueue instead of returning the stale failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sync-manager-')); dirs.push(root)
+    let attempts = 0
+    const manager = new FileSyncManager({ localRoot: root, transfer: {
+      async downloadFile(_remote, localPath) { attempts++; if (attempts === 1) throw new Error('offline'); await writeFile(localPath, 'ok'); return { success: true as const, path: localPath, bytes: 2 } },
+    } })
+    const failed = await manager.enqueue({ id: 's1', workdir: '/remote/job', remotePath: '/remote/job/a' })
+    expect(failed.status).toBe('failed')
+    const rerun = await manager.enqueue({ id: 's1', workdir: '/remote/job', remotePath: '/remote/job/a' })
+    expect(rerun.syncId).toBe(failed.syncId)
+    expect(rerun.status).toBe('completed')
+    expect(attempts).toBe(2)
+  })
 })
 
 async function mkdirp(path: string): Promise<void> {

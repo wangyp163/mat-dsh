@@ -1,4 +1,5 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { gzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import { MatClient } from 'mat-core'
@@ -27,12 +28,18 @@ interface RegisteredTool {
 function makeCtx() {
   const tools = new Map<string, RegisteredTool>()
   const provided = new Map<string, unknown>()
+  const hooks = new Map<string, unknown>()
   const jobs = {
     counter: 0,
+    hooks,
+    // 对齐生产 jobs-local：start() 内同步调 spec.run()，id 在其返回后才赋值——
+    // producer 若在 run() 里同步引用闭包外层的 id 会直接 TDZ（曾致线上 33 连崩）。
     start(input: { kind: string; label: string; run: () => unknown }) {
       jobs.counter += 1
-      const id = `${input.kind}-${jobs.counter}`
-      queueMicrotask(() => { void input.run() })
+      const count = jobs.counter
+      const producer = input.run()
+      const id = `${input.kind}-${count}`
+      hooks.set(id, producer)
       return id
     },
   }
@@ -95,6 +102,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     board.upsert('persisted-job', {
       kind: 'mat-slurm', label: 'persisted', clusterId: '11250',
       startedAt: 500, workdir: '/home/u/work',
+      localWorkspace: `${testRoot}/11250/persisted-job`,
     })
     expect(JSON.parse(await readFile(`${testRoot}/jobs.json`, 'utf8')).jobs)
       .toHaveLength(1)
@@ -102,7 +110,22 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     const restarted = makeCtx()
     apply(restarted.ctx)
     expect((restarted.provided.get('mat.status') as StatusBoard).list())
-      .toMatchObject([{ jobId: 'persisted-job', workdir: '/home/u/work' }])
+      .toMatchObject([{ jobId: 'persisted-job', workdir: '/home/u/work', localWorkspace: `${testRoot}/11250/persisted-job` }])
+  })
+
+  it('重启旧快照没有 localWorkspace 时按稳定任务映射补齐工作目录', async () => {
+    vi.useRealTimers()
+    const legacy = makeCtx()
+    apply(legacy.ctx)
+    await import('node:fs/promises').then(({ writeFile }) => writeFile(`${testRoot}/jobs.json`, JSON.stringify({ jobs: [{
+      jobId: 'legacy-job', kind: 'mat-slurm', label: 'legacy', clusterId: '11250',
+      startedAt: 500, updatedAt: 500, phase: 'settled', workdir: '/home/u/work',
+    }] })))
+
+    const restarted = makeCtx()
+    apply(restarted.ctx)
+    expect((restarted.provided.get('mat.status') as StatusBoard).list())
+      .toMatchObject([{ jobId: 'legacy-job', localWorkspace: `${testRoot}/11250/legacy-job` }])
   })
 
   it('mat_download：OpenAPI 无集群 token 时改走已授权 remote-shell 后备通道', async () => {
@@ -118,7 +141,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     } as Response)
     const exec = vi.spyOn(MatClient.prototype, 'execCommand')
       .mockResolvedValueOnce({ code: 0, data: '3\n', message: '' })
-      .mockResolvedValueOnce({ code: 0, data: `${Buffer.from('xyz').toString('base64')}\n`, message: '' })
+      .mockResolvedValueOnce({ code: 0, data: `${gzipSync(Buffer.from('xyz')).toString('base64')}\n`, message: '' })
     const dir = await import('node:fs/promises').then(({ mkdtemp }) => mkdtemp('/tmp/mat-tool-download-'))
     const localPath = `${dir}/result.xyz`
     try {
@@ -141,7 +164,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     apply(ctx)
     vi.spyOn(MatClient.prototype, 'execCommand')
       .mockResolvedValueOnce({ code: 0, data: '3\n', message: '' })
-      .mockResolvedValueOnce({ code: 0, data: `${Buffer.from('xyz').toString('base64')}\n`, message: '' })
+      .mockResolvedValueOnce({ code: 0, data: `${gzipSync(Buffer.from('xyz')).toString('base64')}\n`, message: '' })
     const dir = await import('node:fs/promises').then(({ mkdtemp }) => mkdtemp('/tmp/mat-tool-download-'))
     try {
       const result = await tools.get('mat_download')!.execute({
@@ -172,6 +195,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       label: '11250 ×1 jobs',
       clusterId: '11250',
       ownerSession: 'sess-a',
+      localWorkspace: `${testRoot}/11250/mat-watch-1`,
       startedAt: expect.any(Number),
       updatedAt: expect.any(Number),
       phase: 'monitoring',
@@ -275,6 +299,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       label: 'gaussian opt+freq @11250 #700',
       clusterId: '11250',
       ownerSession: 'sess-a',
+      localWorkspace: `${testRoot}/11250/mat-slurm-1`,
       phase: 'monitoring',
       task: 'opt+freq',
       workdir: '/home/u/w',

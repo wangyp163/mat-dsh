@@ -143,16 +143,25 @@ export interface GaussianPostParseResult {
 /**
  * 解析 post 输出：取首个以 `{` 开头且可 JSON.parse 的行的 properties/files/plots
  * （对齐 plugin.py §751-758，非法 JSON 行继续找）；无 JSON 行抛错带输出尾部。
+ * 首个可解析行 `status` 为非 "ok"（error 结果行）时抛错带其 error 消息——error
+ * 壳不得被当成功透传（demo 压测 D4）；status 缺省维持旧 result 行兼容。
  * plots 缺省为空数组——兼容未带绘图通道的旧版 gaussian-workflow 部署。
  */
 export function parsePostOutput(stdout: string): GaussianPostParseResult {
   for (const line of stdout.split('\n')) {
     if (!line.startsWith('{')) continue
     try {
-      const data = JSON.parse(line) as { properties?: Record<string, unknown>; files?: string[]; plots?: PlotEntry[] }
+      const data = JSON.parse(line) as { status?: string; error?: unknown; properties?: Record<string, unknown>; files?: string[]; plots?: PlotEntry[] }
+      if (data.status !== undefined && data.status !== 'ok') {
+        throw new Error(`post phase failed (${String(data.status)}): ${tail(String(data.error ?? line))}`)
+      }
       return { properties: data.properties ?? {}, files: data.files ?? [], plots: data.plots ?? [] }
-    } catch {
-      // 首个可解析行语义
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        // 首个可解析行语义：非法 JSON 行继续找
+        continue
+      }
+      throw error
     }
   }
   throw new Error(`post output has no JSON result line: ${tail(stdout)}`)

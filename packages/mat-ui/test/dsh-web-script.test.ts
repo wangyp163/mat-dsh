@@ -16,4 +16,9 @@ describe('dsh-web operations script', () => {
     expect(script).toContain('exec setsid env DSH_HOME="$DSH_HOME_DIR" DSH_HARMONY_DSH_ENTRY="$DEV_DSH_ENTRY"')
     expect(script).toContain('node "$HARMONY_BIN" --profile web --patch "$OVERLAY" --no-open')
   })
+
+  it('launches the file channel on the fetch transport (5x faster roundtrips than curl)', async () => {
+    const script = await readFile(scriptUrl, 'utf8')
+    expect(script).toContain('MAT_TRANSPORT=fetch')
+  })
 })

@@ -5,6 +5,8 @@ import { mapRemotePath } from './remote-file-model.ts'
 
 export interface FileDownloadPort {
   downloadFile(remotePath: string, localPath: string): Promise<{ success: true; path: string; bytes: number }>
+  /** Optional remote byte size, used to bound background prefetch budgets. */
+  statFile?(remotePath: string): Promise<number>
 }
 
 export type FileSyncStatus = 'queued' | 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'
@@ -37,7 +39,15 @@ export class FileSyncManager {
     if (!/^[A-Za-z0-9._-]+$/.test(request.id) || request.id === '.' || request.id === '..') throw new Error('sync id must be a safe path segment')
     const key = `${request.id}\0${request.workdir}\0${request.remotePath}`
     const existingId = this.keys.get(key)
-    if (existingId !== undefined) return { ...this.records.get(existingId)! }
+    if (existingId !== undefined) {
+      const existing = this.records.get(existingId)!
+      // A terminal failure must not pin the file as permanently unsyncable:
+      // re-enqueue retries it under the same sync id. In-flight and completed
+      // records are returned as-is.
+      if (existing.status !== 'failed') return { ...existing }
+      existing.status = 'queued'; delete existing.error
+      return this.run(existing)
+    }
     const syncId = randomUUID()
     const record: FileSyncRecord = { ...request, syncId, status: 'queued' }
     this.keys.set(key, syncId)

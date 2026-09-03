@@ -6,7 +6,9 @@ import {
   mapRemotePath,
   mergeWorkspaceTree,
   normalizeRemotePath,
+  projectDegradedPrimary,
   projectPrimaryFiles,
+  deriveRemoteHome,
   remoteRelativePath,
 } from '../src/remote-file-model'
 import type { RemoteFileEntry } from '../src/efile'
@@ -74,6 +76,32 @@ describe('unified workspace tree projection', () => {
   it('derives primary files from producer paths, patterns, and manual pins without duplicates', () => {
     const entries = [entry({ name: 'result.json', path: '/work/job/result.json' }), entry({ name: 'run.log', path: '/work/job/run.log' }), entry({ name: 'notes.txt', path: '/work/job/notes.txt' })]
     expect(projectPrimaryFiles({ workdir: '/work/job', entries, producerFiles: ['result.json'], patterns: ['*.log'], pins: ['notes.txt'], exclusions: [] })).toEqual(['result.json', 'run.log', 'notes.txt'])
+  })
+
+  it('keeps local entries when a shell-style workdir makes completed syncs unrelativizable', () => {
+    const nodes = mergeWorkspaceTree({
+      local: [{ path: 'result.json', name: 'result.json', size: 12, directory: false, regularFile: true, symbolicLink: false, readable: true }],
+      remote: [],
+      workdir: '$HOME/workspace/water-optfreq',
+      syncs: [{ remotePath: '/public/home/u/workspace/water-optfreq/opt+freq/a.xyz', status: 'completed' }],
+    })
+    expect(nodes).toEqual([expect.objectContaining({ path: 'result.json', origin: 'local', status: 'local-only' })])
+  })
+
+  it('projects degraded primary files from producer paths and pins when the remote listing is unavailable', () => {
+    expect(projectDegradedPrimary({
+      workdir: '/public/home/u/job',
+      producerFiles: ['/public/home/u/job/opt+freq/result.json', 'run.log', '/elsewhere/other.log'],
+      pins: ['opt+freq/pinned.log'],
+      exclusions: ['opt+freq/debug.log'],
+    })).toEqual(['opt+freq/result.json', 'run.log', 'opt+freq/pinned.log'])
+  })
+
+  it('derives the remote home prefix from producer hints for a shell-style workdir', () => {
+    expect(deriveRemoteHome('$HOME/workspace/water-optfreq', ['/public/home/hpc-user-a/workspace/water-optfreq/opt+freq/a.xyz'])).toBe('/public/home/hpc-user-a')
+    expect(deriveRemoteHome('$HOME/workspace/gone', ['/public/home/hpc-user-a/workspace/other/x.log'])).toBeUndefined()
+    expect(deriveRemoteHome('/public/home/hpc-user-a/workspace', ['/public/home/hpc-user-a/workspace/a'])).toBeUndefined()
+    expect(deriveRemoteHome('$HOME', [])).toBeUndefined()
   })
 
   it('marks a local/remote kind mismatch as a conflict instead of merging it', () => {

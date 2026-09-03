@@ -8,10 +8,13 @@
 
 import { randomUUID } from 'node:crypto'
 import { appendFile, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { gunzipSync } from 'node:zlib'
 import type { ExecResult, MatClient } from './client.ts'
 import type { ListFilesOptions, RemoteFilePage } from './efile.ts'
 
-const DEFAULT_CHUNK_BYTES = 32 * 1024
+// 通道实测（2026-09-02，fetch 传输）：exec 单次输出上限 1,048,576 字符。
+// 512KB 原始块 base64 后约 700K 字符（gzip 对不可压数据 +0.05% 仍安全），取整 16 倍于旧值。
+const DEFAULT_CHUNK_BYTES = 512 * 1024
 const TRANSFER_TIMEOUT_SECONDS = 60
 
 function shellQuote(value: string): string {
@@ -87,29 +90,49 @@ export class ShellFileTransferClient {
     return { path: remotePath, total: entries.length, entries: entries.slice(start, start + limit) }
   }
 
-  async downloadFile(clusterId: string, remotePath: string, localPath: string): Promise<ShellDownloadResult> {
-    const remote = shellQuote(remotePath)
+  /** 远端字节数；预取预算与下载前校验共用。 */
+  async statFile(clusterId: string, remotePath: string): Promise<number> {
     const sizeText = stdoutOf(await this.execClient.execCommand(
       clusterId,
-      `stat -c %s -- ${remote}`,
+      `stat -c %s -- ${shellQuote(remotePath)}`,
       TRANSFER_TIMEOUT_SECONDS,
     )).trim()
-    const expectedBytes = Number(sizeText)
-    if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0) {
-      throw new Error(`remote-shell download returned invalid size: ${sizeText.slice(0, 80)}`)
+    const bytes = Number(sizeText)
+    if (!Number.isSafeInteger(bytes) || bytes < 0) {
+      throw new Error(`remote-shell stat returned invalid size: ${sizeText.slice(0, 80)}`)
     }
+    return bytes
+  }
+
+  async downloadFile(clusterId: string, remotePath: string, localPath: string): Promise<ShellDownloadResult> {
+    const remote = shellQuote(remotePath)
+    const expectedBytes = await this.statFile(clusterId, remotePath)
 
     const temporaryPath = `${localPath}.mat-part-${process.pid}-${randomUUID()}`
     await writeFile(temporaryPath, Buffer.alloc(0), { mode: 0o600 })
     try {
-      for (let offset = 0; offset < expectedBytes; offset += this.chunkBytes) {
-        const skip = Math.floor(offset / this.chunkBytes)
+      // 每块独立 gzip 流（dd|gzip|base64），首个块探测 gzip 可用性，失败即整次回退纯 base64。
+      let gzipOk = true
+      const readChunk = async (skip: number, compressed: boolean): Promise<Buffer> => {
+        const pipeline = compressed ? ' | gzip -c' : ''
         const encoded = stdoutOf(await this.execClient.execCommand(
           clusterId,
-          `dd if=${remote} bs=${this.chunkBytes} skip=${skip} count=1 status=none | base64 -w0`,
+          `dd if=${remote} bs=${this.chunkBytes} skip=${skip} count=1 status=none${pipeline} | base64 -w0`,
           TRANSFER_TIMEOUT_SECONDS,
         )).trim()
-        const chunk = Buffer.from(encoded, 'base64')
+        const raw = Buffer.from(encoded, 'base64')
+        return compressed ? gunzipSync(raw) : raw
+      }
+      for (let offset = 0; offset < expectedBytes; offset += this.chunkBytes) {
+        const skip = Math.floor(offset / this.chunkBytes)
+        let chunk: Buffer
+        try {
+          chunk = await readChunk(skip, gzipOk)
+        } catch (error) {
+          if (!gzipOk) throw error
+          gzipOk = false
+          chunk = await readChunk(skip, false)
+        }
         if (chunk.length === 0) throw new Error(`remote-shell download returned an empty chunk at byte ${offset}`)
         await appendFile(temporaryPath, chunk)
       }

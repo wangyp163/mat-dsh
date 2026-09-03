@@ -278,6 +278,25 @@ describe('parsePostOutput（首个可解析 { 行，对齐 plugin.py §751-758�
   it('无任何 JSON 行 → 抛错带输出尾部', () => {
     expect(() => parsePostOutput('line1\nline2 error\n')).toThrow(/no JSON result line[\s\S]*line2 error/)
   })
+
+  it('首个可解析行 status:"error" → 抛错带 error 消息（D4：error 结果不得被当成功壳透传）', () => {
+    const out = [
+      '[post] parsing job.log',
+      '{"status": "error", "phase": "post", "error": "ConvergenceError: Error termination via Lnn1", "properties": {}, "files": []}',
+      '[post] done',
+    ].join('\n')
+    expect(() => parsePostOutput(out)).toThrow(/post phase failed[\s\S]*Error termination via Lnn1/)
+  })
+
+  it('status:"error" 在前、ok 行在后 → 仍以首行为准抛错（首行语义不因后行翻转）', () => {
+    const out = '{"status": "error", "error": "boom"}\n{"status": "ok", "properties": {"energy": -1}}\n'
+    expect(() => parsePostOutput(out)).toThrow(/boom/)
+  })
+
+  it('status 缺省 → 维持原行为（旧版 result 行无 status 字段）', () => {
+    const r = parsePostOutput('{"properties": {"energy": -1}}\n')
+    expect(r.properties).toEqual({ energy: -1 })
+  })
 })
 
 describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {

@@ -61,6 +61,7 @@ do_start() {
     cd "$HOST_REPO"
     set -a; . "$ENV_LOCAL"; set +a
     exec setsid env DSH_HOME="$DSH_HOME_DIR" DSH_HARMONY_DSH_ENTRY="$DEV_DSH_ENTRY" \
+      MAT_TRANSPORT=fetch \
       node "$HARMONY_BIN" --profile web --patch "$OVERLAY" --no-open
   ) >>"$LOG" 2>&1 &
   echo $! > "$PID_FILE"

@@ -1,12 +1,20 @@
-import { useEffect, useState } from 'react'
-import { StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useEffect, useMemo, useState } from 'react'
+import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import { fileManagerState } from './file-manager-state'
+import { jobsForSession } from './status-model'
 import type { MonitorJob } from './status-model'
 
 type Job = MonitorJob & {
   kind?: string
   label?: string
   clusterId?: string
+  ownerSession?: string
   outcomeStatus?: string
+}
+
+type StatusDockProps = PropsRuntime<'conversation.input.dock'> & {
+  onOpenTask?: () => void
 }
 
 function statusState(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
@@ -15,13 +23,13 @@ function statusState(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
 }
 
 export function StatusDock({
+  sessionId,
   openDetailsTab,
   onOpenTask = () => { openDetailsTab?.('mat-task') },
-}: {
-  openDetailsTab?: (id: string) => void
-  onOpenTask?: () => void
-}): JSX.Element {
+}: StatusDockProps): JSX.Element | null {
   const [jobs, setJobs] = useState<Job[]>([])
+  // jobId 与会话相互隔离：只认 ownerSession === 当前会话的作业。
+  const visible = useMemo(() => jobsForSession(jobs, sessionId), [jobs, sessionId])
   useEffect(() => {
     let alive = true
     const load = async () => {
@@ -37,22 +45,27 @@ export function StatusDock({
     return () => { alive = false; window.clearInterval(timer) }
   }, [])
 
-  const latest = jobs[jobs.length - 1]
+  const [selectedId, setSelectedId] = useState(fileManagerState.snapshot().selectedJobId)
+  useEffect(() => fileManagerState.subscribe(() => { setSelectedId(fileManagerState.snapshot().selectedJobId) }), [])
+  // 缺省选板序末位（本会话最新作业）；本会话没有作业时整条状态条隐藏。
+  const selected = visible.find(job => job.jobId === selectedId) ?? visible.at(-1)
+  if (selected === undefined) return null
   return (
-    <button
-      type="button"
-      className="mat-status-strip"
-      aria-label={latest === undefined ? 'Open HPC task details' : `Open task ${latest.jobId}`}
-      onClick={onOpenTask}
-      role="status"
-    >
-      <StateDot state={latest === undefined ? 'done' : statusState(latest)} />
+    <div className="mat-status-strip" role="status">
+      <StateDot state={statusState(selected)} />
       <span className="mat-status-strip__label">
-        {latest === undefined ? 'HPC ready' : latest.phase === 'settled' ? 'Computation finished' : 'Computation running'}
+        {selected.phase === 'settled' ? 'Computation finished' : 'Computation running'}
       </span>
-      {latest !== undefined && <code>{latest.jobId}</code>}
-      {jobs.length > 1 && <span className="mat-status-strip__count">{jobs.length} tasks</span>}
-      <span className="mat-status-strip__action">Details</span>
-    </button>
+      <select
+        aria-label="Current conversation task"
+        value={selected.jobId}
+        onChange={(event) => { fileManagerState.selectJob(event.target.value) }}
+      >
+        {visible.map(job => <option key={job.jobId} value={job.jobId}>{job.label ?? job.jobId}</option>)}
+      </select>
+      <span className="mat-status-strip__count">{visible.length} tasks</span>
+      <Button size="sm" variant="outline" aria-label={`打开任务面板 ${selected.jobId}`} onClick={onOpenTask}>任务</Button>
+      <Button size="sm" variant="outline" aria-label="打开文件面板" onClick={() => { openDetailsTab?.('mat-files') }}>文件</Button>
+    </div>
   )
 }

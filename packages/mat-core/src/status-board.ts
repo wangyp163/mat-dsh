@@ -35,6 +35,8 @@ export interface MatJobStatus {
   phase: 'monitoring' | 'settled'
   task?: string
   workdir?: string
+  /** Host-local workspace reserved for this job at submission time. */
+  localWorkspace?: string
   partition?: string
   converged?: boolean
   slurm?: SlurmEntrySnapshot[]

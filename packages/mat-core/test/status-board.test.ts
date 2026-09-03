@@ -18,6 +18,7 @@ describe('createStatusBoard', () => {
       startedAt: 500,
       task: 'opt+freq',
       workdir: '/public/home/hpc-user-a/workspace/h2o-m2-probe',
+      localWorkspace: '/tmp/mat-files/11250/mat-slurm-1',
       partition: 'Agent0',
       slurm: [{ id: '120283614', state: 'RUNNING', elapsedSeconds: 15 }],
     })
@@ -33,6 +34,7 @@ describe('createStatusBoard', () => {
         phase: 'monitoring',
         task: 'opt+freq',
         workdir: '/public/home/hpc-user-a/workspace/h2o-m2-probe',
+        localWorkspace: '/tmp/mat-files/11250/mat-slurm-1',
         partition: 'Agent0',
         slurm: [{ id: '120283614', state: 'RUNNING', elapsedSeconds: 15 }],
       },

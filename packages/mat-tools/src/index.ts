@@ -7,6 +7,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 // 引入 dsh-jobs 的 Context 合并（ctx.get('jobs')）并注册 watch 的 JobKind。
 import type {} from '@deepseek-ai/dsh-jobs'
 import { MatClient, createWatchLoop, outputText } from 'mat-core'
+import { deriveRemoteHome, isShellStyleWorkdir } from 'mat-core'
 import {
   DEFAULT_PRODUCER_POLL_SECONDS,
   SINFO_COMMAND,
@@ -29,6 +30,8 @@ import type { GaussianProducerResult, RemoteWorkflowAdapter, MatJobStatus, Slurm
 import { MatFileServiceImpl } from './file-service.ts'
 import type { SettledFileJob } from './file-service.ts'
 import { resolveEfileCredentials } from './efile-env.ts'
+import { createWorkdirResolver } from './workdir-resolver.ts'
+import type { WorkdirResolver } from './workdir-resolver.ts'
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -129,22 +132,44 @@ function getShellFileClient(): ShellFileTransferClient {
   return new ShellFileTransferClient({ execClient: getClient() })
 }
 
+let workdirResolver: WorkdirResolver | undefined
+
+/**
+ * workdir 解析器（懒建）：producer 路径推导（零往返）→ 内存 → 磁盘缓存
+ * （`<MAT_FILE_ROOT>/remote-homes.json`，跨重启）→ 远端 exec（成功逐级回填）。
+ */
+function getWorkdirResolver(): WorkdirResolver {
+  if (workdirResolver === undefined) {
+    workdirResolver = createWorkdirResolver({
+      cachePath: join(localWorkspaceRoot(), 'remote-homes.json'),
+      execHome: async (clusterId) => outputText(await getClient().execCommand(clusterId, 'printf %s "$HOME"', 30)).trim(),
+    })
+  }
+  return workdirResolver
+}
+
 function createMatFileService(): MatFileServiceImpl {
   const localRoot = process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
   const service = new MatFileServiceImpl({
     localRoot,
-    transferFor: (clusterId) => ({
-      async downloadFile(remotePath, localPath) {
-        try { return await (await getEfileClient(clusterId)).downloadFile(remotePath, localPath) } catch (error) {
-          if (!canFallBackToRemoteShell(error)) throw error
-          return getShellFileClient().downloadFile(clusterId, remotePath, localPath)
-        }
-      },
-    }),
+    resolveWorkdir: (clusterId, workdir, hints) => getWorkdirResolver().resolve(clusterId, workdir, hints),
+    transferFor: (clusterId) => {
+      const shell = getShellFileClient()
+      return {
+        async downloadFile(remotePath: string, localPath: string) {
+          try { return await (await getEfileClient(clusterId)).downloadFile(remotePath, localPath) } catch (error) {
+            if (!canFallBackToRemoteShell(error)) throw error
+            return shell.downloadFile(clusterId, remotePath, localPath)
+          }
+        },
+        /** 预取预算判定用；efile 无独立 stat，走 shell（失败由预取旁路静默吞掉）。 */
+        async statFile(remotePath: string) { return shell.statFile(clusterId, remotePath) },
+      }
+    },
   })
   service.listFiles = async (clusterId, path, options) => {
-    const resolvedPath = path === '$HOME' || path.startsWith('$HOME/')
-      ? path.replace(/^\$HOME(?=\/|$)/, outputText(await getClient().execCommand(clusterId, 'printf %s "$HOME"', 30)).trim())
+    const resolvedPath = isShellStyleWorkdir(path)
+      ? path.replace(/^\$HOME(?=\/|$)/, await getWorkdirResolver().home(clusterId))
       : path
     try {
       return await (await getEfileClient(clusterId)).listFiles(resolvedPath, options)
@@ -171,15 +196,32 @@ function gaussianOptions(raw: unknown): GaussianOptions {
   }
 }
 
+function localWorkspaceRoot(): string {
+  return process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
+}
+
+function reserveLocalWorkspace(clusterId: string, jobId: string): string {
+  const path = join(localWorkspaceRoot(), clusterId, jobId)
+  mkdirSync(path, { recursive: true, mode: 0o700 })
+  return path
+}
+
 function statusStorePath(): string {
-  const root = process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
-  return join(root, 'jobs.json')
+  return join(localWorkspaceRoot(), 'jobs.json')
 }
 
 function loadPersistedJobs(path: string): MatJobStatus[] {
   try {
     const value = JSON.parse(readFileSync(path, 'utf8')) as { jobs?: unknown }
-    return Array.isArray(value.jobs) ? value.jobs as MatJobStatus[] : []
+    if (!Array.isArray(value.jobs)) return []
+    let migrated = false
+    const jobs = (value.jobs as MatJobStatus[]).map((job) => {
+      if (job.localWorkspace !== undefined) return job
+      migrated = true
+      return { ...job, localWorkspace: reserveLocalWorkspace(job.clusterId, job.jobId) }
+    })
+    if (migrated) persistJobs(path, jobs)
+    return jobs
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     return []
@@ -409,6 +451,17 @@ export function apply(ctx: Context): void {
         ...exec.agent ? { owner: exec.agent } : {},
         run: () => {
           const statusJobId = () => statusId ||= freshStatusId(statusBoard, id)
+          // 生产 jobs-local 在 start() 内同步调 run()，此刻 id 尚未赋值：
+          // 初始登记延后一个微任务躲开 TDZ；onTick/结算本就异步，语义不变。
+          queueMicrotask(() => {
+            const statusKey = statusJobId()
+            const workspace = reserveLocalWorkspace(args.cluster_id, statusKey)
+            statusBoard.upsert(statusKey, {
+              kind: 'mat-watch', label: `${args.cluster_id} ×${jobIds.length} jobs`,
+              clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+              localWorkspace: workspace,
+            })
+          })
           const loop = createWatchLoop({
             clusterId: args.cluster_id,
             jobIds,
@@ -419,6 +472,7 @@ export function apply(ctx: Context): void {
                 statusBoard.upsert(statusJobId(), {
                   kind: 'mat-watch', label: `${args.cluster_id} ×${jobIds.length} jobs`,
                   clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+                  localWorkspace: reserveLocalWorkspace(args.cluster_id, statusJobId()),
                   slurm: statusSlurm(states),
                 })
               } catch { /* 状态板旁路故障不影响监控 */ }
@@ -525,6 +579,16 @@ export function apply(ctx: Context): void {
         ...exec.agent ? { owner: exec.agent } : {},
         run: () => {
           const statusJobId = () => statusId ||= freshStatusId(statusBoard, id)
+          // 同上：初始登记延后一个微任务，躲开 start() 同步窗口内的 id TDZ。
+          queueMicrotask(() => {
+            const statusKey = statusJobId()
+            const workspace = reserveLocalWorkspace(args.cluster_id, statusKey)
+            statusBoard.upsert(statusKey, {
+              kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
+              clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+              task: args.task.trim(), workdir: args.workdir.trim(), localWorkspace: workspace, partition,
+            })
+          })
           return createGaussianProducerHooks({
           execCommand: (clusterId, command, timeoutSeconds) => producerClient.execCommand(clusterId, command, timeoutSeconds),
           clusterId: args.cluster_id,
@@ -539,7 +603,8 @@ export function apply(ctx: Context): void {
               statusBoard.upsert(statusJobId(), {
                 kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
                 clusterId: args.cluster_id, ownerSession: exec.agent?.id,
-                task: args.task.trim(), workdir: args.workdir.trim(), partition, slurm: statusSlurm(states),
+                task: args.task.trim(), workdir: args.workdir.trim(),
+                localWorkspace: reserveLocalWorkspace(args.cluster_id, statusJobId()), partition, slurm: statusSlurm(states),
               })
             } catch { /* 状态板旁路故障不影响 producer */ }
           },

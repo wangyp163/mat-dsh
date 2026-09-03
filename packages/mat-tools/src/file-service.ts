@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile, readdir, lstat, realpath, stat, unlink } from 'node:fs/promises'
 import { dirname, join, relative, resolve, posix } from 'node:path'
-import { FileSyncManager, mergeWorkspaceTree, projectPrimaryFiles } from 'mat-core'
+import { FileSyncManager, mergeWorkspaceTree, projectDegradedPrimary, projectPrimaryFiles } from 'mat-core'
 import type { FileDownloadPort, FileSyncRecord, ListFilesOptions, RemoteFileEntry, RemoteFilePage } from 'mat-core'
 import { normalizeRemotePath, remoteRelativePath } from 'mat-core'
 
@@ -17,10 +17,17 @@ export interface WorkspaceRequest {
   clusterId: string
   workdir: string
   path: string
+  localWorkspace?: string
   producerFiles?: string[]
   patterns?: string[]
 }
-export interface WorkspaceTree { path: string; entries: Array<Record<string, unknown>>; primary: string[] }
+export interface WorkspaceTree {
+  path: string
+  entries: Array<Record<string, unknown>>
+  primary: string[]
+  /** Present when the remote listing was unavailable and only local files are shown. */
+  warning?: string
+}
 
 export interface DownloadArtifact {
   kind: 'file' | 'zip'
@@ -39,6 +46,12 @@ export interface FilePreferences { autoSync: boolean; pins?: string[]; exclusion
 export interface MatFileServiceOptions {
   localRoot: string
   transferFor: (clusterId: string) => FileDownloadPort
+  /**
+   * Expand a shell-style workdir (`$HOME/...`) into an absolute remote path before
+   * any path validation or remote call. Absolute workdirs pass through unchanged;
+   * resolver failures fall back to the raw value so callers can degrade.
+   */
+  resolveWorkdir?: (clusterId: string, workdir: string, hints?: string[]) => Promise<string>
 }
 
 function crc32(data: Uint8Array): number {
@@ -106,31 +119,54 @@ export class MatFileServiceImpl {
     }
   }
 
+  /** Best-effort workdir expansion; absolute and unresolvable values pass through. */
+  private async expandWorkdir(clusterId: string, workdir: string, hints: string[] = []): Promise<string> {
+    if (workdir === '' || workdir.startsWith('/') || this.options.resolveWorkdir === undefined) return workdir
+    try { return await this.options.resolveWorkdir(clusterId, workdir, hints) } catch { return workdir }
+  }
+
   async listWorkspace(request: WorkspaceRequest): Promise<WorkspaceTree> {
     if (!/^[A-Za-z0-9._-]+$/.test(request.jobId) || !/^[A-Za-z0-9._-]+$/.test(request.clusterId)) throw new Error('unsafe workspace identity')
     if (request.path.includes('\0') || request.path.startsWith('/') || request.path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
-    const mappedRoot = resolve(this.options.localRoot, request.clusterId, request.jobId)
+    const expectedRoot = resolve(this.options.localRoot, request.clusterId, request.jobId)
+    const mappedRoot = resolve(request.localWorkspace ?? expectedRoot)
+    if (mappedRoot !== expectedRoot) throw new Error('workspace identity does not match configured local root')
     const root = resolve(mappedRoot, request.path)
     if (root !== mappedRoot && !root.startsWith(`${mappedRoot}/`)) throw new Error('unsafe workspace path')
     const local: Array<Record<string, unknown>> = []
     for (const item of await readdir(root, { withFileTypes: true }).catch(() => [] as import('node:fs').Dirent[])) {
       if (item.name.includes('\0') || item.name.endsWith('.mat-part-') || item.name.includes('.mat-part-')) continue
       const full = join(root, item.name)
-      const info = await lstat(full)
+      const info = await lstat(full).catch(() => undefined)
+      if (info === undefined) continue
       const path = request.path ? `${request.path}/${item.name}` : item.name
       local.push({ path, name: item.name, directory: info.isDirectory(), regularFile: info.isFile(), symbolicLink: info.isSymbolicLink(), readable: info.isFile() ? Boolean(info.mode & 0o444) : true, size: info.isFile() ? info.size : 0 })
     }
+    let workdir = request.workdir
     let remotePage: RemoteFilePage = { path: request.workdir, total: 0, entries: [] }
-    try {
-      remotePage = await this.listFiles(request.clusterId, request.path ? `${request.workdir}/${request.path}` : request.workdir, { limit: MAX_FILES })
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes('must be supplied')) throw error
+    let warning: string | undefined
+    if (workdir === '') {
+      warning = 'task has no remote workdir; showing the local workspace only'
+    } else {
+      try {
+        workdir = await this.expandWorkdir(request.clusterId, workdir, request.producerFiles ?? [])
+        remotePage = await this.listFiles(request.clusterId, request.path ? `${workdir}/${request.path}` : workdir, { limit: MAX_FILES })
+      } catch (error) {
+        // A missing remote directory (post-computation cleanup) or an unreachable
+        // cluster degrades the tree to local-only instead of failing the panel.
+        warning = `remote listing unavailable: ${error instanceof Error ? error.message : String(error)}`
+      }
     }
     const prefs = await this.getPreferences(request.jobId)
-    const nodes = mergeWorkspaceTree({ local: local as never[], remote: remotePage.entries, workdir: request.workdir, syncs: this.listSyncs() })
+    const nodes = mergeWorkspaceTree({ local: local as never[], remote: remotePage.entries, workdir, syncs: this.listSyncs() })
       .filter((node) => node.path === request.path || (request.path === '' ? !node.path.includes('/') : node.path.startsWith(`${request.path}/`) && !node.path.slice(request.path.length + 1).includes('/')))
-    const primary = projectPrimaryFiles({ workdir: request.workdir, entries: remotePage.entries, producerFiles: request.producerFiles ?? [], patterns: request.patterns ?? ['*.log', '*.out', 'result*.json'], pins: prefs.pins ?? [], exclusions: prefs.exclusions ?? [] })
-    return { path: request.path, entries: nodes as unknown as Array<Record<string, unknown>>, primary }
+    const absoluteWorkdir = workdir.startsWith('/') ? workdir : undefined
+    const primary = absoluteWorkdir === undefined
+      ? []
+      : warning === undefined
+        ? projectPrimaryFiles({ workdir: absoluteWorkdir, entries: remotePage.entries, producerFiles: request.producerFiles ?? [], patterns: request.patterns ?? ['*.log', '*.out', 'result*.json'], pins: prefs.pins ?? [], exclusions: prefs.exclusions ?? [] })
+        : projectDegradedPrimary({ workdir: absoluteWorkdir, producerFiles: request.producerFiles ?? [], pins: prefs.pins ?? [], exclusions: prefs.exclusions ?? [] })
+    return { path: request.path, entries: nodes as unknown as Array<Record<string, unknown>>, primary, ...(warning === undefined ? {} : { warning }) }
   }
 
   private manager(clusterId: string): FileSyncManager {
@@ -143,8 +179,22 @@ export class MatFileServiceImpl {
   }
 
   async syncFile(jobId: string, clusterId: string, workdir: string, remotePath: string, conflictPolicy: 'keep-both' | 'overwrite' = 'keep-both'): Promise<FileSyncRecord> {
-    remoteRelativePath(workdir, normalizeRemotePath(remotePath))
-    return this.manager(clusterId).enqueue({ id: jobId, workdir, remotePath, conflictPolicy })
+    const resolved = await this.expandWorkdir(clusterId, workdir)
+    remoteRelativePath(resolved, normalizeRemotePath(remotePath))
+    return this.manager(clusterId).enqueue({ id: jobId, workdir: resolved, remotePath, conflictPolicy })
+  }
+
+  async materializeFile(jobId: string, clusterId: string, workdir: string, path: string): Promise<string> {
+    if (!path || path.includes('\0') || path.startsWith('/') || path.split('/').some((part) => part === '..')) {
+      throw new Error('unsafe workspace path')
+    }
+    const resolved = await this.expandWorkdir(clusterId, workdir)
+    const remotePath = `${resolved.replace(/\/$/, '')}/${path}`
+    const record = await this.syncFile(jobId, clusterId, resolved, remotePath, 'overwrite')
+    if (record.status !== 'completed' || record.localPath === undefined) {
+      throw new Error(record.error ?? `file synchronization failed: ${path}`)
+    }
+    return record.localPath
   }
 
   listSyncs(): FileSyncRecord[] { return [...this.managers.values()].flatMap((manager) => manager.list()) }
@@ -153,19 +203,24 @@ export class MatFileServiceImpl {
     throw new Error('efile list service must be supplied by the runtime adapter')
   }
 
-  async prepareDownload(jobId: string, paths: string[]): Promise<DownloadArtifact> {
+  async prepareDownload(jobId: string, paths: string[], context?: { clusterId: string; workdir: string }): Promise<DownloadArtifact> {
     if (!/^[A-Za-z0-9._-]+$/.test(jobId) || paths.length < 1 || paths.length > MAX_FILES) throw new Error('invalid download request')
     const records = this.listSyncs().filter((record) => record.id === jobId && record.status === 'completed' && record.localPath !== undefined)
-    const roots: string[] = []
-    for (const value of paths) {
+    const roots: Array<string | undefined> = []
+    const missing: Array<{ index: number; value: string }> = []
+    for (const [index, value] of paths.entries()) {
       if (!value || value.includes('\0') || value.startsWith('/') || value.split('/').some((part) => part === '..')) throw new Error('unsafe download path')
       const record = records.find((candidate) => candidate.remotePath.endsWith(`/${value}`) || candidate.remotePath === value)
-      if (record?.localPath !== undefined) roots.push(record.localPath)
-      else {
-        const candidate = records.length > 0 ? undefined : undefined
-        if (candidate !== undefined) roots.push(candidate)
-        else throw new Error(`file is not synchronized: ${value}`)
-      }
+      if (record?.localPath !== undefined) roots[index] = record.localPath
+      else if (context !== undefined) missing.push({ index, value })
+      else throw new Error(`file is not synchronized: ${value}`)
+    }
+    // 按需物化并行池（4）：多文件远端往返不线性叠加。roots[index] 与 paths[index] 一一对应。
+    const POOL = 4
+    for (let start = 0; start < missing.length; start += POOL) {
+      const batch = missing.slice(start, start + POOL)
+      const localPaths = await Promise.all(batch.map(({ value }) => this.materializeFile(jobId, context!.clusterId, context!.workdir, value)))
+      batch.forEach(({ index }, at) => { roots[index] = localPaths[at] })
     }
     const files: Array<{ path: string; name: string; data: Buffer }> = []
     let bytes = 0
@@ -184,15 +239,46 @@ export class MatFileServiceImpl {
       if (files.length >= MAX_FILES || bytes + info.size > MAX_BYTES) throw new Error('download size limit exceeded')
       const data = await readFile(filePath); files.push({ path: filePath, name, data }); bytes += data.length
     }
-    for (const root of roots) await walk(root, posix.basename(root), 0)
+    for (const root of roots) await walk(root!, posix.basename(root!), 0)
     if (files.length === 1 && roots.length === 1) return { kind: 'file', filename: files[0]!.name, body: files[0]!.data, contentType: 'application/octet-stream' }
     return { kind: 'zip', filename: `${jobId}-files.zip`, body: makeZip(files) , contentType: 'application/zip' }
   }
 
   async handleSettledJob(job: SettledFileJob): Promise<FileSyncRecord[]> {
-    if (job.outcomeStatus !== 'completed' || !(await this.getPreferences(job.jobId)).autoSync || this.seenJobs.has(job.jobId)) return []
+    if (job.outcomeStatus !== 'completed' || this.seenJobs.has(job.jobId)) return []
     this.seenJobs.add(job.jobId)
     if (job.workdir === undefined) return []
-    return Promise.all((job.files ?? []).map((path) => this.syncFile(job.jobId, job.clusterId, job.workdir!, path.startsWith('/') ? path : `${job.workdir}/${path}`)))
+    const workdir = await this.expandWorkdir(job.clusterId, job.workdir, job.files ?? [])
+    // 主要文件预取走旁路：与 autoSync 全量同步解耦，结算返回不等它。
+    this.prefetchPrimary(job, workdir)
+    if (!(await this.getPreferences(job.jobId)).autoSync) return []
+    return Promise.all((job.files ?? []).map((path) => this.syncFile(job.jobId, job.clusterId, workdir, path.startsWith('/') ? path : `${workdir}/${path}`)))
+  }
+
+  /**
+   * 结算后把主要文件（producer 投影 + pins）中小于 2MB 的拉到本地，让「点开即读」。
+   * 旁路纪律：任何失败静默丢弃，绝不影响结算路径本身。
+   */
+  private prefetchPrimary(job: SettledFileJob, workdir: string): void {
+    if (!workdir.startsWith('/')) return
+    void (async () => {
+      const port = this.options.transferFor(job.clusterId)
+      if (port.statFile === undefined) return
+      const prefs = await this.getPreferences(job.jobId)
+      const primary = projectDegradedPrimary({
+        workdir, producerFiles: job.files ?? [], pins: prefs.pins ?? [], exclusions: prefs.exclusions ?? [],
+      }).slice(0, 20)
+      const statPool = 4
+      const wanted: string[] = []
+      for (let start = 0; start < primary.length; start += statPool) {
+        const sized = await Promise.all(primary.slice(start, start + statPool).map(async (relative) => {
+          try { return await port.statFile!(`${workdir}/${relative}`) } catch { return Number.POSITIVE_INFINITY }
+        }))
+        primary.slice(start, start + statPool).forEach((relative, at) => {
+          if (sized[at]! < 2 * 1024 * 1024) wanted.push(`${workdir}/${relative}`)
+        })
+      }
+      await Promise.all(wanted.map((remotePath) => this.syncFile(job.jobId, job.clusterId, workdir, remotePath)))
+    })().catch(() => { /* 预取旁路失败静默 */ })
   }
 }
