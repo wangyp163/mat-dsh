@@ -3,11 +3,11 @@ name: gaussian-calc
 # description 必须整体加引号：值里含 "CLI: sp"（冒号+空格），裸标量会被 YAML frontmatter
 # 解析器拒掉，整个 skill 静默跳过（2026-08-28 e2e 排障定位）。
 description: 'Use this skill for Gaussian 16 calculations through the calcflow-based gaussian-workflow CLI: sp, opt, freq, dipole, polar, tddft, fluorescence, resp, ts, qst2, qst3, irc, aea, and valid task compositions such as opt+sp, opt+freq and ts+irc. Generates Gaussian inputs, uses HPC tools to execute pre/post commands, upload files, submit and monitor Slurm jobs, and retrieves results.'
-version: 0.7.11-demo
+version: 0.7.12-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/other-projects/vasp-matstream-agent/skills/debug-gaussian-calc@0.7.1-demo
-  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9；2026-09-03 M9 吸收 canonical v0.7.8 过渡态搜索三件套（ts 补 freq 路由 + qst2/qst3 多帧 xyz 输入：structure/上传文件可含多帧、恰 1/2/3 帧语义、原子序号逐位一致、ts+irc 组合、imaginary_frequency_count equals=1 验收），配套远端 workflow 升 1.3.2；版本 0.7.10 续跳号避让 canonical v0.7.8；2026-09-03 M10 吸收 canonical v0.7.9 压测行为增补（多帧缺失禁历史补帧 C6、一站式崩溃先对账再分步收尾禁改 gjf D1、诊断实验收敛 diag/ 子目录 + 产物尺寸约束、重跑同名额删除边界）+ run 幂等新语义（命令段不一致整体重写、ulimit -c 0，D3/D2 配套 workflow 1.3.3），env_profile 三副本同步 1.3.3；版本 0.7.11-demo 续跳号避让 canonical v0.7.9
+  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9；2026-09-03 M9 吸收 canonical v0.7.8 过渡态搜索三件套（ts 补 freq 路由 + qst2/qst3 多帧 xyz 输入：structure/上传文件可含多帧、恰 1/2/3 帧语义、原子序号逐位一致、ts+irc 组合、imaginary_frequency_count equals=1 验收），配套远端 workflow 升 1.3.2；版本 0.7.10 续跳号避让 canonical v0.7.8；2026-09-03 M10 吸收 canonical v0.7.9 压测行为增补（多帧缺失禁历史补帧 C6、一站式崩溃先对账再分步收尾禁改 gjf D1、诊断实验收敛 diag/ 子目录 + 产物尺寸约束、重跑同名额删除边界）+ run 幂等新语义（命令段不一致整体重写、ulimit -c 0，D3/D2 配套 workflow 1.3.3），env_profile 三副本同步 1.3.3；版本 0.7.11-demo 续跳号避让 canonical v0.7.9；2026-09-03 M11 吸收 canonical v0.7.10（资源档语义 O1：resources 是作业资源档唯一来源、自建 pre.json 必填否则结构化报错、一站式内置默认档仅在不传 pre_json 时生效；确认闸必须阻塞式 question 禁文本收尾 O2——队列编排会越过文本等待点），配套远端 workflow 升 1.3.4（D8：post log 名从 phase state 解析，json pre + legacy post 混合模式不再找 g16.log），env_profile 同步 1.3.4；版本 0.7.12-demo 续跳号避让 canonical v0.7.10
 ---
 
 # Gaussian 工作流
@@ -90,7 +90,7 @@ bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh", "timeout_seco
 脚本只做无副作用检查，不运行 `g16`、不提交 Slurm，stdout 只返回一个 `gaussian-env-gate.v2` 单行 JSON。例如：
 
 ```json
-{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.3.3","expected_version":"1.3.3","newer_version":"","required_tasks":["aea",...,"qst2","qst3",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":14,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
+{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.3.4","expected_version":"1.3.4","newer_version":"","required_tasks":["aea",...,"qst2","qst3",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":14,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
 ```
 
 `required_tasks` 是 skill 要求的公开 task 集，`missing_tasks` 是运行时实际缺失的 task；任何 `missing_tasks` 都会使 `ok=false`。
@@ -293,7 +293,9 @@ resources.ncores → %nprocshared
 resources.memory → %mem
 ```
 
-不得在 `ase.calculator_kwargs` 中提供旧的 `nprocshared` 或 `mem`。不传 `--json` 时使用既有 calculator 默认值。
+不得在 `ase.calculator_kwargs` 中提供旧的 `nprocshared` 或 `mem`。不传 `--json` 时使用 calculator 默认值（1.3.3 起与下例档位对齐：B3LYP/6-31G(d)、32 核、64GB）。
+
+**资源档语义（r2 O1 对齐）**：`pre.json` 的 `resources` 是该次作业资源档的**唯一来源**——自定义 `pre.json`（例如只为改 method/basis）时**必须显式写 `resources`**，缺失会被 workflow 以结构化报错拒绝；上例的 32 核/64GB 是推荐档位，**不会自动继承**到自建 pre.json，小体系可自觉降档但须自己写明。一站式工具的内置默认档（32 核/64GB）仅在不传 `pre_json` 时生效；传了自建 `pre_json` 就以其中 `resources` 为准，报告作业资源时应引用实际值而非文档档位。
 
 单步 task 中，`ase.calculator_kwargs` 是 Gaussian 输入的权威来源；task 语义路由（`opt`→opt、`freq`→freq、`tddft`→td(nstates=20) 等，对照「默认 route 参考」表）在 JSON **未写该键时缺省自动注入**——`pre.json` 不写 `opt`/`freq` 也照样产出优化/频率输入。JSON 显式写的键**以 JSON 为准**（如 `"opt": ["Tight", "CalcFC"]` 覆盖默认裸 opt）。带选项的关键词用列表（`["Tight"]`）、**裸关键词写 `[]` 或 `""`**；路由键的值**不得是布尔**（`"freq": true` 会被 workflow 直接拒绝报错——ASE 会渲染成非法的 `freq(True)`）。AEA 将该块作为多步共享配置，但仍强制每步 charge/mult 与 `opt`/`scf` route。
 
@@ -495,6 +497,8 @@ mat_exec({"cluster_id": "{cluster_id}", "command": 'head -n 6 "{work_dir}/opt/jo
 ```
 
 **提交前必须核对路由行**（组合任务核对每个步骤子目录的 `job.gjf`）：`head` 输出的 route 段必须含该步骤预期的 task 关键词（`-t opt` → `opt`、`-t freq`/`opt+freq` 第二步 → `freq`）。路由行只有 `#P method/basis` 意味着该步会退化成单点能——**不得提交**，改 `pre.json` 后重跑 `pre` 再核对。
+
+**等待用户确认必须用阻塞式交互**：需要用户核对输入、选择选项或授权删除/提交时，发起一个等待应答的 question（宿主阻塞机制），**不得以文本收尾代替**——turn 结束 ≠ 用户已确认；队列/多 case 编排下后续 prompt 会直接越过文本等待点，等待形同虚设（demo r2 O2 教训）。
 
 ### 3. 生成 slurm.sh（经 `mat_exec` 调 `run`）
 
