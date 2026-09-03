@@ -3,11 +3,11 @@ name: gaussian-calc
 # description 必须整体加引号：值里含 "CLI: sp"（冒号+空格），裸标量会被 YAML frontmatter
 # 解析器拒掉，整个 skill 静默跳过（2026-08-28 e2e 排障定位）。
 description: 'Use this skill for Gaussian 16 calculations through the calcflow-based gaussian-workflow CLI: sp, opt, freq, dipole, polar, tddft, fluorescence, resp, ts, qst2, qst3, irc, aea, and valid task compositions such as opt+sp, opt+freq and ts+irc. Generates Gaussian inputs, uses HPC tools to execute pre/post commands, upload files, submit and monitor Slurm jobs, and retrieves results.'
-version: 0.7.10-demo
+version: 0.7.11-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/other-projects/vasp-matstream-agent/skills/debug-gaussian-calc@0.7.1-demo
-  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9；2026-09-03 M9 吸收 canonical v0.7.8 过渡态搜索三件套（ts 补 freq 路由 + qst2/qst3 多帧 xyz 输入：structure/上传文件可含多帧、恰 1/2/3 帧语义、原子序号逐位一致、ts+irc 组合、imaginary_frequency_count equals=1 验收），配套远端 workflow 升 1.3.2；版本 0.7.10 续跳号避让 canonical v0.7.8
+  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9；2026-09-03 M9 吸收 canonical v0.7.8 过渡态搜索三件套（ts 补 freq 路由 + qst2/qst3 多帧 xyz 输入：structure/上传文件可含多帧、恰 1/2/3 帧语义、原子序号逐位一致、ts+irc 组合、imaginary_frequency_count equals=1 验收），配套远端 workflow 升 1.3.2；版本 0.7.10 续跳号避让 canonical v0.7.8；2026-09-03 M10 吸收 canonical v0.7.9 压测行为增补（多帧缺失禁历史补帧 C6、一站式崩溃先对账再分步收尾禁改 gjf D1、诊断实验收敛 diag/ 子目录 + 产物尺寸约束、重跑同名额删除边界）+ run 幂等新语义（命令段不一致整体重写、ulimit -c 0，D3/D2 配套 workflow 1.3.3），env_profile 三副本同步 1.3.3；版本 0.7.11-demo 续跳号避让 canonical v0.7.9
 ---
 
 # Gaussian 工作流
@@ -90,7 +90,7 @@ bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh", "timeout_seco
 脚本只做无副作用检查，不运行 `g16`、不提交 Slurm，stdout 只返回一个 `gaussian-env-gate.v2` 单行 JSON。例如：
 
 ```json
-{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.3.2","expected_version":"1.3.2","newer_version":"","required_tasks":["aea",...,"qst2","qst3",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":14,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
+{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.3.3","expected_version":"1.3.3","newer_version":"","required_tasks":["aea",...,"qst2","qst3",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":14,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
 ```
 
 `required_tasks` 是 skill 要求的公开 task 集，`missing_tasks` 是运行时实际缺失的 task；任何 `missing_tasks` 都会使 `ok=false`。
@@ -365,7 +365,7 @@ resources.memory <= slurm.mem
 | 顺序组合（如 `opt+sp`） | 每个已就绪 step 子目录（`01-opt/`、`02-sp/`）**各一份** | 每个 step 各 `submit-job` 一次 |
 | `aea` | 当前已就绪子目录（见下"两波"）**各一份** | 每个子目录各 `submit-job` 一次 |
 
-脚本内的 `source` 行来自 `GAUSSIAN_ENV_SCRIPT`（g16 runtime，不是 `workflow_env`）；`partition`/`nodes`/`ntasks_per_node`/`mem` 等来自 `run.json.slurm`。若 `slurm.sh` 已存在，`run` 仅更新 `#SBATCH` 指令，不改命令行。
+脚本内的 `source` 行来自 `GAUSSIAN_ENV_SCRIPT`（g16 runtime，不是 `workflow_env`）；`partition`/`nodes`/`ntasks_per_node`/`mem` 等来自 `run.json.slurm`。若 `slurm.sh` 已存在：命令段（`source` 行与 `g16 < input > log` 命令行）与本次渲染不一致时 `run` **整体重写**脚本（workflow 1.3.3 起；result 的 `context` 会记 `>> slurm.sh command section re-rendered`），一致时仅更新 `#SBATCH` 指令。脚本固定含 `ulimit -c 0`（禁 core dump）。
 
 提交前确认脚本数量：`find "{work_dir}/<task>" -maxdepth 2 -name slurm.sh`。脚本数即提交次数；不要在登录节点手动跑 `g16` 或改写脚本。
 
@@ -598,6 +598,7 @@ mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/opt/spectrum_
 要点：
 
 - **帧数或元素序号不符 → pre 直接结构化报错**，不静默截断；多帧文件交给单结构 task（如 `opt`）时取第 1 帧。
+- **多帧输入缺失/帧数不符时，把 pre 的结构化报错原样透出，或向用户索要缺失帧——禁止从会话历史、旧 workdir 或先前 case 的产物"补帧"凑数**。用户说"就这一个结构"就是一帧，不得替用户脑补第二帧；科学结果正确不豁免输入保真度违约（demo 压测 C6 教训）。
 - **原子序号必须严格一致**：反应物和产物的同一原子在两帧中必须同位（Gaussian QST 硬要求）；各几何节共用同一 `charge`/`mult`。
 - post 报 `frequencies_cm-1`、`imaginary_frequency_count`，并导出 `g16_initial.xyz` 与 `g16_optimized.xyz`（优化后 TS 几何）。**一阶鞍点确认（恰好一个虚频）由验收声明表达**：`"acceptance": {"imaginary_frequency_count": {"equals": 1}}`；count≠1 时 post 只在 context 警示，不判失败。
 - TS→IRC 联动用组合 `ts+irc`（多波，分步链路）：IRC 步消费 TS 的**优化后**几何（`g16_optimized.xyz`），不是初猜。
@@ -700,3 +701,6 @@ mat_exec({"cluster_id": "{cluster_id}", "command": "grep -n \"SCF Done:\" {work_
 - post 找不到 log：确认三阶段使用同一绝对 workdir、相同 CLI task 和结构输入；state 位于 `{work_dir}/<task>/.calcflow-phase.json`。
 - fluorescence/resp 工具失败：检查 `Multiwfnpath`、`formchk` 和 checkpoint，不要吞错误。
 - AEA 中间步骤缺失：按两波流程再次执行 `pre` 和 `run`，已完成步骤会复用/跳过。
+- **一站式工具崩溃（`mat_gaussian` 报内部错误/无 job id 返回）**：远端动作可能**已经执行**（prepare→pre→run→sbatch 在工具返回前发生）。处置顺序：先用 `mat_job_status`（状态板）对账实际提交状态与 workdir 产物（必要时 `mat_exec` 查 `sacct`），再决定收尾方式——复用已产出 pre 产物的 workdir 走分步 `run`→`mat_sbatch`→`post`，或换新 workdir 重来。**禁止直接改 gjf / 手写输入文件绕过工具错误**（掩盖工具缺陷、绕开 workflow 输入契约）；向用户透明披露工具错误与对账结论，不静默降级（demo 压测 D1 教训）。
+- **诊断实验约束**：格式定界/变体实验（空行格式、route 变体等）收敛到**单一 `diag/` 子目录**（`{work_dir}/diag/`）内逐个编号，不散落平级子目录；控制产物尺寸——诊断作业同样遵守 `ulimit -c 0`，不得在共享目录留下 core dump 或大体量中间物；结论得出后向用户报告并请求清理确认（tryA–J 十连目录 + 1.7GB core 教训）。
+- **「重跑同名额」语境的删除边界**：用同名 workdir/task 重跑需要清掉旧产物（`g16.com`/`job.log`/`slurm-*.out` 等）时，仍先把将删路径列给用户确认——"我马上要重跑"不构成删除授权；只删确属本会话产物、且证据已从 result.json/log 取证的文件。
