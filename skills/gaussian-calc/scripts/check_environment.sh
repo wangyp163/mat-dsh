@@ -12,7 +12,7 @@ WORKFLOW_ENV="$WORKFLOW_ROOT/env.sh"
 G16_ENV="$G16_HOME/scripts/env.sh"
 PYTHON_BIN="$WORKFLOW_ROOT/$PYTHON_BIN_SUBDIR/python"
 CLI="$WORKFLOW_ROOT/$PYTHON_BIN_SUBDIR/gaussian-workflow"
-REQUIRED_TASKS=(aea dipole fluorescence freq irc opt polar resp sp tddft ts)
+REQUIRED_TASKS=(aea dipole fluorescence freq irc opt polar qst2 qst3 resp sp tddft ts)
 
 protocol=unknown
 module_file=""

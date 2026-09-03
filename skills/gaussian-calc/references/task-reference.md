@@ -5,7 +5,7 @@
 ## Current task registry and composition
 
 ```text
-aea dipole fluorescence freq irc opt polar resp sp tddft ts
+aea dipole fluorescence freq irc opt polar qst2 qst3 resp sp tddft ts
 ```
 
 `freq` is the molecular vibrational-frequency task; periodic `phonon` is not supported. The CLI also accepts compositions of registered tasks: `opt+freq` and `opt+sp`. `opt+freq` is a **single-job composition** — one Gaussian route `opt freq`, a flat `{workdir}/opt+freq/` directory (no `01-`/`02-` step subdirectories), one `slurm.sh`, one submission, and unprefixed post properties (`energy`, `converged`, `frequencies_cm-1`, `imaginary_frequency_count`). It must be executed as such; 不得退化为 `-t opt` 加隐藏的 `calculator_kwargs.freq` route hack。Other compositions (e.g. `opt+sp`) remain multi-wave step directories. 若运行时 registry 与本文档不一致，应停止并报告部署版本漂移，而不是静默 fallback。 A composition cannot contain empty, repeated, or unknown components. The public result JSON always retains the original full CLI task string.
@@ -129,7 +129,9 @@ resources.memory <= slurm.mem
 | `tddft` | `td(nstates=20)` | final energy/convergence |
 | `fluorescence` | B3LYP/aug-cc-pVDZ, `td(nstates=10)` | S1 energy/wavelength/oscillator strength and Multiwfn spectrum files |
 | `resp` | B3LYP/def2TZVP, solvent/dispersion, MK for light elements | final energy and RESP charges |
-| `ts` | `opt(ts)` | final energy/convergence; requires valid TS geometry |
+| `ts` | `opt(TS,CalcFC,NoEigenTest) freq` | `frequencies_cm-1`, `imaginary_frequency_count`, `g16_optimized.xyz`; requires a reasonable TS guess |
+| `qst2` | `opt(QST2,CalcFC) freq` | same as `ts`; 2-frame input (reactant + product, identical atom ordering) |
+| `qst3` | `opt(QST3,CalcFC) freq` | same as `ts`; 3-frame input (reactant + product + TS guess) |
 | `irc` | `irc(calcfc)` | final energy/convergence; requires valid TS geometry |
 
 ## freq and opt+freq
@@ -143,6 +145,26 @@ resources.memory <= slurm.mem
 ```
 
 A failed acceptance rule keeps execution `completed` but marks the workflow `needs_review`; it is not an execution failure.
+
+## Transition-state search (ts / qst2 / qst3)
+
+The three transition-state tasks take **all geometries from one multi-frame xyz file** (`-i` is still a single file; frame order = Gaussian molecule-section order; atom count and element ordering must match frame-by-frame):
+
+| task | frames | route | frame semantics |
+|---|---|---|---|
+| `ts` | exactly 1 | `opt(TS,CalcFC,NoEigenTest) freq` | TS initial guess |
+| `qst2` | exactly 2 | `opt(QST2,CalcFC) freq` | reactant, product (both pre-optimized) |
+| `qst3` | exactly 3 | `opt(QST3,CalcFC) freq` | reactant, product, TS guess |
+
+A wrong frame count or mismatched element ordering fails `pre` with a structured error (no silent truncation). A multi-frame file fed to a single-structure task (e.g. `opt`) uses frame 1. All molecule sections share one `charge`/`mult`. Post reports `frequencies_cm-1` and `imaginary_frequency_count` and exports `g16_optimized.xyz`; first-order saddle confirmation is expressed as acceptance:
+
+```json
+{
+  "imaginary_frequency_count": {"equals": 1}
+}
+```
+
+TS→IRC linkage uses the composition `ts+irc` — the IRC step consumes the **optimized** TS geometry, not the initial guess.
 
 ## fluorescence
 

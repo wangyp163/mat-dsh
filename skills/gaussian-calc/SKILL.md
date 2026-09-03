@@ -2,12 +2,12 @@
 name: gaussian-calc
 # description 必须整体加引号：值里含 "CLI: sp"（冒号+空格），裸标量会被 YAML frontmatter
 # 解析器拒掉，整个 skill 静默跳过（2026-08-28 e2e 排障定位）。
-description: 'Use this skill for Gaussian 16 calculations through the calcflow-based gaussian-workflow CLI: sp, opt, freq, dipole, polar, tddft, fluorescence, resp, ts, irc, aea, and valid task compositions such as opt+sp and opt+freq. Generates Gaussian inputs, uses HPC tools to execute pre/post commands, upload files, submit and monitor Slurm jobs, and retrieves results.'
-version: 0.7.9-demo
+description: 'Use this skill for Gaussian 16 calculations through the calcflow-based gaussian-workflow CLI: sp, opt, freq, dipole, polar, tddft, fluorescence, resp, ts, qst2, qst3, irc, aea, and valid task compositions such as opt+sp, opt+freq and ts+irc. Generates Gaussian inputs, uses HPC tools to execute pre/post commands, upload files, submit and monitor Slurm jobs, and retrieves results.'
+version: 0.7.10-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/other-projects/vasp-matstream-agent/skills/debug-gaussian-calc@0.7.1-demo
-  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9
+  adaptation: 2026-08-28 将 mat-command-executor/mat-job-manager/mat-chat 的职责全部映射到 mat_exec；未随包 tests/ 与 scripts/check_skill_contract.py（其断言针对上游 SKILL.md 原文）；2026-08-28 M2 增补「一站式路径（mat_gaussian）」节与 mat_upload/mat_download 文件通道；2026-08-31 M3 门禁 heredoc 落盘模式 + 门禁黑盒/registry 探针禁令 + 一站式 job_output 终点收口（session c9d00865 排障）；2026-08-31 M4 rm/rm -rf/mv 全局用户确认 + 一站式/分步重试 workdir 语义（session f4f3d916 排障）；2026-09-01 M5 冗余精简：删 demo 直连节、协议判定旧协议史、快速定位部署配方；2026-09-01 M6 吸收 canonical v0.7.5 门禁版本锚（deployed/expected/newer_version），门禁改懒校验：远端常驻 .gaussian-calc/scripts 直达、heredoc 降级为播种/刷新（scripts/ 随包同步 canonical 并新增 env_profile.sh）；修正 bootstrap 命令块本机路径 bug；sinfo 输出 legend + 决策树 fallback 措辞修正；版本 0.7.7 为避免与 canonical v0.7.6（plots 契约，本血脉未含）撞号；2026-09-01 M7 吸收 canonical v0.7.6 plots 消费契约（result.json `plots` 数组：图+绘图数据两类路径报告、`image=null` 降级、无键向后兼容），速查表/一站式例外/决策树三处落地，配套远端 workflow 升 1.3.0（双 wheel force-reinstall + VERSION 锚，env_profile 三副本同步）；版本 0.7.8 续跳号；2026-09-02 M8 压测问题修复：默认 pre.json 去 task 路由键（路由身份由 task 决定，workflow 侧同步剥离异 task 键并升 1.3.1）、job_output 直读 plots（保留 result.json fallback）、producer 轮询默认封顶 30s（job_output 是轮询快照、完成通知才是终态权威）、一站式节内联纪律（不手动 squeue/sacct、不读 log 原文点名 grep/awk/sed/tail、task 即计算范围）；版本 0.7.9；2026-09-03 M9 吸收 canonical v0.7.8 过渡态搜索三件套（ts 补 freq 路由 + qst2/qst3 多帧 xyz 输入：structure/上传文件可含多帧、恰 1/2/3 帧语义、原子序号逐位一致、ts+irc 组合、imaginary_frequency_count equals=1 验收），配套远端 workflow 升 1.3.2；版本 0.7.10 续跳号避让 canonical v0.7.8
 ---
 
 # Gaussian 工作流
@@ -45,12 +45,14 @@ polar         极化率
 tddft         TDDFT 激发态
 fluorescence  荧光激发态/光谱
 resp          RESP 电荷
-ts            过渡态优化
+ts            过渡态优化（初猜结构 + 频率验证）
+qst2          QST2 过渡态搜索（反应物+产物，两帧输入）
+qst3          QST3 过渡态搜索（反应物+产物+TS 初猜，三帧输入）
 irc           IRC
 aea           绝热电子亲和能（多步）
 ```
 
-也支持顺序组合 DSL，例如 `opt+sp`、`opt+freq`。每个原子 task 必须已注册，组合不得含空项、重复项或未知项；最终结果 JSON 的 `task` 回显完整 DSL 字符串。`freq` 用于分子振动频率计算，不实现周期性 `phonon`。
+也支持顺序组合 DSL，例如 `opt+sp`、`opt+freq`、`ts+irc`（IRC 消费 TS 的优化几何）。每个原子 task 必须已注册，组合不得含空项、重复项或未知项；最终结果 JSON 的 `task` 回显完整 DSL 字符串。`freq` 用于分子振动频率计算，不实现周期性 `phonon`。过渡态搜索三件套（`ts`/`qst2`/`qst3`）使用**多帧 xyz 单文件**输入，约定见「特殊 task」节。
 
 所有集群操作统一通过 `mat_exec` 工具完成（在目标集群登录节点执行 shell 命令）。它是 JSON 参数工具，不是 shell 命令：调用形态为 `mat_exec({"cluster_id": "11250", "command": "<shell 命令>", "timeout_seconds": 30})`；下文代码块里的 `command` 值原样传给远端 shell。
 
@@ -88,7 +90,7 @@ bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh", "timeout_seco
 脚本只做无副作用检查，不运行 `g16`、不提交 Slurm，stdout 只返回一个 `gaussian-env-gate.v2` 单行 JSON。例如：
 
 ```json
-{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.2.3","expected_version":"1.2.3","newer_version":"","required_tasks":["aea",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":11,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
+{"schema":"gaussian-env-gate.v2","ok":true,"workflow":"/public/home/hpc-user-a/workspace/demo","python":".../workspace/demo/bin/python","cli":".../workspace/demo/bin/gaussian-workflow","module":".../workspace/demo/lib/python3.11/site-packages/gaussian_workflow/__init__.py","protocol":"new","deployed_version":"1.3.2","expected_version":"1.3.2","newer_version":"","required_tasks":["aea",...,"qst2","qst3",...,"ts"],"tasks":["aea",...,"ts"],"missing_tasks":[],"task_count":14,"g16":"/public/home/hpc-user-a/workspace/g16-hy/scripts/env.sh","errors":[]}
 ```
 
 `required_tasks` 是 skill 要求的公开 task 集，`missing_tasks` 是运行时实际缺失的 task；任何 `missing_tasks` 都会使 `ok=false`。
@@ -159,12 +161,13 @@ mat_gaussian({
 - **参数默认**：pre.json 默认 B3LYP/6-31G(d)、charge 0/mult 1、32 核/64GB，**不含任何 task 路由关键字**——opt/freq/td/irc 等路由身份由 `task` 参数唯一决定，`pre_json` 携带的异 task 路由键会被 workflow 剥离（1.3.1+）；run.json 默认 Agent0/1 节点/32 核/00:30:00/64GB。需要不同方法基组或资源时，经 `options.pre_json`/`options.run_json` 传**完整** phase 配置（结构同上文 pre.json/run.json 节；注意 `resources.ncores ≤ slurm.ntasks_per_node`、`resources.memory ≤ slurm.mem` 校验仍生效；task 自身路由键可在 JSON 中精调选项，如 `-t opt` 传 `"opt": ["Tight"]`）。
 - **硬警告：显式构造 `pre_json` 时，路由键要么不写，要么只写 task 自身键且写全（JSON 值整体替换默认 route，不与默认叠加）**。两层机制要分清，后者与远端部署版本无关：
   - **异 task 路由键**：workflow 1.3.1+ 会剥离 `pre_json` 里不属于当前 task 的路由键（opt/freq/td/irc/polar/force/scan）；但 **<1.3.1 的已部署集群没有这层剥离**，异 task 键直接混入 route——`-t tddft` 被 JSON 里的 `opt`/`freq` 混成 `opt freq td` 三合一（压测 P4 实证）。
-  - **task 自身路由键**：以 JSON 为准，**任何 workflow 版本都如此**。`-t ts` 的路由键就是 `opt`（默认 `opt(TS,CalcFC,NoEigenTest)`）、`-t irc` 就是 `irc`（默认 `irc(CalcFC,…)`）——在 `pre_json` 里写普通 `opt`/`irc` 走的是自身键精调路径，1.3.1 的异 task 剥离**不拦**，结果是把 TS/IRC 语义**静默掩蔽成普通 opt/irc**。
-  - **处置**：`ts`/`irc`/`aea` 的 `pre_json` **一律不写路由键**（自身键 JSON 权威本是精调机制，对这三个 task 是坑）；`opt`/`freq` 等要精调时只写 task 自身键且写全，如 `-t opt` 传 `"opt": ["Tight","CalcFC"]`。路由身份只由 `task` 参数决定，调用侧不感知远端部署版本，按此写法两层风险都不沾。
+  - **task 自身路由键**：以 JSON 为准，**任何 workflow 版本都如此**。`-t ts` 的路由键就是 `opt`（默认 `opt(TS,CalcFC,NoEigenTest) freq`）、`-t irc` 就是 `irc`（默认 `irc(CalcFC,…)`）——在 `pre_json` 里写普通 `opt`/`irc` 走的是自身键精调路径，1.3.1 的异 task 剥离**不拦**，结果是把 TS/IRC 语义**静默掩蔽成普通 opt/irc**。
+  - **处置**：`ts`/`qst2`/`qst3`/`irc`/`aea` 的 `pre_json` **一律不写路由键**（自身键 JSON 权威本是精调机制，对这几个 task 是坑）；`opt`/`freq` 等要精调时只写 task 自身键且写全，如 `-t opt` 传 `"opt": ["Tight","CalcFC"]`。路由身份只由 `task` 参数决定，调用侧不感知远端部署版本，按此写法两层风险都不沾。
 - **返回即离手**：工具返回 slurm job id 与后台作业 id 后本轮即可结束；后台 producer 服务端轮询 sacct（无模型请求），**终态后自动执行 post 并解析**，会话内收到完成通知。
+- **过渡态搜索（`ts`/`qst2`/`qst3`）的 `structure` 是多帧 xyz 字符串**：`ts` 一帧（TS 初猜）、`qst2` 两帧（反应物+产物）、`qst3` 三帧（反应物+产物+TS 初猜）——帧序 = 分子节序，各帧原子数与元素序号逐位一致，帧数或序号不符 pre 直接结构化报错。会话内按 `原子数\n注释\n坐标行\n` 逐帧拼接成 `structure` 值即可（heredoc 原样落盘 molecule.xyz，workflow 多帧读取）；`ts`/`qst2`/`qst3` 属单作业形态，可走一站式。post 报 `frequencies_cm-1`/`imaginary_frequency_count`，一阶鞍点确认由验收 `{"imaginary_frequency_count": {"equals": 1}}` 表达。TS→IRC 联动是 `ts+irc` 多波组合，**不支持一站式**，走分步链路。
 - **读结果**：通知后 `job_output({"job_id": "<background job id>"})` 一次拿到：`properties`（energy、converged、`frequencies_cm-1`、`imaginary_frequency_count`）、`files`（如 `g16_optimized.xyz`、`job.log`）与逐作业终态行、`plots`（绘图任务返回 `kind` + PNG/CSV 两路径的 JSON 行）。**无需再跑 `cat result.json`**——post 结果已由 producer 解析进输出；需要原始 result.json 或大文件时再经 `mat_exec`/`mat_download` 取。
 - **`job_output` 即终点**：`properties` 与终态行已足够判定成败并向用户汇报；**不要为"呈现完整结果"主动 `cat` `files` 里的原始产物**（`g16_optimized.xyz`、`job.log`、几何坐标全文都算）——产物路径已列在 `files`，用户明确要看优化几何或原始输出时再按需取回。仅当需要 `properties` 之外的字段（`steps`、`warnings`、`science`、`error_detail`）或诊断失败时，才 `mat_exec` 执行 `cat {work_dir}/result.json`（`plots` 直读见下条，旧版部署才回退 result.json）。
-- **图与绘图数据（`plots`）**：freq/tddft/fluorescence/opt/ts/opt+freq/irc 的 post 会生成 `plots` 数组（`{"kind", "image", "data"}`，图 PNG + 绘图数据 CSV 两类路径）。**本版本 dsh 起（0.7.9）`job_output` 输出直接带 `plots:` 行**（含全部路径；远端 1.3.0/1.3.1 均适用——该行来自 dsh 侧透传，与 workflow 版本无关），无需再读 `result.json`；仅当**绘图任务的** `job_output` 未带（旧 dsh 部署）时才 `cat {work_dir}/result.json` 取 `plots` 字段兜底。向用户报告图的类型与两个路径（PNG 给直觉、CSV 可复绘后处理），取回走 `mat_download`。`image=null` = 该环境缺 matplotlib、图未渲染，告知用户完整数据在 `data` 指向的 CSV；`result.json` 里 `plots` 为 `[]` 或无该键（纯数值任务、出错时被清空、或极旧部署）都**正常继续、不报错**。不要 `cat`/下载 PNG 内容做分析，不要通读 CSV 全文。
+- **图与绘图数据（`plots`）**：freq/tddft/fluorescence/opt/ts/qst2/qst3/opt+freq/irc 的 post 会生成 `plots` 数组（`{"kind", "image", "data"}`，图 PNG + 绘图数据 CSV 两类路径）。**本版本 dsh 起（0.7.9）`job_output` 输出直接带 `plots:` 行**（含全部路径；远端 1.3.0/1.3.1 均适用——该行来自 dsh 侧透传，与 workflow 版本无关），无需再读 `result.json`；仅当**绘图任务的** `job_output` 未带（旧 dsh 部署）时才 `cat {work_dir}/result.json` 取 `plots` 字段兜底。向用户报告图的类型与两个路径（PNG 给直觉、CSV 可复绘后处理），取回走 `mat_download`。`image=null` = 该环境缺 matplotlib、图未渲染，告知用户完整数据在 `data` 指向的 CSV；`result.json` 里 `plots` 为 `[]` 或无该键（纯数值任务、出错时被清空、或极旧部署）都**正常继续、不报错**。不要 `cat`/下载 PNG 内容做分析，不要通读 CSV 全文。
 - **失败语义**：slurm 作业非 COMPLETED → 不跑 post，`job_output` 里带 `log_tail`（job.log 尾部 50 行）供诊断；COMPLETED 但 post 失败 → 作业仍按完成结算，输出里标注 `post failed` 与 log_tail。
 - **边界**：多波组合（`opt+sp`、`aea` 等需要分波提交/二次 run 的形态）**不支持**一站式，仍走分步链路；每个 `mat_gaussian` 占用一个后台作业配额（owner 上限 10），批量独立计算 = 多次调用；`max_wait_seconds` 默认 1800，超时按 max-wait 结算、不跑 post——续盯或重新评估，不是错误。
 - **全程异步，不碰调度器**：提交后**不要手动 `squeue`/`sacct` 轮询**（与分步链路同一红线）。`job_output` 返回的是**最近一次服务端轮询快照**——作业刚结束时它可能仍显示 running，这是正常竞态；完成通知（in-session notice）才是终态权威。非终态期间就地等待用 `job_output({"job_id": ..., "wait": true, "timeout_ms": 600000})`，不要为"确认状态"绕过监控去查调度器（压测 P6 教训：producer 轮询已默认封顶 30s，可见延迟有界）。
@@ -582,6 +585,23 @@ mat_exec({"cluster_id": "{cluster_id}", "command": "cat {work_dir}/opt/spectrum_
 
 ## 特殊 task
 
+### 过渡态搜索（ts / qst2 / qst3）
+
+三个过渡态 task 共用**多帧 xyz 单文件**输入：`-i` 仍是**一个文件**（一站式即 `structure` 字符串多帧拼接），帧序 = Gaussian 分子节顺序，各帧原子数与元素序号必须逐位一致：
+
+| task | 帧数 | route | 帧语义 |
+|---|---|---|---|
+| `ts` | 恰 1 | `opt(TS,CalcFC,NoEigenTest) freq` | 过渡态初猜 |
+| `qst2` | 恰 2 | `opt(QST2,CalcFC) freq` | 反应物、产物（各自先优化过） |
+| `qst3` | 恰 3 | `opt(QST3,CalcFC) freq` | 反应物、产物、TS 初猜 |
+
+要点：
+
+- **帧数或元素序号不符 → pre 直接结构化报错**，不静默截断；多帧文件交给单结构 task（如 `opt`）时取第 1 帧。
+- **原子序号必须严格一致**：反应物和产物的同一原子在两帧中必须同位（Gaussian QST 硬要求）；各几何节共用同一 `charge`/`mult`。
+- post 报 `frequencies_cm-1`、`imaginary_frequency_count`，并导出 `g16_initial.xyz` 与 `g16_optimized.xyz`（优化后 TS 几何）。**一阶鞍点确认（恰好一个虚频）由验收声明表达**：`"acceptance": {"imaginary_frequency_count": {"equals": 1}}`；count≠1 时 post 只在 context 警示，不判失败。
+- TS→IRC 联动用组合 `ts+irc`（多波，分步链路）：IRC 步消费 TS 的**优化后**几何（`g16_optimized.xyz`），不是初猜。
+
 ### fluorescence
 
 无 JSON 默认：`B3LYP/aug-cc-pVDZ` + `TD(nstates=10)`。post 解析最后一个 `Excited State 1`，报告：
@@ -657,11 +677,13 @@ AEA 的 `pre`/`run` 是**幂等且自推进**的，重复调用安全，agent �
 | `tddft` | `td(nstates=20)` |
 | `fluorescence` | `td(nstates=10)` + S1 解析 |
 | `resp` | ESP/MK + RESP post |
-| `ts` | `opt(ts)`，需要合理 TS 几何 |
+| `ts` | `opt(TS,CalcFC,NoEigenTest) freq`，恰 1 帧输入，需要合理 TS 初猜 |
+| `qst2` | `opt(QST2,CalcFC) freq`，恰 2 帧输入（反应物+产物，原子序号一致） |
+| `qst3` | `opt(QST3,CalcFC) freq`，恰 3 帧输入（反应物+产物+TS 初猜） |
 | `irc` | `irc(calcfc)`，需要 TS 几何 |
 | `aea` | 四步内建 recipe |
 
-TS/IRC 不自动完成 TS→IRC；普通稳定分子不能直接作为 IRC 起点。
+TS→IRC 联动用组合 `ts+irc`（IRC 消费 TS 的优化几何）；单独跑 `irc` 仍需精确 TS 起点，普通稳定分子不能直接作为 IRC 起点。
 
 ## 故障排查
 
