@@ -76,7 +76,7 @@ resources.ncores → %nprocshared
 resources.memory → %mem
 ```
 
-Do not set `nprocshared` or `mem` inside `ase.calculator_kwargs`. Without JSON, task methods supply defaults. For single-step tasks, JSON `ase.calculator_kwargs` is authoritative for route, method, basis, charge, multiplicity, and checkpoint settings. AEA uses the block as shared configuration but derives mandatory per-step charge/multiplicity and route.
+`charge`/`mult` must match the system electron count (hard-validated at pre since workflow 1.4.2): odd-electron systems (radicals, e.g. F+H2 = 11e) require an even multiplicity (`"mult": 2`), even-electron systems an odd one (closed-shell baseline `"mult": 1`). A mismatch returns `error_detail.code = "VALIDATION_FAILED"` with the suggested mult — fix and re-run pre instead of letting g16 fail with an opaque l101/l301 electron-count error. Do not set `nprocshared` or `mem` inside `ase.calculator_kwargs`. Without JSON, task methods supply defaults. For single-step tasks, JSON `ase.calculator_kwargs` is authoritative for route, method, basis, charge, multiplicity, and checkpoint settings. AEA uses the block as shared configuration but derives mandatory per-step charge/multiplicity and route.
 
 ### run.json
 
@@ -132,7 +132,7 @@ resources.memory <= slurm.mem
 | `ts` | `opt(TS,CalcFC,NoEigenTest) freq` | `frequencies_cm-1`, `imaginary_frequency_count`, `g16_optimized.xyz`; requires a reasonable TS guess |
 | `qst2` | `opt(QST2,CalcFC) freq` | same as `ts`; 2-frame input (reactant + product, identical atom ordering) |
 | `qst3` | `opt(QST3,CalcFC) freq` | same as `ts`; 3-frame input (reactant + product + TS guess) |
-| `irc` | `irc(calcfc)` | final energy/convergence, `irc_point_count`; plots `irc_profile` (total-energy curve along the IRC, signed reaction coordinate, TS highlighted) and `reaction_path` (R→TS→P ladder in kcal/mol from the IRC branch ends and point 0); requires valid TS geometry |
+| `irc` | `irc(CalcFC,MaxPoints=30,StepSize=10)` (MaxPoints 30 since workflow 1.4.2, was 5; tune via full-value route override, e.g. `["CalcFC","MaxPoints=50","StepSize=5"]` when l123 Bulirsch-Stoer integration diverges on small linear systems) | final energy/convergence, `irc_point_count`; plots `irc_profile` (total-energy curve along the IRC, signed reaction coordinate, TS highlighted) and `reaction_path` (R→TS→P ladder in kcal/mol from the IRC branch ends and point 0); requires valid TS geometry |
 
 ## freq and opt+freq
 
@@ -156,7 +156,7 @@ The three transition-state tasks take **all geometries from one multi-frame xyz 
 | `qst2` | exactly 2 | `opt(QST2,CalcFC) freq` | reactant, product (both pre-optimized) |
 | `qst3` | exactly 3 | `opt(QST3,CalcFC) freq` | reactant, product, TS guess |
 
-A wrong frame count or mismatched element ordering fails `pre` with a structured error (no silent truncation). A multi-frame file fed to a single-structure task (e.g. `opt`) uses frame 1. All molecule sections share one `charge`/`mult`. Post reports `frequencies_cm-1` and `imaginary_frequency_count` and exports `g16_optimized.xyz`; first-order saddle confirmation is expressed as acceptance:
+Element symbols in the xyz symbol column must be plain (`H`/`C`/`O`...); indexed labels (`H1`/`O2`) are rejected at pre with `VALIDATION_FAILED` (workflow 1.4.2+; earlier deployments raise a bare `KeyError('H1')`). A wrong frame count or mismatched element ordering fails `pre` with a structured error (no silent truncation). A multi-frame file fed to a single-structure task (e.g. `opt`) uses frame 1. All molecule sections share one `charge`/`mult`. Post reports `frequencies_cm-1` and `imaginary_frequency_count` and exports `g16_optimized.xyz`; first-order saddle confirmation is expressed as acceptance:
 
 ```json
 {
