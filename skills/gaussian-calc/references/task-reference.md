@@ -132,7 +132,7 @@ resources.memory <= slurm.mem
 | `ts` | `opt(TS,CalcFC,NoEigenTest) freq` | `frequencies_cm-1`, `imaginary_frequency_count`, `g16_optimized.xyz`; requires a reasonable TS guess |
 | `qst2` | `opt(QST2,CalcFC) freq` | same as `ts`; 2-frame input (reactant + product, identical atom ordering) |
 | `qst3` | `opt(QST3,CalcFC) freq` | same as `ts`; 3-frame input (reactant + product + TS guess) |
-| `irc` | `irc(calcfc)` | final energy/convergence; requires valid TS geometry |
+| `irc` | `irc(calcfc)` | final energy/convergence, `irc_point_count`; plots `irc_profile` (total-energy curve along the IRC, signed reaction coordinate, TS highlighted) and `reaction_path` (R→TS→P ladder in kcal/mol from the IRC branch ends and point 0); requires valid TS geometry |
 
 ## freq and opt+freq
 
@@ -164,7 +164,7 @@ A wrong frame count or mismatched element ordering fails `pre` with a structured
 }
 ```
 
-TS→IRC linkage uses the composition `ts+irc` — the IRC step consumes the **optimized** TS geometry, not the initial guess.
+TS→IRC linkage uses the composition `ts+irc` — the IRC step consumes the **optimized** TS geometry, not the initial guess (`qst2+irc` / `qst3+irc` chain the same way). The IRC step reports `irc_point_count` and produces the `irc_profile` and `reaction_path` plots.
 
 ## fluorescence
 
