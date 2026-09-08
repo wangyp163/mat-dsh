@@ -6,7 +6,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 // 引入 dsh-jobs 的 Context 合并（ctx.get('jobs')）并注册 watch 的 JobKind。
 import type {} from '@deepseek-ai/dsh-jobs'
-import { MatClient, createWatchLoop, outputText } from 'mat-core'
+import { MatClient, createWatchLoop, isTerminal, outputText } from 'mat-core'
 import { deriveRemoteHome, isShellStyleWorkdir } from 'mat-core'
 import {
   DEFAULT_PRODUCER_POLL_SECONDS,
@@ -235,20 +235,15 @@ function persistJobs(path: string, jobs: MatJobStatus[]): void {
   renameSync(temporary, path)
 }
 
-function freshStatusId(board: StatusBoard, base: string): string {
-  const existing = new Set(board.list().map((entry) => entry.jobId))
-  if (!existing.has(base)) return base
-  for (let suffix = 2; ; suffix += 1) {
-    const candidate = `${base}-${suffix}`
-    if (!existing.has(candidate)) return candidate
-  }
-}
-
 export function apply(ctx: Context): void {
   const jobsPath = statusStorePath()
   const statusBoard = createStatusBoard({
     initialEntries: loadPersistedJobs(jobsPath),
     onChange: (jobs) => persistJobs(jobsPath, jobs),
+    // settled 保留上限：核心默认 20 会把最旧的作业（连同其目录键）静默裁掉，
+    // 而 onChange 写的是裁剪后快照——持久层跟着丢，磁盘目录成不可达孤儿。
+    // 按 ~18 作业/日的压测速率取 500（≈27 天窗口）；monitoring 永不裁剪。
+    maxSettled: 500,
   })
   ctx.provide('mat.status', statusBoard)
   const fileService = createMatFileService()
@@ -281,6 +276,23 @@ export function apply(ctx: Context): void {
       'Move files between this machine and a cluster with mat_upload/mat_download. ' +
       'They prefer the efile API with MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER and fall back ' +
       'to the authorized remote-shell channel when that cluster has no OpenAPI file token.',
+  })
+
+  // 压测编排引导段（SOP 固化第 1 层：常驻触发）——触发词、计划确认闸与收口红线
+  // 随系统提示常驻，用户说"压测"时模型无需先读 SOP 即可拿到三条内核。
+  ctx.systemPrompt.section({
+    name: 'tool:mat-stress',
+    order: 101,
+    text:
+      'When the user asks to stress-test, regression-test, or validate the demo Gaussian workflow end to end ' +
+      '(压测、回归、端到端验证、链路验证、plots 验证、稳定性测试), load the gaussian-demo-stress skill (skill tool) ' +
+      'first and follow it: decompose the goal into a case matrix (original-style prompts, new/appended sessions, ' +
+      'one-shot or stepwise chain, unique workdir, expected route and plots with quantifiable assertions), ' +
+      'and wait for explicit user confirmation of the plan (先出计划、经用户确认后再投放) before creating sessions or submitting real jobs. ' +
+      'Before finalizing the stress report, close the round: run the local session-debug L0 light scan ' +
+      '(scripts/session-debug.ts anomalies <session.jsonl.zstd> --json, zero tokens) over EVERY session of the round ' +
+      'and record the summary table (session-debug 摘要表) in the report — a stress report without the session-debug summary table is not closed. ' +
+      'Run ordinary single Gaussian calculations through the gaussian-calc skill instead; do not load the stress skill for them.',
   })
 
   ctx.tools.register(defineTool({
@@ -425,6 +437,12 @@ export function apply(ctx: Context): void {
       },
       poll_seconds: { type: 'number', description: 'Optional cap on the poll interval in seconds (min 10; default adaptive 10-300s)' },
       max_wait_seconds: { type: 'number', description: 'Total watch budget in seconds (default 86400); exceeding settles with still-active ids — just watch again' },
+      label: {
+        type: 'string',
+        description: 'Optional context prefix for board labels so stepwise watches read like one-stop jobs: ' +
+          'e.g. "gaussian irc @11250" — per-job labels become "<label> #<jobid>" ' +
+          '(matching mat_gaussian\'s "gaussian <task> @<cluster> #<jobid>"). Default: bare job id.',
+      },
     },
     output: {
       schema: { type: 'string' },
@@ -443,25 +461,27 @@ export function apply(ctx: Context): void {
       const maxWaitMs = (args.max_wait_seconds ?? 86_400) * 1_000
       // 每次 watch 独立客户端：后台轮询与前台 mat_exec 会话互不干扰。
       const watchClient = newWatchClient()
-      let statusId = ''
+      const labelPrefix = args.label !== undefined && args.label.trim() !== '' ? args.label.trim() : undefined
       const id = jobs.start({
         kind: 'mat-watch',
-        label: `${args.cluster_id} ×${jobIds.length} jobs`,
+        label: labelPrefix !== undefined ? `${labelPrefix} ×${jobIds.length} jobs` : `${args.cluster_id} ×${jobIds.length} jobs`,
         outputLimitBytes: 4_096,
         ...exec.agent ? { owner: exec.agent } : {},
         run: () => {
-          const statusJobId = () => statusId ||= freshStatusId(statusBoard, id)
-          // 生产 jobs-local 在 start() 内同步调 run()，此刻 id 尚未赋值：
-          // 初始登记延后一个微任务躲开 TDZ；onTick/结算本就异步，语义不变。
-          queueMicrotask(() => {
-            const statusKey = statusJobId()
-            const workspace = reserveLocalWorkspace(args.cluster_id, statusKey)
-            statusBoard.upsert(statusKey, {
-              kind: 'mat-watch', label: `${args.cluster_id} ×${jobIds.length} jobs`,
+          // 一卡一 Slurm 作业：板键 = cluster:jobId（确定性，重复 watch 同键幂等合并，
+          // 不随宿主任务计数增殖）；label = 纯作业号（下拉即 job-id，可直接解析）。
+          // 键不依赖宿主任务 id，run() 内没有对它的闭包引用——旧实现引用了
+          // start() 同步窗口内尚未赋值的 id，每次调用必 TDZ。
+          const statusKeyOf = (jobId: string): string => `${args.cluster_id}:${jobId}`
+          const jobLabel = (jobId: string): string => labelPrefix !== undefined ? `${labelPrefix} #${jobId}` : jobId
+          for (const jobId of jobIds) {
+            statusBoard.upsert(statusKeyOf(jobId), {
+              kind: 'mat-watch', label: jobLabel(jobId),
               clusterId: args.cluster_id, ownerSession: exec.agent?.id,
-              localWorkspace: workspace,
+              localWorkspace: reserveLocalWorkspace(args.cluster_id, jobId),
             })
-          })
+          }
+          let lastStates = new Map<string, SlurmJobInfo>()
           const loop = createWatchLoop({
             clusterId: args.cluster_id,
             jobIds,
@@ -469,19 +489,36 @@ export function apply(ctx: Context): void {
             ...(pollSeconds !== undefined ? { maxPollMs: pollSeconds * 1_000 } : {}),
             onTick: (states) => {
               try {
-                statusBoard.upsert(statusJobId(), {
-                  kind: 'mat-watch', label: `${args.cluster_id} ×${jobIds.length} jobs`,
-                  clusterId: args.cluster_id, ownerSession: exec.agent?.id,
-                  localWorkspace: reserveLocalWorkspace(args.cluster_id, statusJobId()),
-                  slurm: statusSlurm(states),
-                })
+                lastStates = new Map(states)
+                for (const [jobId, info] of states) {
+                  statusBoard.upsert(statusKeyOf(jobId), {
+                    kind: 'mat-watch', label: jobLabel(jobId),
+                    clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+                    localWorkspace: reserveLocalWorkspace(args.cluster_id, jobId),
+                    // sacct WorkDir：watch 作业的文件面板入口（无 workdir 时面板只能看到空本地目录）。
+                    ...(info.workdir === undefined ? {} : { workdir: info.workdir }),
+                    slurm: statusSlurm(new Map([[jobId, info]])),
+                  })
+                }
               } catch { /* 状态板旁路故障不影响监控 */ }
             },
             execCommand: (clusterId, command, timeoutSeconds) => watchClient.execCommand(clusterId, command, timeoutSeconds),
             scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
             clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
           })
-          void loop.done.then((result) => settleBoard(statusBoard, statusJobId(), result, fileService))
+          void loop.done.then(() => {
+            // 逐卡结算：只 settle 已终态的作业；max-wait/传输中断时未终态的卡保持
+            // monitoring（作业仍在远端跑，再 watch 同键续接，不产生新卡片）。
+            for (const [jobId, info] of lastStates) {
+              if (!isTerminal(info.state)) continue
+              try {
+                statusBoard.settle(statusKeyOf(jobId), {
+                  outcomeStatus: info.state === 'COMPLETED' ? 'completed' : info.state === 'CANCELLED' ? 'killed' : 'failed',
+                  detail: `${info.state}${info.exitCode !== undefined ? ` (exit ${info.exitCode})` : ''}`,
+                })
+              } catch { /* 状态板旁路故障不影响结算 */ }
+            }
+          })
           return loop
         },
       })
@@ -571,23 +608,19 @@ export function apply(ctx: Context): void {
       const { executionId: slurmJobId } = await adapter.run(request)
       // producer：再一个独立客户端（终态后自动 post，与同步段/前台隔离）
       const producerClient = newWatchClient()
-      let statusId = ''
+      // 同 watch：板键 = cluster:slurmJobId，workspace 直接落在真实作业号目录。
+      const statusKey = `${args.cluster_id}:${slurmJobId}`
       const id = jobs.start({
         kind: 'mat-slurm',
         label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
         outputLimitBytes: 8_192,
         ...exec.agent ? { owner: exec.agent } : {},
         run: () => {
-          const statusJobId = () => statusId ||= freshStatusId(statusBoard, id)
-          // 同上：初始登记延后一个微任务，躲开 start() 同步窗口内的 id TDZ。
-          queueMicrotask(() => {
-            const statusKey = statusJobId()
-            const workspace = reserveLocalWorkspace(args.cluster_id, statusKey)
-            statusBoard.upsert(statusKey, {
-              kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
-              clusterId: args.cluster_id, ownerSession: exec.agent?.id,
-              task: args.task.trim(), workdir: args.workdir.trim(), localWorkspace: workspace, partition,
-            })
+          statusBoard.upsert(statusKey, {
+            kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
+            clusterId: args.cluster_id, ownerSession: exec.agent?.id,
+            task: args.task.trim(), workdir: args.workdir.trim(),
+            localWorkspace: reserveLocalWorkspace(args.cluster_id, slurmJobId), partition,
           })
           return createGaussianProducerHooks({
           execCommand: (clusterId, command, timeoutSeconds) => producerClient.execCommand(clusterId, command, timeoutSeconds),
@@ -600,15 +633,15 @@ export function apply(ctx: Context): void {
           ...options.maxWaitSeconds !== undefined ? { maxWaitSeconds: options.maxWaitSeconds } : {},
           onTick: (states) => {
             try {
-              statusBoard.upsert(statusJobId(), {
+              statusBoard.upsert(statusKey, {
                 kind: 'mat-slurm', label: `gaussian ${args.task.trim()} @${args.cluster_id} #${slurmJobId}`,
                 clusterId: args.cluster_id, ownerSession: exec.agent?.id,
                 task: args.task.trim(), workdir: args.workdir.trim(),
-                localWorkspace: reserveLocalWorkspace(args.cluster_id, statusJobId()), partition, slurm: statusSlurm(states),
+                localWorkspace: reserveLocalWorkspace(args.cluster_id, slurmJobId), partition, slurm: statusSlurm(states),
               })
             } catch { /* 状态板旁路故障不影响 producer */ }
           },
-          onResult: (result) => settleBoard(statusBoard, statusJobId(), result, fileService),
+          onResult: (result) => settleBoard(statusBoard, statusKey, result, fileService),
           })
         },
       })

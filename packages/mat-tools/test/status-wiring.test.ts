@@ -94,6 +94,28 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     expect(typeof board!.list).toBe('function')
   })
 
+  it('目录键持久不丢：结算 25 个作业后板上仍全量保留（接线覆写 maxSettled，防目录键静默蒸发）', async () => {
+    vi.useRealTimers()
+    const { ctx, provided } = makeCtx()
+    apply(ctx)
+    const board = provided.get('mat.status') as StatusBoard
+    for (let index = 1; index <= 25; index += 1) {
+      const jobId = `11250:12100${String(index).padStart(3, '0')}`
+      board.upsert(jobId, {
+        kind: 'mat-slurm', label: String(index), clusterId: '11250', startedAt: index,
+        localWorkspace: `${testRoot}/11250/12100${String(index).padStart(3, '0')}`,
+      })
+      board.settle(jobId, { outcomeStatus: 'completed' })
+    }
+    // 内存板与持久层都必须保住 25 条：onChange 写的是裁剪后快照，裁剪上限必须足够大。
+    expect(board.list()).toHaveLength(25)
+    const persisted = JSON.parse(await readFile(`${testRoot}/jobs.json`, 'utf8')).jobs
+    expect(persisted).toHaveLength(25)
+    const restarted = makeCtx()
+    apply(restarted.ctx)
+    expect((restarted.provided.get('mat.status') as StatusBoard).list()).toHaveLength(25)
+  })
+
   it('重启 apply 后从本地快照恢复 tracked job', async () => {
     vi.useRealTimers()
     const first = makeCtx()
@@ -176,81 +198,121 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     }
   })
 
-  it('mat_job_watch：onTick → 板 monitoring 条目（identity + slurm 投影 + ownerSession）', async () => {
+  it('mat_job_watch：一卡一 Slurm 作业（键 cluster:jobId、label=纯作业号、workspace 按真实号）', async () => {
     const { ctx, tools, provided } = makeCtx()
     apply(ctx)
     const board = provided.get('mat.status') as StatusBoard
     stubExec([
-      { match: (c) => c.includes('sacct -j 100'), out: '100|RUNNING|0:0|15\n' },
+      { match: (c) => c.includes('sacct -j'), out: '100|RUNNING|0:0|15\n101|PENDING|0:0|0\n' },
     ])
     const watch = tools.get('mat_job_watch')!
     await watch.execute(
-      { cluster_id: '11250', job_ids: ['100'] },
+      { cluster_id: '11250', job_ids: ['100', '101'] },
       { agent: { id: 'sess-a' } },
     )
     await advance(0)
-    expect(board.list()).toEqual([{
-      jobId: 'mat-watch-1',
-      kind: 'mat-watch',
-      label: '11250 ×1 jobs',
-      clusterId: '11250',
-      ownerSession: 'sess-a',
-      localWorkspace: `${testRoot}/11250/mat-watch-1`,
-      startedAt: expect.any(Number),
-      updatedAt: expect.any(Number),
-      phase: 'monitoring',
-      slurm: [{ id: '100', state: 'RUNNING', exitCode: 0, elapsedSeconds: 15 }],
-    }])
+    expect(board.list()).toHaveLength(2)
+    expect(board.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        jobId: '11250:100', kind: 'mat-watch', label: '100', clusterId: '11250',
+        ownerSession: 'sess-a', localWorkspace: `${testRoot}/11250/100`,
+        phase: 'monitoring',
+        slurm: [{ id: '100', state: 'RUNNING', exitCode: 0, elapsedSeconds: 15 }],
+      }),
+      expect.objectContaining({
+        jobId: '11250:101', label: '101',
+        slurm: [{ id: '101', state: 'PENDING', exitCode: 0, elapsedSeconds: 0 }],
+      }),
+    ]))
   })
 
-  it('mat_job_watch：结算 → 板 settled 条目（outcomeStatus/detail）', async () => {
+  it('mat_job_watch：label 前缀对齐一站式形态（gaussian <task> @<cluster> #<jobid>；缺省仍纯作业号）', async () => {
     const { ctx, tools, provided } = makeCtx()
     apply(ctx)
     const board = provided.get('mat.status') as StatusBoard
     stubExec([
-      { match: (c) => c.includes('sacct -j 100'), out: '100|COMPLETED|0:0|26\n' },
+      { match: (c) => c.includes('sacct -j'), out: '200|RUNNING|0:0|15\n' },
+    ])
+    const watch = tools.get('mat_job_watch')!
+    await watch.execute(
+      { cluster_id: '11250', job_ids: ['200'], label: 'gaussian irc @11250' },
+      { agent: { id: 'sess-a' } },
+    )
+    await advance(0)
+    expect(board.list()).toEqual(expect.arrayContaining([
+      // D24（r10 观察、r11 复现）：分步 watch 的裸 jobid 与一站式
+      // "gaussian <task> @<cluster> #<jobid>" 混排增加对账心智负担——带 label
+      // 时子卡与一站式同形态。
+      expect.objectContaining({
+        jobId: '11250:200', kind: 'mat-watch', label: 'gaussian irc @11250 #200',
+      }),
+    ]))
+  })
+
+  it('mat_job_watch：sacct WorkDir 列入板（watch 作业的文件面板可浏览/打开文件）', async () => {
+    const { ctx, tools, provided } = makeCtx()
+    apply(ctx)
+    const board = provided.get('mat.status') as StatusBoard
+    stubExec([
+      // 生产命令 5 列；WorkDir 来自 sacct（2026-09-04 11250 实证，见 PROVENANCE）
+      { match: (c) => c.includes('sacct -j'), out: '100|RUNNING|0:0|15|/public/home/hpc-user-a/workspace/h3-qst3-0904r3/qst3\n100.batch|RUNNING|0:0|15|\n' },
     ])
     const watch = tools.get('mat_job_watch')!
     await watch.execute({ cluster_id: '11250', job_ids: ['100'] }, { agent: { id: 'sess-a' } })
     await advance(0)
-    const [entry] = board.list()
-    expect(entry.phase).toBe('settled')
-    expect(entry.outcomeStatus).toBe('completed')
-    expect(entry.detail).toContain('1/1 settled (1 COMPLETED)')
-    expect(entry.settledAt).toEqual(expect.any(Number))
+    expect(board.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        jobId: '11250:100', kind: 'mat-watch', label: '100',
+        workdir: '/public/home/hpc-user-a/workspace/h3-qst3-0904r3/qst3',
+      }),
+    ]))
   })
 
-  it('重启后宿主任务编号重用时不覆盖已持久化任务', async () => {
-    const first = makeCtx()
-    apply(first.ctx)
-    const firstBoard = first.provided.get('mat.status') as StatusBoard
-    firstBoard.upsert('mat-slurm-1', {
-      kind: 'mat-slurm', label: 'old', clusterId: '11250',
-      startedAt: 1, workdir: '/home/u/old',
-    })
-    firstBoard.settle('mat-slurm-1', { outcomeStatus: 'completed' })
-
-    const restarted = makeCtx()
-    apply(restarted.ctx)
+  it('mat_job_watch：WorkDir 为空时板条目不写 workdir（缺省语义不变）', async () => {
+    const { ctx, tools, provided } = makeCtx()
+    apply(ctx)
+    const board = provided.get('mat.status') as StatusBoard
     stubExec([
-      { match: (c) => c.includes('PREP_READY') || c.includes('mkdir -p'), out: 'PREP_READY\n' },
-      { match: (c) => c.includes('-p pre'), out: '{"status": "ok", "phase": "pre"}\n' },
-      { match: (c) => c.includes('-p run'), out: '{"status": "ok", "phase": "run"}\n' },
-      { match: (c) => c.includes('sbatch slurm.sh'), out: 'Submitted batch job 701\n' },
-      { match: (c) => c.includes('sacct -j 701'), out: '701|RUNNING|0:0|15\n' },
+      { match: (c) => c.includes('sacct -j'), out: '100|RUNNING|0:0|15|\n' },
     ])
-    await restarted.tools.get('mat_gaussian')!.execute({
-      cluster_id: '11250', task: 'opt', structure: XYZ,
-      workdir: '/home/u/new',
-    }, {})
+    const watch = tools.get('mat_job_watch')!
+    await watch.execute({ cluster_id: '11250', job_ids: ['100'] }, { agent: { id: 'sess-a' } })
     await advance(0)
+    expect(board.list()[0]?.workdir).toBeUndefined()
+  })
 
-    const entries = (restarted.provided.get('mat.status') as StatusBoard).list()
-    expect(entries).toHaveLength(2)
-    expect(entries).toEqual(expect.arrayContaining([
-      expect.objectContaining({ workdir: '/home/u/old', phase: 'settled' }),
-      expect.objectContaining({ workdir: '/home/u/new', phase: 'monitoring' }),
-    ]))
+  it('mat_job_watch：逐卡结算（outcomeStatus/detail 按各作业自身终态）', async () => {
+    const { ctx, tools, provided } = makeCtx()
+    apply(ctx)
+    const board = provided.get('mat.status') as StatusBoard
+    stubExec([
+      { match: (c) => c.includes('sacct -j'), out: '100|COMPLETED|0:0|26\n101|FAILED|1:0|30\n' },
+    ])
+    const watch = tools.get('mat_job_watch')!
+    await watch.execute({ cluster_id: '11250', job_ids: ['100', '101'] }, { agent: { id: 'sess-a' } })
+    await advance(0)
+    const byKey = new Map(board.list().map(entry => [entry.jobId, entry]))
+    expect(byKey.get('11250:100')).toMatchObject({ phase: 'settled', outcomeStatus: 'completed' })
+    expect(byKey.get('11250:100')!.detail).toContain('COMPLETED')
+    expect(byKey.get('11250:101')).toMatchObject({ phase: 'settled', outcomeStatus: 'failed' })
+    expect(byKey.get('11250:101')!.settledAt).toEqual(expect.any(Number))
+  })
+
+  it('重复 watch 同一 Slurm 作业：同键幂等合并，不新增卡片（跨会话重监控也不翻倍）', async () => {
+    const { ctx, tools, provided } = makeCtx()
+    apply(ctx)
+    stubExec([
+      { match: (c) => c.includes('sacct -j'), out: '100|RUNNING|0:0|15\n' },
+    ])
+    const watch = tools.get('mat_job_watch')!
+    await watch.execute({ cluster_id: '11250', job_ids: ['100'] }, { agent: { id: 'sess-a' } })
+    await advance(0)
+    await watch.execute({ cluster_id: '11250', job_ids: ['100'] }, { agent: { id: 'sess-b' } })
+    await advance(0)
+    const entries = (provided.get('mat.status') as StatusBoard).list()
+      .filter(entry => entry.clusterId === '11250')
+    expect(entries).toHaveLength(1)
+    expect(entries[0]).toMatchObject({ jobId: '11250:100', ownerSession: 'sess-b', phase: 'monitoring' })
   })
 
   it('mat_gaussian：自定义 run_json partition 投影到状态板', async () => {
@@ -294,12 +356,12 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     await advance(0)
     const [monitoring] = board.list()
     expect(monitoring).toMatchObject({
-      jobId: 'mat-slurm-1',
+      jobId: '11250:700',
       kind: 'mat-slurm',
       label: 'gaussian opt+freq @11250 #700',
       clusterId: '11250',
       ownerSession: 'sess-a',
-      localWorkspace: `${testRoot}/11250/mat-slurm-1`,
+      localWorkspace: `${testRoot}/11250/700`,
       phase: 'monitoring',
       task: 'opt+freq',
       workdir: '/home/u/w',
