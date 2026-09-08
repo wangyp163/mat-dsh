@@ -370,21 +370,41 @@ describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {
     ])
   })
 
-  it('FAILED → 跳过 post，log_tail 进输出，detail 标注', async () => {
+it('FAILED → 诊断性 post：error 全文进 diagnostic_post 行，log_tail 兜底，作业终态不变', async () => {
     const { hooks, commands } = makeProducer([
       { out: row('700', 'RUNNING') },
       { out: row('700', 'FAILED', '1:0', '30') },
+      { out: '{"status": "error", "error": "ConvergenceError(...kb:ts-step-limit ... convergence_trace.csv ...)"}\n' },
       { out: 'Error termination via Lnk1e in l103.exe\n' },
     ])
     await advance(0)
     await advance(10_000)
     const outcome = await hooks.done
-    expect(outcome.detail).toBe('1/1 settled (1 FAILED); opt+freq FAILED, post skipped')
-    expect(commands.some((c) => c.includes('-p post'))).toBe(false)
+    expect(outcome.detail).toBe('1/1 settled (1 FAILED); opt+freq FAILED, diagnostic post attached')
+    expect(commands.some((c) => c.includes('-p post'))).toBe(true)
     const out = hooks.readOutput()
     expect(out).toContain('slurm_state: FAILED')
+    expect(out).toContain('diagnostic_post: ConvergenceError')
+    expect(out).toContain('kb:ts-step-limit')
     expect(out).toContain('log_tail:')
     expect(out).toContain('Lnk1e')
+  })
+
+  it('FAILED → 诊断性 post 崩溃时 best-effort：不附加不判失败', async () => {
+    const { hooks } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'FAILED', '1:0', '30') },
+      { out: 'post crashed with traceback\n' },
+      { out: 'Error termination via Lnk1e in l103.exe\n' },
+    ])
+    await advance(0)
+    await advance(10_000)
+    const outcome = await hooks.done
+    expect(outcome.detail).toBe('1/1 settled (1 FAILED); opt+freq FAILED, diagnostic post attached')
+    const out = hooks.readOutput()
+    expect(out).not.toContain('diagnostic_post:')
+    expect(out).toContain('slurm_state: FAILED')
+    expect(out).toContain('log_tail:')
   })
 
   it('COMPLETED 但 post 输出无 JSON → post failed 标注 + log_tail，结算仍 completed', async () => {
@@ -480,7 +500,7 @@ describe('producer 状态板喂料（onTick / onResult）', () => {
     }])
   })
 
-  it('onResult：FAILED 跳过 post → 无 properties/files，detail 标注', async () => {
+  it('onResult：FAILED 诊断性 post → 无 properties/files（诊断行只在 job_output），detail 标注', async () => {
     const results: Array<import('../src/gaussian').GaussianProducerResult> = []
     const { hooks } = makeProducer(
       [{ out: row('700', 'FAILED', '1:0', '30') }, { out: 'Error termination via Lnk1e\n' }],
@@ -490,7 +510,7 @@ describe('producer 状态板喂料（onTick / onResult）', () => {
     await hooks.done
     expect(results).toEqual([{
       status: 'completed',
-      detail: '1/1 settled (1 FAILED); opt+freq FAILED, post skipped',
+      detail: '1/1 settled (1 FAILED); opt+freq FAILED, diagnostic post attached',
       properties: undefined,
       files: undefined,
       plots: undefined,

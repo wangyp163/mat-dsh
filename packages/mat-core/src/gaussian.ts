@@ -235,10 +235,30 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
     onAllSettled: async (states) => {
       const state = states.get(slurmJobId)?.state ?? 'UNKNOWN'
       if (state !== 'COMPLETED') {
+        // Diagnostic post (stress r10 D22): a FAILED job's structured
+        // diagnostics live in the workflow's post phase — e.g. tsxtb's
+        // convergence trace CSV and the kb:<id> knowledge reference. The old
+        // skip-post gate (D4) predates structured diagnostics and left the
+        // agent to awk the raw log. Run post once, best-effort: the job's
+        // terminal state stays authoritative, and the post error message is
+        // surfaced verbatim as the diagnostic payload.
+        let diagnostic: string[] = []
+        try {
+          const r = await execCommand(clusterId, postPhaseCommand(workdir, task, workflowEnv), 60)
+          const line = outputText(r).split('\n').find((l) => l.startsWith('{'))
+          if (line !== undefined) {
+            const data = JSON.parse(line) as { status?: string; error?: unknown }
+            if (data.status === 'error') {
+              diagnostic = [`diagnostic_post: ${String(data.error ?? '(no message)')}`]
+            }
+          }
+        } catch {
+          // best-effort only — a broken diagnostic post never fails the job
+        }
         const logTail = await fetchLogTail()
         return {
-          detailSuffix: `; ${task} ${state}, post skipped`,
-          extraLines: ['slurm_state: ' + state, ...(logTail !== '' ? [`log_tail: ${logTail}`] : [])],
+          detailSuffix: `; ${task} ${state}, diagnostic post attached`,
+          extraLines: ['slurm_state: ' + state, ...diagnostic, ...(logTail !== '' ? [`log_tail: ${logTail}`] : [])],
         }
       }
       try {
