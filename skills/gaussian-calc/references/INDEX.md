@@ -25,7 +25,7 @@ source: "session xxx / 压测 rN / sobereva/164"   # 出处可审计
 
 | 目录 | 内容 | 条目 |
 |---|---|---|
-| `errors/` | 精确签名 → 根因/处方 | `ts-step-limit`（优化步数超限/l9999 收尾猝死 → `methods/ts-convergence`）；`irc-l123-divergence`（IRC corrector 发散三级梯进：StepSize 减半→CalcAll→Steep → `methods/irc-methods`） |
+| `errors/` | 精确签名 → 根因/处方 | `ts-step-limit`（优化步数超限/l9999 收尾猝死，处方决策表：震荡→稳 Hessian 族/临界→MaxCycle/发散→换初猜 → `methods/ts-convergence`）；`irc-l123-divergence`（IRC corrector 发散三级梯进：StepSize 减半→CalcAll→Steep → `methods/irc-methods`）；`ts-l103-formbx`（TS 起步即摔：FormBX/Tors failed 内坐标崩塌 → 换初猜/tsxtb 预优化，非步数问题） |
 | `methods/` | 方法学指引 | `ts-convergence`（几何优化不收敛诊断与解法，sobereva/164 + tsxtb 特化）；`irc-methods`（IRC 计算方法学与参数语义，sobereva/400 + 端点精修）；`ts-selection`（ts/qst2/qst3 选择，正文见 SKILL.md 特殊 task 节，待迁入） |
 | `contracts/` | workflow 契约细则 | （随 SKILL.md 拆分轮充实；现驻 SKILL.md 正文与 `docs/gaussian-json-input.md`） |
 | `runbooks/` | 部署/压测 SOP 指针 | （指针至 SOP 库 `~/dev/sops/`，不在 skill 内复制正文） |

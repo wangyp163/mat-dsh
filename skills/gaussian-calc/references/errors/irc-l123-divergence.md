@@ -25,6 +25,10 @@ IRC 作业 FAILED，log 尾 `Error termination via Lnk1e … l123.exe`；上方�
 
 要点：① 整体值覆盖（pre.json `irc` 键写全，不能只写增量）；② 若 1、2 级只让死亡点**后移**不根治（corrector 数据逐位相同/聚簇不变），直接跳 Steep——真实会话三连败的教训；③ 前置自检：TS 虚频方向是否真对应反应坐标（方向错了 IRC 必然走不通）。
 
+## 处置后回写
+
+按「诊断-重试协议」（SKILL.md）在 `diag/att-{NNN}-irc-l123-divergence/conclusion.md` 回写：facts（死亡点位置/聚簇形态）/ prescription（上表哪一级）/ diff（参数改动）/ 新 attempt 号。
+
 ## 禁止事项
 
 - 原样重提（同参必复现）。

@@ -25,7 +25,20 @@ source: 压测 r9（集群 121236068 NStep=57 / tsxtb-quad NStep=54 / H3 smoke N
 
 ## 处方
 
-**先诊断后动手：读 `convergence_trace.csv`（或 GaussView 优化曲线）区分三类**——震荡 / 单调逼近未达阈值 / 发散。诊断法与解法全表见 [`methods/ts-convergence.md`](../methods/ts-convergence.md)。
+## 处方（决策表：读 convergence_trace.csv 趋势列定行）
+
+| trace 形态（能量/受力/位移列） | 判定 | 处方 |
+|---|---|---|
+| 受力/几何周期性往复 | 震荡（最常见） | 「稳 Hessian」族：`recalc=N`/`calcall`（TS 最敏感）；`gdiis maxstep=N notrust`；**加步数无效** |
+| 单调下降但 force/displacement 不达阈值 | 临界收敛 | `MaxCycle` 加预算 / `loose` 放宽 / 取受力最低帧续算——加步数唯一有效的场景 |
+| 能量不降反升、位移发散 | 初猜在错误势面 | **换初猜**（或 tsxtb 预优化），不是调参问题 |
+| log 无步数块、l103 起步即摔 | 内坐标崩塌 | 转条目 [`ts-l103-formbx`](ts-l103-formbx.md) |
+
+诊断法与完整解法清单见 [`methods/ts-convergence.md`](../methods/ts-convergence.md)。
+
+## 处置后回写
+
+按「诊断-重试协议」（SKILL.md）在 `diag/att-{NNN}-ts-step-limit/conclusion.md` 回写：facts（trace 摘要一行）/ prescription（上表哪一行）/ diff（参数/初猜改动）/ 新 attempt 号。
 
 ## 禁止事项
 
