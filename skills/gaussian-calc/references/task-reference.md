@@ -123,13 +123,13 @@ resources.memory <= slurm.mem
 |---|---|---|
 | `sp` | single point | final SCF energy |
 | `opt` | `opt` | final energy, `g16_initial.xyz`, `g16_optimized.xyz` |
-| `freq` | `freq` | `frequencies_cm-1`, `imaginary_frequency_count` |
+| `freq` | `freq` | `frequencies_cm-1`, `imaginary_frequency_count`, thermochemistry keys (`temperature_k` … `sum_electronic_free_energy_hartree`, workflow 1.6.3+) |
 | `dipole` | single-point semantics | final energy/convergence |
 | `polar` | `polar` route | final energy/convergence |
 | `tddft` | `td(nstates=20)` | final energy/convergence |
 | `fluorescence` | B3LYP/aug-cc-pVDZ, `td(nstates=10)` | S1 energy/wavelength/oscillator strength and Multiwfn spectrum files |
 | `resp` | B3LYP/def2TZVP, solvent/dispersion, MK for light elements | final energy and RESP charges |
-| `ts` | `opt(TS,CalcFC,NoEigenTest) freq` | `frequencies_cm-1`, `imaginary_frequency_count`, `g16_optimized.xyz`; requires a reasonable TS guess |
+| `ts` | `opt(TS,CalcFC,NoEigenTest) freq` | `frequencies_cm-1`, `imaginary_frequency_count`, thermochemistry keys (1.6.3+), `g16_optimized.xyz`; requires a reasonable TS guess |
 | `qst2` | `opt(QST2,CalcFC) freq` | same as `ts`; 2-frame input (reactant + product, identical atom ordering) |
 | `qst3` | `opt(QST3,CalcFC) freq` | same as `ts`; 3-frame input (reactant + product + TS guess) |
 | `irc` | `irc(CalcFC,MaxPoints=30,StepSize=10)` (MaxPoints 30 since workflow 1.4.2, was 5; tune via full-value route override, e.g. `["CalcFC","MaxPoints=50","StepSize=5"]` when l123 Bulirsch-Stoer integration diverges on small linear systems) | final energy/convergence, `irc_point_count`; plots `irc_profile` (total-energy curve along the IRC, signed reaction coordinate, TS highlighted) and `reaction_path` (R→TS→P ladder in kcal/mol from the IRC branch ends and point 0); requires valid TS geometry |
