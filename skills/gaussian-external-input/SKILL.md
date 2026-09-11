@@ -1,7 +1,7 @@
 ---
 name: gaussian-external-input
 description: Use this skill when the user provides a working directory that already contains self-prepared Gaussian 16 input files (.gjf/.com) and wants them run as-is — trigger phrases include 自带输入, 现成 gjf, 已准备好的输入文件, 用户输入文件, external input, 不重新生成输入. Routes the agent into the gaussian-workflow external mode (-t external; syntax check + task registration at pre, slurm rendering at run, registry-gated post). Do NOT load for regular calculations from a structure file (use gaussian-calc), or for release/stress testing.
-version: 0.1.0-demo
+version: 0.1.1-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/dev/mat-aitool/skills/gaussian-external-input@0.1.0
@@ -34,9 +34,11 @@ mat_exec({"cluster_id": "11250", "command": "bash $HOME/workspace/.gaussian-calc
 ## 场景判定树（按序执行）
 
 1. 用户是否给出了包含 `.gjf`/`.com` 的工作目录，且意图是**原样执行**这些输入？否 → 走 `gaussian-calc`。
-2. 目录里有几个输入文件？**一次只处理一个**：向用户确认目标文件（或按用户点名）；多个文件 = 多次独立调用本流程，互不影响。
-3. 输入是笛卡尔坐标吗？（`head` 看 geometry 块，每行应为 `符号 x y z`。）Z-matrix 输入 external 模式**暂不支持**——告知用户转笛卡尔后再来。
+2. **文件都在集群上**：用户说的目录是集群 home 下的路径——目录检查、文件内容确认一律经 `mat_exec` 在集群侧做，不要在本地解析 `~`（r16 S3 实证：本地找不到目录会白费一轮反问）。一次只处理一个文件：向用户确认目标文件（或按用户点名）；多个文件 = 多次独立调用本流程。
+3. `head` 看 geometry 块做**快筛**（每行应为 `符号 x y z`）：Z-matrix 直接告知用户转笛卡尔。快筛是笛卡尔**不代表跳过 pre**——pre 的语法检查器才是权威（charge/mult 奇偶、帧数契约、多节一致性只有它查得全），不要目测诊断代替 pre 的结构化报错。
 4. 进入三段式操作（下节）。`-t` 一律用 `external`，`-i` 指向用户文件，`-w` 用绝对路径。
+
+补充（r16 实证沉淀）：副本可能被 pre 规范化（title 与 charge/mult 之间补分隔空行——该 g16 部署的 l101 契约），context 会明示 `inserted blank separator line(s) ... of the COPY`；用户原文件永不被改。作业失败排查的第一信息源是 result JSON 的 `error_detail` 与 `warnings`，不是 cat log/输出文件。
 
 ## 执行模型
 
