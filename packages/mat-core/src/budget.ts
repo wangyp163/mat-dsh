@@ -7,6 +7,8 @@
  * 拒绝一律结构化返回（非抛异常），由调用方转成工具可见的结构化错误。
  */
 
+import { parseSacctBatch } from './job-state.ts'
+
 export interface BudgetDeclaration {
   /** 总 sbatch 上限（首提 + 重试合计）。 */
   maxSbatch: number
@@ -115,4 +117,49 @@ export function checkBudgetAgainstManifest(
     })
   }
   return guard.check(request)
+}
+
+
+/** 估算核时取数（scale-round E1）：manifest spec 钉死优先 → pre_json → 32 核缺省。 */
+export function resolveEstimateNcores(spec: unknown, preJson: unknown): number {
+  const fromRecord = (v: unknown): number | undefined => {
+    if (typeof v !== 'object' || v === null) return undefined
+    const resources = (v as Record<string, unknown>)['resources']
+    if (typeof resources !== 'object' || resources === null) return undefined
+    const n = (resources as Record<string, unknown>)['ncores']
+    return typeof n === 'number' ? n : undefined
+  }
+  return fromRecord(spec) ?? fromRecord(preJson) ?? 32
+}
+
+/**
+ * 台账对账（scale-round E2）：批量 sacct 行按 jobId 回写 actualCoreHours
+ * （elapsedSeconds × ncores / 3600；ncores 取任务 spec，缺省 32——与闸的估算同源）。
+ * 幂等：重复对账覆盖写不叠加。返回 {reconciled, report}——report 是估算/实际
+ * 两本账的 diff 行（含未对账条目点名）。
+ */
+export function reconcileLedger(
+  portfolio: { tasks: Array<{ taskId: string; spec?: { resources?: { ncores?: number } } }>; ledger?: Array<{ taskId: string; jobId?: string; estimatedCoreHours: number; actualCoreHours?: number }> },
+  sacctBatchText: string,
+): { reconciled: number; report: string[] } {
+  const entries = portfolio.ledger ?? []
+  const states = parseSacctBatch(sacctBatchText)
+  const ncoresByTask = new Map(portfolio.tasks.map((t) => [t.taskId, t.spec?.resources?.ncores ?? 32]))
+  let reconciled = 0
+  for (const entry of entries) {
+    if (entry.jobId === undefined) continue
+    const info = states.get(entry.jobId)
+    if (info === undefined || info.elapsedSeconds === undefined) continue
+    entry.actualCoreHours = Math.round(((info.elapsedSeconds * (ncoresByTask.get(entry.taskId) ?? 32)) / 3600) * 1e6) / 1e6
+    reconciled += 1
+  }
+  const estTotal = entries.reduce((a, e) => a + e.estimatedCoreHours, 0)
+  const actTotal = entries.reduce((a, e) => a + (e.actualCoreHours ?? 0), 0)
+  const unreconciled = entries.filter((e) => e.jobId !== undefined && e.actualCoreHours === undefined)
+  const report = [
+    `ledger entries=${entries.length} reconciled=${reconciled} unreconciled=${unreconciled.length}`,
+    `estimated total=${estTotal.toFixed(3)} core-h | actual total=${actTotal.toFixed(3)} core-h | ratio=${estTotal > 0 ? (actTotal / estTotal).toFixed(4) : 'n/a'}`,
+    ...unreconciled.map((e) => `unreconciled: ${e.taskId} job ${e.jobId}`),
+  ]
+  return { reconciled, report }
 }

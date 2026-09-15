@@ -15,6 +15,7 @@ import {
   checkBudgetAgainstManifest,
   portfolioFromJson,
   portfolioToJson,
+  resolveEstimateNcores,
 } from 'mat-core'
 
 export interface BudgetTaskRef {
@@ -39,14 +40,6 @@ export function parseBudgetTaskRef(raw: unknown): BudgetTaskRef | undefined {
 /** 核时估算：ncores × 3.75 分钟（分钟级小作业的经验档）；缺省按 32 核。 */
 export function estimateCoreHours(ncores: number | undefined): number {
   return Math.round((ncores ?? 32) * 0.0625 * 1000) / 1000
-}
-
-function readPortfolioNcores(preJson: unknown): number | undefined {
-  if (typeof preJson !== 'object' || preJson === null) return undefined
-  const resources = (preJson as Record<string, unknown>)['resources']
-  if (typeof resources !== 'object' || resources === null) return undefined
-  const ncores = (resources as Record<string, unknown>)['ncores']
-  return typeof ncores === 'number' ? ncores : undefined
 }
 
 export interface BudgetGateHandle {
@@ -74,10 +67,12 @@ export function openBudgetGate(rawTaskRef: unknown, preJson?: unknown): BudgetGa
       `BUDGET_REJECTED: task ${ref.taskId} is not in portfolio ${manifest.portfolioId} — plan-external submission refused`,
     )
   }
+  // 估算取数（scale-round E1）：manifest spec 钉死优先 → pre_json → 32 核缺省。
+  const ncores = resolveEstimateNcores(task.spec, preJson)
   const decision = checkBudgetAgainstManifest(manifest, {
     taskId: ref.taskId,
     isRetry: task.attempts > 0,
-    estimatedCoreHours: estimateCoreHours(readPortfolioNcores(preJson)),
+    estimatedCoreHours: estimateCoreHours(ncores),
   })
   if (!decision.ok) {
     throw new Error(`BUDGET_REJECTED: ${decision.reason}`)
@@ -88,7 +83,7 @@ export function openBudgetGate(rawTaskRef: unknown, preJson?: unknown): BudgetGa
         taskId: ref.taskId,
         jobId,
         isRetry: task.attempts > 0,
-        estimatedCoreHours: estimateCoreHours(readPortfolioNcores(preJson)),
+        estimatedCoreHours: estimateCoreHours(ncores),
       })
       const temporary = `${ref.portfolioFile}.part`
       writeFileSync(temporary, portfolioToJson(manifest))

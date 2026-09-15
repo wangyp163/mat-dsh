@@ -72,7 +72,10 @@ export interface SubmissionLedgerEntry {
   taskId: string
   jobId?: string
   isRetry: boolean
+  /** 闸的估算计费（提交时点）。 */
   estimatedCoreHours: number
+  /** sacct 实际核时（对账回写；elapsed × ncores / 3600）。 */
+  actualCoreHours?: number
   at: string
 }
 

@@ -64,6 +64,22 @@ function main(): void {
       console.log(`initialized ${values.id}: ${portfolio.tasks.length} tasks -> ${values.out}`)
       return
     }
+    case 'stale': {
+      // 自愈扫描（scale-round E3）：submitted 但未结算的任务 = 重启/中断后的接续面。
+      const [path] = rest
+      if (path === undefined) fail('stale requires <manifest.json>')
+      const p = portfolioFromJson(readFileSync(path, 'utf8'))
+      const stale = p.tasks.filter((t) => t.phase === 'submitted')
+      if (stale.length === 0) {
+        console.log('no stale tasks (none in submitted phase)')
+        return
+      }
+      for (const t of stale) {
+        console.log(`${t.taskId} submitted job=${t.jobId ?? '-'} spec=${t.spec?.task ?? '-'}`)
+      }
+      process.exitCode = 2
+      return
+    }
     case 'show': {
       const [path] = rest
       if (path === undefined) fail('show requires <manifest.json>')
@@ -142,7 +158,7 @@ function main(): void {
       return
     }
     default:
-      fail(`unknown command '${cmd ?? ''}' (init|show|update|retry|diff|validate)`)
+      fail(`unknown command '${cmd ?? ''}' (init|show|stale|update|retry|diff|validate)`)
   }
 }
 

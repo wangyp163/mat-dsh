@@ -86,6 +86,19 @@ pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/portfolio-cli.ts <cmd>
   （properties/workdir 字段）——读取用 `show`，禁止跨相位翻旧会话的 job_output
   或远端补读。
 
+## 自愈扫描（scale-round 起，新会话/重启后第一步）
+
+接手任何批量清单先跑 `portfolio-cli stale <manifest>`：
+
+- **有 stale（submitted 未结算）**：上次会话/服务中断过。逐个对账恢复——
+  `mat_exec` 跑 `sacct -j <jobid> -P -n -o JobID,State,ExitCode,ElapsedRaw`：
+  终态 COMPLETED → 按 gaussian-calc 分步协议手动 post 拿 properties → 门检 →
+  `update --phase settled`；非 COMPLETED → 记 note 并按分诊协议处理。
+  恢复完 stale 再继续 pending/prepared 的原计划提交。
+- **无 stale**：直接按清单继续（prepared 的提交、settled 的解读）。
+- 批量收尾时跑 `scripts/reconcile-ledger.ts <cluster> <manifest>` 对账两本账
+  （闸的估算计费 vs sacct 实际核时），把报告贴进相位摘要。
+
 ## 链式任务委托（shepherd）
 
 多波链（如 opt→freq 分步）委托给 `subagent_shepherd`（可续后台子 agent，协议见
