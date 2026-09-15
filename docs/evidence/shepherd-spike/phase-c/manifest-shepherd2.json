@@ -1,0 +1,103 @@
+{
+  "portfolioId": "shepherd-spike-2",
+  "createdAt": "2026-09-15T16:30:28.232Z",
+  "budget": {
+    "maxSbatch": 6,
+    "maxRetriesPerTask": 1,
+    "maxCoreHours": 3
+  },
+  "tasks": [
+    {
+      "taskId": "SH3",
+      "system": "H2O 水分子",
+      "kind": "valid",
+      "phase": "pending",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T16:40:05.341Z",
+      "spec": {
+        "task": "opt>freq",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "note": "budget_rejected: core-hour budget would exceed (5.00 > 3.00) — opt completed (job 122202312, E=-76.4089539033, converged), freq not submitted"
+    },
+    {
+      "taskId": "SH4",
+      "system": "CH3OH 甲醇",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T16:39:24.771Z",
+      "spec": {
+        "task": "opt>freq",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/shepherd/SH4/freq",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); freq E=-115.714405956 converged=true imag=0",
+        "energy": -115.714405956,
+        "converged": true,
+        "frequencies_cm-1": [
+          346.3609,
+          1067.0359,
+          1096.5884,
+          1183.2138,
+          1400.0141,
+          1511.2973,
+          1524.9165,
+          1541.5543,
+          2996.595,
+          3039.0318,
+          3131.7947,
+          3754.5664
+        ],
+        "imaginary_frequency_count": 0,
+        "temperature_k": 298.15,
+        "pressure_atm": 1,
+        "zero_point_correction_hartree": 0.051471,
+        "thermal_correction_energy_hartree": 0.054761,
+        "thermal_correction_enthalpy_hartree": 0.055705,
+        "thermal_correction_gibbs_hartree": 0.02875,
+        "sum_electronic_zpe_hartree": -115.662935,
+        "sum_electronic_thermal_hartree": -115.659645,
+        "sum_electronic_enthalpy_hartree": -115.658701,
+        "sum_electronic_free_energy_hartree": -115.685656,
+        "files": [
+          "/public/home/hpc-user-a/workspace/shepherd/SH4/freq/freq/artifacts.json",
+          "/public/home/hpc-user-a/workspace/shepherd/SH4/freq/freq/events.jsonl"
+        ]
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "taskId": "SH4",
+      "jobId": "122202188",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:35:26.954Z"
+    },
+    {
+      "taskId": "SH3",
+      "jobId": "122202312",
+      "isRetry": false,
+      "estimatedCoreHours": 2,
+      "at": "2026-09-15T16:36:40.898Z"
+    },
+    {
+      "taskId": "SH4",
+      "jobId": "122202513",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:38:32.974Z"
+    }
+  ]
+}

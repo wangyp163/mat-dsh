@@ -1,0 +1,10 @@
+执行 shepherd spike Phase C'（链式委托实弹）。新会话，cwd ~/workspace/batch-subagent。先读 skill batch-orchestrator（链式任务委托节）与 batch-roles（shepherd 角色）。
+
+1. 建清单 manifest/shepherd.json（id=shepherd-spike，预算 {"maxSbatch":6,"maxRetriesPerTask":1,"maxCoreHours":3}）：
+   - 任务 SH1（system "H2O 水分子"，kind valid）与 SH2（system "CH3OH 甲醇"，kind valid）
+   - 每任务 update --spec '{"task":"opt>freq","method":"B3LYP/6-31G(d)","resources":{"ncores":8,"memory":"16GB"}}'（规格钉死：牧羊人从清单读，你不得在委托 prompt 里另立规格）
+2. 同一回复并行派 2 个 subagent_shepherd（各自 prompt 自含，一字不差包含以下要点）：
+   「你是牧羊人。先读 skill batch-roles（shepherd 节）与 gaussian-calc。任务：<taskId>，manifest 绝对路径 ~/workspace/batch-subagent/manifest/shepherd.json（用 bash 跑 portfolio-cli 读 spec：<CLI 命令行>）。体系：<体系描述>。初始结构（xyz 原子行，charge=0 mult=1）：<结构行>。执行 opt→freq 分步两波链，全部在一个回合内完成（波内绝不结束回合）：波1 mat_gaussian（task=opt，workdir ~/workspace/shepherd/<taskId>/opt，options.pre_json={"resources":{"ncores":8,"memory":"16GB"}}，options.run_json={"slurm":{"partition":"Agent0","ntasks_per_node":8,"mem":"16GB","time":"00:30:00"}}，task_ref={"portfolio_file":"~/workspace/batch-subagent/manifest/shepherd.json","task_id":"<taskId>"}）→ 回合内等完成通知 → 门检（读 job_output properties：converged=true 才许进波2，不过则 report 原因并结束链）→ report 一行进度 → 用 mat_exec cat 远端 <波1 workdir>/g16_optimized.xyz 取优化几何转波2 structure → 波2 mat_gaussian（task=freq，workdir ~/workspace/shepherd/<taskId>/freq，资源档与 task_ref 同波1）→ 等通知 → 终检（converged 且 imaginary_frequency_count 报出）→ update 清单 --phase final（你的 bash）→ report 最终摘要 ≤10 行（两波终态/能量/虚频数/台账）。预算纪律：BUDGET_REJECTED 即 report 原文并止链。」
+   结构行：SH1 用 "O 0.000 0.000 0.000; H 0.757 0.586 0.000; H -0.757 0.586 0.000"；SH2 用 "C 0.000 0.000 0.000; O 1.430 0.000 0.000; H -0.390 0.960 0.510; H -0.390 0.200 -1.020; H -1.010 -0.740 -0.100; H 1.750 -0.870 0.100"。
+3. 派发后结束你的回合等 report。收到第一个牧羊人的中途进度 report 后：向它 send_message「汇报当前预算台账与剩余计划」，然后继续等。收到两个最终摘要后：
+4. portfolio-cli show 验证清单（相位/台账/properties 快照/workdir 字段都应自动就位），输出 ≤10 行相位摘要：两链终态（能量/虚频）、预算台账终值、properties 快照是否自动落盘、send_message 注入的实际交付时机。

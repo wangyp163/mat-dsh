@@ -1,0 +1,138 @@
+{
+  "portfolioId": "shepherd-spike",
+  "createdAt": "2026-09-15T16:14:17.982Z",
+  "budget": {
+    "maxSbatch": 6,
+    "maxRetriesPerTask": 1,
+    "maxCoreHours": 3
+  },
+  "tasks": [
+    {
+      "taskId": "SH1",
+      "system": "H2O 水分子",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T16:23:05.742Z",
+      "spec": {
+        "task": "opt>freq",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/shepherd/SH1/freq",
+      "jobId": "122200537",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); freq E=-76.4089539034 converged=true imag=0",
+        "energy": -76.4089539034,
+        "converged": true,
+        "frequencies_cm-1": [
+          1713.6374,
+          3727.3647,
+          3848.9151
+        ],
+        "imaginary_frequency_count": 0,
+        "temperature_k": 298.15,
+        "pressure_atm": 1,
+        "zero_point_correction_hartree": 0.021164,
+        "thermal_correction_energy_hartree": 0.023999,
+        "thermal_correction_enthalpy_hartree": 0.024943,
+        "thermal_correction_gibbs_hartree": 0.003497,
+        "sum_electronic_zpe_hartree": -76.38779,
+        "sum_electronic_thermal_hartree": -76.384955,
+        "sum_electronic_enthalpy_hartree": -76.384011,
+        "sum_electronic_free_energy_hartree": -76.405457,
+        "files": [
+          "/public/home/hpc-user-a/workspace/shepherd/SH1/freq/freq/artifacts.json",
+          "/public/home/hpc-user-a/workspace/shepherd/SH1/freq/freq/events.jsonl"
+        ]
+      }
+    },
+    {
+      "taskId": "SH2",
+      "system": "CH3OH 甲醇",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T16:23:06.223Z",
+      "spec": {
+        "task": "opt>freq",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/shepherd/SH2/freq",
+      "jobId": "122200602",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); freq E=-115.714405956 converged=true imag=0",
+        "energy": -115.714405956,
+        "converged": true,
+        "frequencies_cm-1": [
+          346.3609,
+          1067.0359,
+          1096.5884,
+          1183.2138,
+          1400.0141,
+          1511.2973,
+          1524.9165,
+          1541.5543,
+          2996.595,
+          3039.0318,
+          3131.7947,
+          3754.5664
+        ],
+        "imaginary_frequency_count": 0,
+        "temperature_k": 298.15,
+        "pressure_atm": 1,
+        "zero_point_correction_hartree": 0.051471,
+        "thermal_correction_energy_hartree": 0.054761,
+        "thermal_correction_enthalpy_hartree": 0.055705,
+        "thermal_correction_gibbs_hartree": 0.02875,
+        "sum_electronic_zpe_hartree": -115.662935,
+        "sum_electronic_thermal_hartree": -115.659645,
+        "sum_electronic_enthalpy_hartree": -115.658701,
+        "sum_electronic_free_energy_hartree": -115.685656,
+        "files": [
+          "/public/home/hpc-user-a/workspace/shepherd/SH2/freq/freq/artifacts.json",
+          "/public/home/hpc-user-a/workspace/shepherd/SH2/freq/freq/events.jsonl"
+        ]
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "taskId": "SH1",
+      "jobId": "122200169",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:19:14.302Z"
+    },
+    {
+      "taskId": "SH2",
+      "jobId": "122200204",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:19:39.634Z"
+    },
+    {
+      "taskId": "SH1",
+      "jobId": "122200537",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:22:09.029Z"
+    },
+    {
+      "taskId": "SH2",
+      "jobId": "122200602",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:22:32.636Z"
+    }
+  ]
+}

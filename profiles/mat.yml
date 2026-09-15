@@ -168,15 +168,16 @@
           maxTokens: 8192
         persona: 批量分析师（batch-roles skill 角色 analyst）——判定结果科学可用性，数值逐位来自输入数据，先读 skill batch-roles，按契约回传 JSON。
     # 牧羊人（shepherd spike）：可续后台子 agent，全权一条计算链。全 mat 工具面
-    # 但禁一切 agent 生成/控制工具（深度锁 0 双保险——toolFilter 挡 affordance，
-    # maxDepth 0 是运行时硬顶）。长回合纪律见 batch-roles shepherd 节。
+    # 但禁一切 agent 生成/控制工具（toolFilter 挡 affordance；maxDepth 1 是运行时
+    # 硬顶——牧羊人自身 depth 1 可创建，孙代 depth 2 必拒。注意 maxDepth 0 语义是
+    # "本工具完全不能委托"，C' 首跑实测踩坑）。
     - id: subagent-shepherd
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
         provider: spawn
         toolName: subagent_shepherd
         backgroundMode: continuable
-        maxDepth: 0
+        maxDepth: 1
         toolFilter:
           deny: ['subagent', 'subagent_fork', 'subagent_prep', 'subagent_triage', 'subagent_analyst', 'subagent_shepherd', 'send_message', 'interrupt_agent']
         agentOptions:
