@@ -22,12 +22,14 @@ export interface SlurmJobInfo {
   exitCode?: number
   /** ElapsedRaw 原生秒；空值缺省。 */
   elapsedSeconds?: number
+  /** sacct WorkDir 列（提交目录，绝对路径）；列缺省或空值时缺省——文件面板据此浏览远端文件。 */
+  workdir?: string
 }
 
 /**
  * 解析 `sacct -P -n` 批量输出。只取主 id 行（丢弃 `.batch`/`.extern`/数组步骤子行），
  * 畸形行跳过不抛。
- * @param stdout - sacct 原始 stdout（`id|State|ExitCode|ElapsedRaw` 行流）。
+ * @param stdout - sacct 原始 stdout（`id|State|ExitCode|ElapsedRaw[,WorkDir]` 行流）。
  * @returns jobId → 观测快照；输出里不存在的 id 不在表中。
  */
 export function parseSacctBatch(stdout: string): Map<string, SlurmJobInfo> {
@@ -39,11 +41,13 @@ export function parseSacctBatch(stdout: string): Map<string, SlurmJobInfo> {
     if (!jobId || !/^\d+$/.test(jobId)) continue // 子行（id.batch 等）与非数字 id 一并跳过
     const exitNum = Number(rawExit?.split(':')[0])
     const elapsed = cols[3] !== undefined && cols[3] !== '' ? Number(cols[3]) : undefined
+    const workdir = cols[4]?.trim()
     result.set(jobId, {
       jobId,
       state: classifyState(rawState ?? ''),
       exitCode: Number.isFinite(exitNum) ? exitNum : undefined,
       elapsedSeconds: elapsed !== undefined && Number.isFinite(elapsed) ? elapsed : undefined,
+      ...(workdir === '' ? {} : { workdir }),
     })
   }
   return result

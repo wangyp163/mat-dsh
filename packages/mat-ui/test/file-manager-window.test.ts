@@ -19,7 +19,7 @@ describe('native HPC file details tab', () => {
     expect(panel).toContain('/mat-files/tree?')
     expect(panel).toContain('primary')
     expect(panel).toContain('selectedPaths')
-    expect(panel).toContain('loadDirectory(entry.path)')
+    expect(panel).toContain('loadDirectory(entry.path, scope)')
     expect(panel).toContain('/mat-files/download')
   })
 
@@ -43,7 +43,7 @@ describe('native HPC file details tab', () => {
   it('renders the cached tree instantly while revalidating, and reads job selection live', async () => {
     const panel = await source('FileManagerPanel.tsx')
     expect(panel).toContain('treeCache')
-    expect(panel).toContain('fileManagerState.snapshot().selectedJobId')
+    expect(panel).toContain('snapshot.selectedJobId')
   })
 
   it('keeps jobs visible across session switches (own first) and opens its local workspace', async () => {
@@ -54,9 +54,9 @@ describe('native HPC file details tab', () => {
     expect(panel).toContain('jobsForSession(jobs, sessionId)')
     expect(panel).not.toContain('ownSessionScope')
     expect(panel).toContain('openWorkspace')
-    expect(panel).toContain('job.localWorkspace')
-    expect(panel).toContain('openFile(path)')
-    expect(panel).toContain('openFile(entry.path)')
+    expect(panel).toContain('focusedJob.localWorkspace')
+    expect(panel).toContain('openFile(path, focused)')
+    expect(panel).toContain('openFile(entry.path, scope)')
     // 点击文件的预览已迁到「查看」tab：不再 POST /mat-files/open、不再 openWorkspace 单文件。
     expect(panel).not.toContain("fetch('/mat-files/open'")
     expect(panel).not.toContain('openWorkspace(payload.path)')

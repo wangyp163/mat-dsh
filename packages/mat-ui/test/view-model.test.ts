@@ -29,6 +29,7 @@ describe('classifyFile', () => {
     expect(classifyFile('report.pdf')).toBe('pdf')
     expect(classifyFile('job.log')).toBe('text')
     expect(classifyFile('result.json')).toBe('text')
+    expect(classifyFile('events.jsonl')).toBe('text')
     expect(classifyFile('slurm-123.out')).toBe('text')
     expect(classifyFile('input.com')).toBe('text')
     expect(classifyFile('input.gjf')).toBe('text')

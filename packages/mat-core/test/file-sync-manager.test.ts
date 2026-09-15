@@ -83,6 +83,18 @@ describe('FileSyncManager', () => {
     expect(rerun.status).toBe('completed')
     expect(attempts).toBe(2)
   })
+
+  it('maps a board-key id (cluster:slurm) onto its explicit safe local dir', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sync-manager-')); dirs.push(root)
+    const manager = new FileSyncManager({ localRoot: root, transfer: transfer('hello') })
+    const result = await manager.enqueue({ id: '11250:120763977', localDir: '120763977', workdir: '/remote/job', remotePath: '/remote/job/out.log' })
+    expect(result.status).toBe('completed')
+    expect(result.id).toBe('11250:120763977') // 关联 id 保留板键，供下载路由按 jobId 对账
+    expect(result.localPath).toBe(join(root, '120763977', 'out.log')) // 目录段 = 真实作业号
+    // 板键 id 不带安全目录段时必须拒绝（不得把 `:` 拼进本地路径）。
+    await expect(manager.enqueue({ id: '11250:oops', workdir: '/remote/job', remotePath: '/remote/job/b.log' }))
+      .rejects.toThrow(/id/)
+  })
 })
 
 async function mkdirp(path: string): Promise<void> {

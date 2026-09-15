@@ -36,10 +36,42 @@
               low: low
               high: high
               max: max
+      # BigModel GLM（glm-5.3-flash）：解决 HPC 网关 deepseek 双模型无图像输入
+      # 的问题（2026-09-04 实测两模型对 image_url 均静默丢图）。密钥放 env.local
+      # 的 BIGMODEL_API_KEY。思考等级依据官方文档（capabilities/thinking）：
+      # GLM-5.3 系不可关闭思考（thinking.type:disabled 直接报错），深度用
+      # reasoning_effort low/high/max 调节；zai 格式在"无等级"时发 disabled → 400，
+      # 故不声明 off 档，并以路由级 reasoning: high 兜底保证请求必带等级；
+      # open.bigmodel.cn 的 zai 检测默认 supportsReasoningEffort=false，必须显式
+      # 打开才会发送 reasoning_effort（否则 thinking 只能开/关、深度恒为默认 max）。
+      # glm-5.3-flash 是 GLM-5 系首个原生多模态（图片/视频/文件），input 声明
+      # image 后 read_image 工具的路由闸即对其放行。
+      bigmodel:
+        displayName: BigModel GLM
+        apiKeyEnv: BIGMODEL_API_KEY
+        api: openai-completions
+        baseURL: https://open.bigmodel.cn/api/coding/paas/v4
+        compat:
+          thinkingFormat: zai
+          supportsReasoningEffort: true
+        reasoning: high
+        models:
+          - id: glm-5.3-flash
+            name: GLM-5.3-Flash
+            contextWindow: 1000000
+            input:
+              - text
+              - image
+            reasoningEfforts:
+              low: low
+              high: high
+              max: max
 
 - id: agent-default-model
   config:
-    provider: mat
+    # 路由随环境切换（mat=deepseek 双模型 | bigmodel=glm-5.3-flash 多模态），
+    # 与 LLM_MODEL_ID 配套；用户级 settings.yaml 的 agent-default-model 同旨。
+    provider: !!js process.env.LLM_PROVIDER_ID || 'mat'
     model: !!js process.env.LLM_MODEL_ID
 
 # web 客户端（模型选择/会话初始化）引用 llm-deepseek 独占注册的 "deepseek-official"
@@ -54,8 +86,13 @@
     reasoningEffort: high
 
 - insert:
+    # 插件以裸包名加载（同 mat-ui 模式）：dsh-web.sh 把 packages/mat-tools
+    # 软链进 profile 的 node_modules。entry.name 不得用 !!js——loader 的
+    # interpolate 只作用于 config/disabled，name 原样传给 tree.import，且
+    # harmony 包扫描先于求值急切读 name（{__jsExpr} 对象直接崩）；
+    # package.json main 已指向 src/index.ts（Harmony 原生 ESM loader 加载 TS）。
     - id: mat-tools
-      name: '~/mat-harness/mat-dsh/packages/mat-tools/src/index.ts'
+      name: 'mat-tools'
     # 显式根入口兼容 Harmony 的原生 ESM loader；同目录 package.json 仍供
     # client-modules 注册表解析 dsh.client 声明。
     - id: mat-ui
@@ -70,4 +107,4 @@
     # 只从本仓库发现 skill，避免旧 DSH_HOME 或临时目录成为候选根。
     includeDefaultRoots: false
     customSkillDirs:
-      - ~/mat-harness/mat-dsh/skills
+      - !!js process.env.MAT_DSH_ROOT + '/skills'

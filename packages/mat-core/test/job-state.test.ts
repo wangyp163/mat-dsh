@@ -43,6 +43,18 @@ describe('parseSacctBatch', () => {
     expect(m.get('400')?.jobId).toBe('400')
     expect(m.get('400')?.elapsedSeconds).toBeUndefined()
   })
+
+  it('WorkDir 第 5 列 → workdir 绝对路径（子行空值随子行丢弃）', () => {
+    const out = '120865157|COMPLETED|0:0|23|/public/home/hpc-user-a/workspace/h3-qst3-0904r3/qst3\n120865157.batch|COMPLETED|0:0|23|\n'
+    const m = parseSacctBatch(out)
+    expect(m.size).toBe(1)
+    expect(m.get('120865157')?.workdir).toBe('/public/home/hpc-user-a/workspace/h3-qst3-0904r3/qst3')
+  })
+
+  it('第 5 列缺省（4 列旧行/空 WorkDir）→ workdir 缺省不炸', () => {
+    expect(parseSacctBatch('100|RUNNING|0:0|15\n').get('100')?.workdir).toBeUndefined()
+    expect(parseSacctBatch('101|RUNNING|0:0|15|\n').get('101')?.workdir).toBeUndefined()
+  })
 })
 
 describe('classifyState', () => {

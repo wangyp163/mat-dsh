@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, StateDot, IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { jobsForSession, monitorMetadata } from './status-model'
+import { jobOptionLabel, jobsForSession, monitorMetadata } from './status-model'
 import type { MonitorJob } from './status-model'
 
 import { fileManagerState } from './file-manager-state'
@@ -25,6 +25,26 @@ interface TaskDetailsPanelProps extends PropsRuntime<'conversation.details.tab'>
 function stateOf(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
   if (job.phase !== 'settled') return 'ongoing'
   return job.outcomeStatus === 'completed' ? 'done' : 'error'
+}
+
+/** 纯数值/ID 型值（job id、能量数）→ 等宽字型；文字值（状态、分区名）→ 无衬线。 */
+const NUMERIC_VALUE = /^-?[0-9][0-9.,:x×+\-eE_/]*$/
+const isNumericValue = (value: string): boolean => NUMERIC_VALUE.test(value) && /\d/.test(value)
+
+/** status/converged 两行是语义态：映射成 StateDot 四色（绿成/蓝跑/黄疑/红败）。 */
+function metadataStateOf(label: string, value: string): 'done' | 'warning' | 'ongoing' | 'error' | undefined {
+  const v = value.toUpperCase()
+  if (label === 'status') {
+    if (v === 'COMPLETED') return 'done'
+    if (v === 'RUNNING' || v === 'PENDING' || v === 'COMPLETING') return 'ongoing'
+    if (v === 'FAILED' || v === 'CANCELLED' || v === 'TIMEOUT' || v === 'OUT_OF_MEMORY' || v === 'NODE_FAIL') return 'error'
+    return undefined
+  }
+  if (label === 'converged') {
+    if (value === 'yes') return 'done'
+    if (value === 'no') return 'warning'
+  }
+  return undefined
 }
 
 export function TaskDetailsPanel({ sessionId, openTab, openDetailsTab }: TaskDetailsPanelProps): JSX.Element {
@@ -73,16 +93,29 @@ export function TaskDetailsPanel({ sessionId, openTab, openDetailsTab }: TaskDet
       <header className="mat-task-details__header">
         <StateDot state={stateOf(job)} />
         <label><span>任务</span><select value={job.jobId} onChange={(event) => { setSelectedJobId(event.target.value); fileManagerState.selectJob(event.target.value) }}>
-          {visible.map(value => <option key={value.jobId} value={value.jobId}>{value.label ?? value.jobId}</option>)}
+          {visible.map(value => <option key={value.jobId} value={value.jobId}>{jobOptionLabel(value)}</option>)}
         </select></label>
       </header>
       <dl className="mat-task-details__metadata">
-        {monitorMetadata(job).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+        {monitorMetadata(job).map(([label, value]) => {
+          const state = metadataStateOf(label, value)
+          const ddClass = state !== undefined
+            ? `mat-task-details__dd--state mat-task-details__dd--${state}`
+            : isNumericValue(value) ? 'mat-task-details__dd--mono' : undefined
+          return (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd className={ddClass}>{state !== undefined && <StateDot state={state} />}{value}</dd>
+            </div>
+          )
+        })}
       </dl>
-      {job.detail !== undefined && <p className="mat-task-details__failure" title={job.detail}>{job.detail}</p>}
+      {stateOf(job) === 'error' && job.detail !== undefined && <p className="mat-task-details__failure" title={job.detail}>{job.detail}</p>}
       <footer className="mat-task-details__footer">
         <p className="mat-task-details__files">结果文件 <b>{job.files?.length ?? 0}</b> 个</p>
-        <div className="mat-task-details__actions"><Button size="sm" variant="primary" onClick={selectFiles}>打开文件</Button></div>
+        <div className="mat-task-details__actions">
+          <Button size="sm" variant="primary" icon={<IconFolderOpen16 />} onClick={selectFiles}>打开文件</Button>
+        </div>
       </footer>
       {/* openDetailsTab is the native Details controller seam; openTab remains for direct hosts. */}
     </section>

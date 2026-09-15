@@ -12,6 +12,7 @@
 | `sacct-pending.txt` | 同上 §"sacct PENDING"，job 120268907 |
 | `sacct-cancelled-by-uid.txt` | 同上 §"sacct CANCELLED（scancel 后）"，`CANCELLED by 31561` 原样保留 uid 后缀 |
 | `sacct-completed-4col.txt` | `docs/evidence/m1/2026-08-28-fetch-transport-probe.md` §1 —— 与生产命令完全同列集（`JobID,State,ExitCode,ElapsedRaw`）的真实输出 |
+| `sacct-completed-workdir-5col.txt` | **真实录制**（2026-09-04，cluster 11250，smoke-exec 直查）：`sacct -j 120865157 -P -n -o JobID,State,ExitCode,ElapsedRaw,WorkDir` 原始输出 —— 生产命令加 WorkDir 列的实证（主行绝对路径，`.batch`/`.extern` 子行 WorkDir 为空） |
 | `sbatch-ok.envelope.json` | format-probe §"sbatch（Agent0）" MCP 业务信封（code/data/message）逐字转录 |
 | `squeue-empty.envelope.json` | format-probe §"squeue 对该 RUNNING 作业返回空"（本集群 squeue 对 RUNNING 常空 → sacct 兜底的实证依据） |
 | `squeue-invalid-10020.envelope.json` | format-probe §"squeue 全部 id 不存在"（code 10020 + slurm_load_jobs error） |

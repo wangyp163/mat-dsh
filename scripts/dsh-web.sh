@@ -9,15 +9,23 @@
 #   - env.local 含凭据：只 source，绝不 cat/echo；日志只重定向 stdout/stderr
 set -euo pipefail
 
-HOST_REPO=~/mat-harness/deepseek-harness
-OVERLAY=~/mat-harness/mat-dsh/profiles/mat.yml
-ENV_LOCAL=~/mat-harness/mat-dsh/env.local
-DSH_HOME_DIR=~/.local/share/mat-dsh
+# 位置无关部署：路径从脚本自身位置推导（scripts/ 的上级即本仓根）。
+# 兄弟布局约定：本仓与 deepseek-harness 宿主仓同父目录；不同布局用
+# DEEPSEEK_HARNESS_REPO 覆盖。MAT_DSH_ROOT 供 profile 的 !!js 表达式
+# 解析插件/skill 路径（mat.yml 不再含绝对路径）。
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export MAT_DSH_ROOT="${MAT_DSH_ROOT:-$REPO_ROOT}"
+HOST_REPO="${DEEPSEEK_HARNESS_REPO:-$REPO_ROOT/../deepseek-harness}"
+OVERLAY="$REPO_ROOT/profiles/mat.yml"
+ENV_LOCAL="$REPO_ROOT/env.local"
+DSH_HOME_DIR="${DSH_HOME_DIR:-$HOME/.local/share/mat-dsh}"
 HARMONY_BIN="$DSH_HOME_DIR/profiles/web/node_modules/dsh-harmony/lib/bin.js"
 DEV_DSH_ENTRY="$DSH_HOME_DIR/profiles/web/node_modules/@deepseek-ai/dsh/lib/bin.js"
-MAT_UI_PACKAGE=~/mat-harness/mat-dsh/packages/mat-ui
+MAT_UI_PACKAGE="$REPO_ROOT/packages/mat-ui"
 MAT_UI_LINK="$DSH_HOME_DIR/profiles/web/node_modules/mat-ui"
-MAT_UI_BUILD=~/mat-harness/mat-dsh/scripts/build-mat-ui.mjs
+MAT_TOOLS_PACKAGE="$REPO_ROOT/packages/mat-tools"
+MAT_TOOLS_LINK="$DSH_HOME_DIR/profiles/web/node_modules/mat-tools"
+MAT_UI_BUILD="$REPO_ROOT/scripts/build-mat-ui.mjs"
 PORT=3080
 PID_FILE=/tmp/mat-dsh-web.pid
 LOG=/tmp/mat-dsh-web.log
@@ -56,6 +64,7 @@ do_start() {
   if is_up; then echo "已在运行（http://127.0.0.1:${PORT} HTTP 200，pid=$(port_pid)），跳过启动"; exit 0; fi
   [ -f "$LOG" ] && mv -f "$LOG" "$OLD_LOG"
   ln -sfn "$MAT_UI_PACKAGE" "$MAT_UI_LINK"
+  ln -sfn "$MAT_TOOLS_PACKAGE" "$MAT_TOOLS_LINK"
   node "$MAT_UI_BUILD"
   (
     cd "$HOST_REPO"

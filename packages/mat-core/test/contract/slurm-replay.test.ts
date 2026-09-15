@@ -64,6 +64,15 @@ describe('契约回放：sacct 录制 → parseSacctBatch', () => {
     const rows = parseSacctBatch(fx('slurm/sacct-completed-4col.txt'))
     expect(rows.get('120269511')).toMatchObject({ state: 'COMPLETED', exitCode: 0, elapsedSeconds: 26 })
   })
+
+  it('生产 5 列格式（含 WorkDir）真实输出：主行 workdir 绝对路径，子行 WorkDir 空', () => {
+    const rows = parseSacctBatch(fx('slurm/sacct-completed-workdir-5col.txt'))
+    expect(rows.size).toBe(1)
+    expect(rows.get('120865157')).toEqual({
+      jobId: '120865157', state: 'COMPLETED', exitCode: 0, elapsedSeconds: 23,
+      workdir: '/public/home/hpc-user-a/workspace/h3-qst3-0904r3/qst3',
+    })
+  })
 })
 
 describe('契约回放：watch 全链路（两轮真实录制驱动到终态）', () => {

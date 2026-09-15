@@ -5,7 +5,7 @@
 ## 内容
 
 - `2026-09-01-stress-table.md` — 结果表（会话号/task/exit/耗时/result.json 一致性/偏差备注）+ 判定清单汇总 + 归因分类（代码/文档/agent/基础设施）
-- `SOP.md` — 复用方法论：集群准备、编排设施、交互应答政策、判定清单、已知坑与收尾
+- `SOP.md` — 已迁至 `~/dev/sops/docs/gw-merge-stress-SOP.md`（SOP 库）。复用方法论：集群准备、编排设施、交互应答政策、判定清单、已知坑与收尾
 - `prompts/` — 20 条 verbatim prompt（只含科学意图，不含任何命令/协议）
 - `raw/sessions.json` — 会话注册表（name → sessionId）
 - `raw/interactions.jsonl` — watchdog 交互审计（每个 question/approval 与应答）

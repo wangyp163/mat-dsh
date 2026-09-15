@@ -4,6 +4,7 @@
  * （cordis 依赖等待语义，见宿主 vendor/cordis/src/fiber.ts `_refresh`）。
  */
 import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import { normalizeRemotePath, remoteRelativePath } from 'mat-core'
@@ -12,12 +13,17 @@ import type { ListFilesOptions, RemoteFilePage, StatusBoard } from 'mat-core'
 interface MatFileService {
   listFiles(clusterId: string, path: string, options?: ListFilesOptions): Promise<RemoteFilePage>
   listWorkspace?(request: { jobId: string; clusterId: string; workdir: string; path: string; producerFiles?: string[]; localWorkspace?: string }): Promise<unknown>
+  listSessionWorkspace?(request: { cwd: string; path: string }): Promise<unknown>
+  prepareLocalDownload?(cwd: string, paths: string[]): Promise<DownloadArtifact>
   prepareDownload?(jobId: string, paths: string[], context?: { clusterId: string; workdir: string }): Promise<DownloadArtifact>
   syncFile?(jobId: string, clusterId: string, workdir: string, remotePath: string, conflictPolicy: 'keep-both' | 'overwrite'): Promise<unknown>
   materializeFile?(jobId: string, clusterId: string, workdir: string, path: string): Promise<string>
   listSyncs?(): unknown[]
   getPreferences?(jobId: string): Promise<{ autoSync: boolean; pins?: string[]; exclusions?: string[] }>
   setPreferences?(jobId: string, value: { autoSync: boolean; pins?: string[]; exclusions?: string[] }): Promise<void>
+  deleteLocalFiles?(request: { jobId: string; clusterId: string; workdir?: string; localWorkspace?: string; paths: string[] }): Promise<{ deleted: string[]; missing: string[] }>
+  deleteSessionFiles?(request: { cwd: string; paths: string[] }): Promise<{ deleted: string[]; missing: string[] }>
+  listLocalPeers?(root: string, path: string): Promise<{ peers: string[]; index: number }>
 }
 
 type DownloadArtifact = {
@@ -59,7 +65,7 @@ function json(res: ServerResponse, value: unknown, status = 200): void {
 const PREVIEW_CONTENT_TYPES: Record<string, string> = {
   png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
   pdf: 'application/pdf',
-  ...Object.fromEntries(['xyz', 'cif', 'poscar', 'vasp', 'log', 'out', 'txt', 'json', 'sh', 'com', 'gjf', 'inp', 'py', 'csv', 'md', 'yml', 'yaml', 'slurm', 'pbs', 'job']
+  ...Object.fromEntries(['xyz', 'cif', 'poscar', 'vasp', 'log', 'out', 'txt', 'json', 'jsonl', 'sh', 'com', 'gjf', 'inp', 'py', 'csv', 'md', 'yml', 'yaml', 'slurm', 'pbs', 'job']
     .map((extension) => [extension, 'text/plain; charset=utf-8'])),
 }
 
@@ -72,6 +78,50 @@ function previewContentType(path: string): string | undefined {
 }
 
 const PREVIEW_LIMIT_BYTES = 64 * 1024 * 1024
+
+/**
+ * 会话工作目录真相源：宿主持久化的 session projcache（`identity.cwd`）。
+ * 客户端只传 session id——绝不接受浏览器侧传来的路径，防任意目录读取。
+ */
+type ProjcacheSession = { identity?: { cwd?: unknown; createdAt?: unknown }; rows?: { title?: { val?: unknown } } }
+
+async function readProjcache(): Promise<Record<string, ProjcacheSession>> {
+  const home = process.env.DSH_HOME
+  if (home === undefined || home === '') return {}
+  try {
+    const data = JSON.parse(await readFile(join(home, 'storages', 'session_projcache.json'), 'utf8')) as {
+      tables?: { sessions?: Record<string, ProjcacheSession> }
+    }
+    return data.tables?.sessions ?? {}
+  } catch {
+    return {}
+  }
+}
+
+async function sessionCwdOf(sessionId: string): Promise<string | undefined> {
+  if (!/^session-[A-Za-z0-9-]+$/.test(sessionId)) return undefined
+  const cwd = (await readProjcache())[sessionId]?.identity?.cwd
+  return typeof cwd === 'string' && cwd.startsWith('/') ? cwd : undefined
+}
+
+/** 同一 cwd（工作区）下的会话清单：标题可选（projcache rows.title），createdAt 倒序。 */
+async function workspaceSessionsOf(sessionId: string): Promise<{ root: string; sessions: Array<{ sessionId: string; title?: string; createdAt?: number }> } | undefined> {
+  const root = await sessionCwdOf(sessionId)
+  if (root === undefined) return undefined
+  const sessions: Array<{ sessionId: string; title?: string; createdAt?: number }> = []
+  for (const [id, record] of Object.entries(await readProjcache())) {
+    if (record.identity?.cwd !== root) continue
+    const createdAt = record.identity.createdAt
+    const title = record.rows?.title?.val
+    sessions.push({
+      sessionId: id,
+      ...(typeof title === 'string' && title !== '' ? { title } : {}),
+      ...(typeof createdAt === 'number' ? { createdAt } : {}),
+    })
+  }
+  sessions.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+  return { root, sessions }
+}
 
 /** vendored NGL 只读一次磁盘，进程内复用。 */
 let nglBuffer: Buffer | undefined
@@ -100,11 +150,83 @@ export function apply(ctx: Context): void {
     handler: (_req: IncomingMessage, res: ServerResponse) => json(res, {
       jobs: board.list().map((job) => ({
         jobId: job.jobId, clusterId: job.clusterId, ownerSession: job.ownerSession,
+        label: job.label, slurm: job.slurm,
         workdir: job.workdir, localWorkspace: job.localWorkspace,
         phase: job.phase, outcomeStatus: job.outcomeStatus,
         files: job.files ?? [],
       })),
     }),
+  })
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/mat-files/workspace-sessions',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+      const session = url.searchParams.get('session') ?? ''
+      const result = session === '' ? undefined : await workspaceSessionsOf(session)
+      if (result === undefined) {
+        json(res, { error: { code: 'unknown-session', message: `unknown session ${session}` } }, 404)
+        return
+      }
+      json(res, result)
+    },
+  })
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/mat-files/localpath',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      // 本地镜像绝对路径（供沉浸层展示/复制）：根与 tree/peers 同源，不接受客户端传路径根。
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+      const path = url.searchParams.get('path') ?? ''
+      if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\0')) {
+        json(res, { error: { code: 'invalid-path', message: 'path must be a safe relative path' } }, 400)
+        return
+      }
+      const session = url.searchParams.get('session') ?? ''
+      let root: string | undefined
+      if (session !== '') root = await sessionCwdOf(session)
+      else {
+        const jobId = url.searchParams.get('jobId') ?? ''
+        root = board.list().find((entry) => entry.jobId === jobId)?.localWorkspace
+      }
+      if (root === undefined) {
+        json(res, { error: { code: 'unknown-scope', message: 'unknown job or session' } }, 404)
+        return
+      }
+      const localPath = `${root.replace(/\/$/, '')}/${path}`
+      const exists = await stat(localPath).then(() => true).catch(() => false)
+      json(res, { root, localPath, exists })
+    },
+  })
+  ctx.webServer.register({
+    kind: 'exact',
+    path: '/mat-files/peers',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+      const path = url.searchParams.get('path') ?? ''
+      if (files?.listLocalPeers === undefined) { json(res, { error: { code: 'not-configured', message: 'peers listing is not configured' } }, 501); return }
+      try {
+        if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\0')) {
+          json(res, { error: { code: 'invalid-path', message: 'path must be a safe relative path' } }, 400)
+          return
+        }
+        // 根与 tree/content 同源：job=板键作业的 localWorkspace，session=projcache 解析的 cwd。
+        const session = url.searchParams.get('session') ?? ''
+        let root: string | undefined
+        if (session !== '') root = await sessionCwdOf(session)
+        else {
+          const jobId = url.searchParams.get('jobId') ?? ''
+          root = board.list().find((entry) => entry.jobId === jobId)?.localWorkspace
+        }
+        if (root === undefined) {
+          json(res, { error: { code: 'unknown-scope', message: 'unknown job or session for peers' } }, 404)
+          return
+        }
+        json(res, await files.listLocalPeers(root, path))
+      } catch (error) {
+        json(res, { error: { code: 'peers-failed', message: error instanceof Error ? error.message : String(error) } }, 400)
+      }
+    },
   })
   ctx.webServer.register({
     kind: 'exact',
@@ -171,9 +293,16 @@ export function apply(ctx: Context): void {
         }
         const paths = Array.isArray(body.paths) ? body.paths.filter((path): path is string => typeof path === 'string') : []
         if (paths.length < 1 || paths.length > 100) throw new Error('paths must contain 1 to 100 files')
-        for (const path of paths) remoteRelativePath(job.workdir, path)
+        // UI 选中的是 workdir 相对路径；绝对路径（工具面老调用）仍按原样校验。
+        const workdir = job.workdir.replace(/\/$/, '')
+        const absolute = paths.map((path) => {
+          if (path.startsWith('/')) return path
+          if (path === '' || path.includes('\0') || path.split('/').some((part) => part === '..')) throw new Error('unsafe relative path')
+          return `${workdir}/${path}`
+        })
+        for (const path of absolute) remoteRelativePath(job.workdir, path)
         const policy = body.conflictPolicy === 'overwrite' ? 'overwrite' : 'keep-both'
-        const syncs = await Promise.all(paths.map((path) => files.syncFile!(job.jobId, job.clusterId, job.workdir!, path, policy)))
+        const syncs = await Promise.all(absolute.map((path) => files.syncFile!(job.jobId, job.clusterId, job.workdir!, path, policy)))
         json(res, { syncs }, 202)
       } catch (error) {
         json(res, { error: { code: 'invalid-request', message: error instanceof Error ? error.message : String(error) } }, 400)
@@ -185,6 +314,22 @@ export function apply(ctx: Context): void {
     path: '/mat-files/tree',
     handler: async (req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+      // 工作区模式（无作业回退）：cwd 从宿主 projcache 解析（多会话共享），客户端只传 session id。
+      const session = url.searchParams.get('session') ?? ''
+      if (session !== '') {
+        const cwd = await sessionCwdOf(session)
+        if (cwd === undefined || files?.listSessionWorkspace === undefined) {
+          json(res, { error: { code: 'unknown-session', message: `unknown session ${session}` } }, 404)
+          return
+        }
+        try {
+          const path = url.searchParams.get('path') ?? ''
+          if (path.startsWith('/') || path.split('/').includes('..') || path.includes('\0')) throw new Error('unsafe relative path')
+          const tree = await files.listSessionWorkspace({ cwd, path })
+          json(res, { ...(tree as object), preferences: { autoSync: false, pins: [], exclusions: [] } })
+        } catch (error) { json(res, { error: { code: 'tree-failed', message: error instanceof Error ? error.message : String(error) } }, 400) }
+        return
+      }
       const jobId = url.searchParams.get('jobId') ?? ''
       const job = board.list().find((entry) => entry.jobId === jobId)
       if (job === undefined) { json(res, { error: { code: 'unknown-job', message: `unknown job ${jobId}` } }, 404); return }
@@ -231,20 +376,75 @@ export function apply(ctx: Context): void {
   })
   ctx.webServer.register({
     kind: 'exact',
+    path: '/mat-files/delete',
+    handler: async (req: IncomingMessage, res: ServerResponse) => {
+      if (req.method !== 'POST' || files?.deleteLocalFiles === undefined && files?.deleteSessionFiles === undefined) {
+        json(res, { error: { code: 'not-configured', message: 'use POST with configured file synchronization' } }, 501)
+        return
+      }
+      try {
+        const body = await readJson(req)
+        const paths = Array.isArray(body.paths) ? body.paths.filter((value): value is string => typeof value === 'string') : []
+        if (paths.length < 1 || paths.length > 100
+          || paths.some((value) => !value || value.startsWith('/') || value.split('/').includes('..') || value.includes('\0'))) {
+          json(res, { error: { code: 'invalid-path', message: 'paths must be safe relative paths, at most 100' } }, 400)
+          return
+        }
+        // 工作区自由删除：session 体按 cwd 根删（无板身份绑定，cwd 即真相源）。
+        const session = typeof body.session === 'string' ? body.session : ''
+        if (session !== '') {
+          const cwd = await sessionCwdOf(session)
+          if (cwd === undefined || files.deleteSessionFiles === undefined) {
+            json(res, { error: { code: 'unknown-session', message: `unknown session ${session}` } }, 404)
+            return
+          }
+          const result = await files.deleteSessionFiles({ cwd, paths })
+          json(res, result)
+          return
+        }
+        const jobId = typeof body.jobId === 'string' ? body.jobId : ''
+        const job = board.list().find((entry) => entry.jobId === jobId)
+        if (job === undefined || job.localWorkspace === undefined
+          || !job.localWorkspace.startsWith(`${process.env.MAT_FILE_ROOT || ''}`)) {
+          json(res, { error: { code: 'unknown-job', message: `unknown workspace job ${jobId}` } }, 404)
+          return
+        }
+        const result = await files.deleteLocalFiles({
+          jobId, clusterId: job.clusterId,
+          ...(job.workdir === undefined ? {} : { workdir: job.workdir }),
+          localWorkspace: job.localWorkspace,
+          paths,
+        })
+        json(res, result)
+      } catch (error) {
+        json(res, { error: { code: 'delete-failed', message: error instanceof Error ? error.message : String(error) } }, 400)
+      }
+    },
+  })
+  ctx.webServer.register({
+    kind: 'exact',
     path: '/mat-files/download',
     handler: async (req: IncomingMessage, res: ServerResponse) => {
       let artifact: DownloadArtifact | undefined
       if (req.method !== 'POST' || files?.prepareDownload === undefined) { json(res, { error: { code: 'not-configured', message: 'use POST with configured download service' } }, 501); return }
       try {
         const body = await readJson(req)
-        const jobId = typeof body.jobId === 'string' ? body.jobId : ''
-        const job = board.list().find((entry) => entry.jobId === jobId)
-        if (job === undefined) { json(res, { error: { code: 'unknown-job', message: `unknown job ${jobId}` } }, 404); return }
         const paths = Array.isArray(body.paths) ? body.paths.filter((value): value is string => typeof value === 'string') : []
         if (paths.length < 1 || paths.length > 100 || paths.some((value) => !value || value.startsWith('/') || value.split('/').includes('..') || value.includes('\\0'))) {
           json(res, { error: { code: paths.length > 100 ? 'download-limit' : 'invalid-path', message: 'paths must be safe relative paths, at most 100' } }, paths.length > 100 ? 413 : 400); return
         }
-        artifact = await files.prepareDownload(jobId, paths, { clusterId: job.clusterId, workdir: job.workdir ?? '' })
+        // 工作区模式：不经同步记录，直接打包 cwd 下文件。
+        const session = typeof body.session === 'string' ? body.session : ''
+        if (session !== '') {
+          const cwd = await sessionCwdOf(session)
+          if (cwd === undefined || files?.prepareLocalDownload === undefined) { json(res, { error: { code: 'unknown-session', message: `unknown session ${session}` } }, 404); return }
+          artifact = await files.prepareLocalDownload(cwd, paths)
+        } else {
+          const jobId = typeof body.jobId === 'string' ? body.jobId : ''
+          const job = board.list().find((entry) => entry.jobId === jobId)
+          if (job === undefined) { json(res, { error: { code: 'unknown-job', message: `unknown job ${jobId}` } }, 404); return }
+          artifact = await files.prepareDownload(jobId, paths, { clusterId: job.clusterId, workdir: job.workdir ?? '' })
+        }
         res.statusCode = 200
         res.setHeader('content-type', artifact.contentType ?? (artifact.kind === 'zip' ? 'application/zip' : 'application/octet-stream'))
         res.setHeader('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(artifact.filename)}`)
@@ -309,8 +509,30 @@ export function apply(ctx: Context): void {
       if (req.method !== 'GET') { json(res, { error: { code: 'method-not-allowed', message: 'use GET' } }, 405); return }
       try {
         const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-        const jobId = url.searchParams.get('jobId') ?? ''
         const path = url.searchParams.get('path') ?? ''
+        // 工作区模式：直接读 cwd 下白名单文件（无远端物化步骤）。
+        const session = url.searchParams.get('session') ?? ''
+        if (session !== '') {
+          const cwd = await sessionCwdOf(session)
+          if (cwd === undefined) { json(res, { error: { code: 'unknown-session', message: `unknown session ${session}` } }, 404); return }
+          if (path === '' || path.startsWith('/') || path.split('/').includes('..') || path.includes('\\0')) {
+            json(res, { error: { code: 'invalid-path', message: 'path must be a safe relative path' } }, 400)
+            return
+          }
+          const contentType = previewContentType(path)
+          if (contentType === undefined) { json(res, { error: { code: 'unsupported-type', message: `${path} is not previewable` } }, 415); return }
+          const localPath = `${cwd.replace(/\/$/, '')}/${path}`
+          const info = await stat(localPath)
+          if (info.size > PREVIEW_LIMIT_BYTES) { json(res, { error: { code: 'content-limit', message: 'preview supports files up to 64MB' } }, 413); return }
+          const body = await readFile(localPath)
+          res.statusCode = 200
+          res.setHeader('content-type', contentType)
+          res.setHeader('x-content-type-options', 'nosniff')
+          res.setHeader('cache-control', 'no-store')
+          res.end(body)
+          return
+        }
+        const jobId = url.searchParams.get('jobId') ?? ''
         const job = board.list().find((entry) => entry.jobId === jobId)
         if (job === undefined || job.workdir === undefined || job.localWorkspace === undefined
           || !job.localWorkspace.startsWith(`${process.env.MAT_FILE_ROOT || ''}`)) {

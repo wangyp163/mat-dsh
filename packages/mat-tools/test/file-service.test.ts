@@ -42,6 +42,38 @@ describe('MatFileServiceImpl', () => {
     expect(service.listSyncs().every((record) => record.status === 'completed')).toBe(true)
   })
 
+  it('deletes only the requested local copies, reports unsynced entries missing, and prunes dead pins', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    const jobRoot = join(root, '11250', '123')
+    await mkdir(join(jobRoot, 'opt'), { recursive: true })
+    await writeFile(join(jobRoot, 'result.json'), '{}')
+    await writeFile(join(jobRoot, 'opt', 'a.log'), 'a')
+    await writeFile(join(jobRoot, 'kept.log'), 'kept')
+    await service.setPreferences('11250:123', { autoSync: false, pins: ['opt/a.log', 'kept.log'] })
+
+    const result = await service.deleteLocalFiles({
+      jobId: '11250:123', clusterId: '11250', workdir: '/remote/job', localWorkspace: jobRoot,
+      paths: ['opt', 'result.json', 'never-synced.log'],
+    })
+    expect(result.deleted.sort()).toEqual(['opt', 'result.json'])
+    expect(result.missing).toEqual(['never-synced.log'])
+    await expect(readFile(join(jobRoot, 'kept.log'), 'utf8')).resolves.toBe('kept')
+    await expect(readFile(join(jobRoot, 'opt', 'a.log'))).rejects.toMatchObject({ code: 'ENOENT' })
+    // 指向已删目录的 pin 一并被清理，存活文件的 pin 保留。
+    expect(await service.getPreferences('11250:123')).toEqual({ autoSync: false, pins: ['kept.log'] })
+
+    // 身份绑定：localWorkspace 指向别处（哪怕同 cluster 的其它作业目录）必须拒绝。
+    await expect(service.deleteLocalFiles({
+      jobId: '11250:123', clusterId: '11250', workdir: '/remote/job', localWorkspace: join(root, '11250', '999'),
+      paths: ['kept.log'],
+    })).rejects.toThrow(/identity/)
+    // 越界路径拒绝。
+    await expect(service.deleteLocalFiles({
+      jobId: '11250:123', clusterId: '11250', localWorkspace: jobRoot, paths: ['../escape'],
+    })).rejects.toThrow('unsafe workspace path')
+  })
+
   it('materializes a remote file at its agreed task-workspace path', async () => {
     const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
     const port = transfer('result')
@@ -245,5 +277,134 @@ describe('MatFileServiceImpl', () => {
     await service.handleSettledJob({ jobId: 'job-2', clusterId: '11250', workdir: '/remote/job', outcomeStatus: 'failed', files: ['result.json'] })
     await new Promise(resolve => { setTimeout(resolve, 25) })
     expect(port.calls).toHaveLength(1) // 失败结算不预取
+  })
+})
+
+describe('板键作业（cluster:slurm）的文件链路', () => {
+  const dirs: string[] = []
+  afterEach(async () => { await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true }))); dirs.length = 0 })
+
+  it('lists the real slurm workspace for a board-key job id', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    await mkdir(join(root, '11250', '120763977'), { recursive: true })
+    await writeFile(join(root, '11250', '120763977', 'local.log'), 'x')
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    // 显式 localWorkspace（板上持久化的真实目录）：
+    const tree = await service.listWorkspace({
+      jobId: '11250:120763977', clusterId: '11250', workdir: '', path: '',
+      localWorkspace: join(root, '11250', '120763977'),
+    })
+    expect(tree.entries.map((entry: { path: string }) => entry.path)).toEqual(['local.log'])
+    // 未带 localWorkspace 时按板键段名（真实作业号）兜底，不拼 `:` 目录：
+    const fallback = await service.listWorkspace({ jobId: '11250:120763977', clusterId: '11250', workdir: '', path: '' })
+    expect(fallback.entries.map((entry: { path: string }) => entry.path)).toEqual(['local.log'])
+  })
+
+  it('still rejects identity escapes under board-key ids', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    // 越出 cluster 根：
+    await expect(service.listWorkspace({
+      jobId: '11250:120763977', clusterId: '11250', workdir: '', path: '',
+      localWorkspace: join(root, '11251', '120763977'),
+    })).rejects.toThrow('workspace identity')
+    // cluster 根下多层嵌套（伪装成子目录）：
+    await expect(service.listWorkspace({
+      jobId: '11250:120763977', clusterId: '11250', workdir: '', path: '',
+      localWorkspace: join(root, '11250', '120763977', 'sub'),
+    })).rejects.toThrow('workspace identity')
+    // 板键外的非法字符仍拒绝：
+    await expect(service.listWorkspace({ jobId: 'bad key', clusterId: '11250', workdir: '', path: '' }))
+      .rejects.toThrow('unsafe workspace identity')
+    // 段名伪装（`..`）不得借白名单里的 `.` 通过：
+    await expect(service.listWorkspace({ jobId: '11250:..', clusterId: '11250', workdir: '', path: '' }))
+      .rejects.toThrow('unsafe workspace identity')
+  })
+
+  it('materializes and downloads board-key jobs into the real slurm workspace', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const port = transfer('result')
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => port })
+    const path = await service.materializeFile('11250:120763977', '11250', '/remote/job', 'output/result.log')
+    expect(path).toBe(join(root, '11250', '120763977', 'output', 'result.log'))
+    // 下载路由按板键对账同步记录，文件名不再携带 `:`：
+    const artifact = await service.prepareDownload('11250:120763977', ['output/result.log'])
+    expect(artifact).toMatchObject({ kind: 'file', filename: 'result.log' })
+    const missing = await service.prepareDownload('11250:120763977', ['other.log'], { clusterId: '11250', workdir: '/remote/job' })
+    expect(missing).toMatchObject({ kind: 'file', filename: 'other.log' })
+  })
+})
+
+describe('MatFileServiceImpl 会话工作区（无作业回退）', () => {
+  const dirs: string[] = []
+  afterEach(async () => { await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true }))); dirs.length = 0 })
+
+  it('listSessionWorkspace：本地-only 树（root 绝对路径回传），路径穿越拒绝', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'mat-session-ws-')); dirs.push(workspace)
+    await writeFile(join(workspace, 'mol.gjf'), 'input')
+    await mkdir(join(workspace, 'plots'))
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    const tree = await service.listSessionWorkspace({ cwd: workspace, path: '' })
+    expect(tree.root).toBe(workspace)
+    expect(tree.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'mol.gjf', directory: false, regularFile: true }),
+      expect.objectContaining({ path: 'plots', directory: true }),
+    ]))
+    const sub = await service.listSessionWorkspace({ cwd: workspace, path: 'plots' })
+    expect(sub.entries).toEqual([])
+    await expect(service.listSessionWorkspace({ cwd: workspace, path: '../escape' })).rejects.toThrow('unsafe')
+    await expect(service.listSessionWorkspace({ cwd: workspace, path: '/abs' })).rejects.toThrow('unsafe')
+  })
+
+  it('prepareLocalDownload：直接打包会话工作区文件（不经同步记录）', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'mat-session-ws-')); dirs.push(workspace)
+    await writeFile(join(workspace, 'mol.gjf'), 'input')
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    const artifact = await service.prepareLocalDownload(workspace, ['mol.gjf'])
+    expect(artifact).toMatchObject({ kind: 'file', filename: 'mol.gjf' })
+    expect(Buffer.from(artifact.body).toString()).toBe('input')
+    await expect(service.prepareLocalDownload(workspace, ['../escape'])).rejects.toThrow('unsafe')
+  })
+})
+
+describe('MatFileServiceImpl.deleteSessionFiles（工作区自由删除）', () => {
+  const dirs: string[] = []
+  afterEach(async () => { await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true }))); dirs.length = 0 })
+
+  it('按 cwd 根删除安全相对路径；穿越拒绝；不存在的报 missing', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'mat-ws-')); dirs.push(workspace)
+    await writeFile(join(workspace, 'mol.gjf'), 'x')
+    await mkdir(join(workspace, 'plots'))
+    await writeFile(join(workspace, 'plots', 'a.csv'), 'x')
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    const result = await service.deleteSessionFiles({ cwd: workspace, paths: ['mol.gjf', 'plots', 'ghost.log'] })
+    expect(result).toEqual({ deleted: ['mol.gjf', 'plots'], missing: ['ghost.log'] })
+    await expect(service.deleteSessionFiles({ cwd: workspace, paths: ['../escape'] })).rejects.toThrow('unsafe')
+    await expect(service.deleteSessionFiles({ cwd: workspace, paths: ['/abs'] })).rejects.toThrow('unsafe')
+  })
+})
+
+describe('MatFileServiceImpl.listLocalPeers（同后缀本地清单）', () => {
+  const dirs: string[] = []
+  afterEach(async () => { await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true }))); dirs.length = 0 })
+
+  it('递归收集同后缀（大小写不敏感）已同步文件，返回排序清单与当前项索引；无后缀按同名组', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'mat-ws-')); dirs.push(workspace)
+    await mkdir(join(workspace, 'plots'), { recursive: true })
+    for (const name of ['b.log', 'a.log', 'c.LOG', 'skip.txt']) await writeFile(join(workspace, name), 'x')
+    await writeFile(join(workspace, 'plots', 'd.log'), 'x')
+    await writeFile(join(workspace, 'noext'), 'x')
+    const root = await mkdtemp(join(tmpdir(), 'mat-files-')); dirs.push(root)
+    const service = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    expect(await service.listLocalPeers(workspace, 'b.log')).toEqual({
+      peers: ['a.log', 'b.log', 'c.LOG', 'plots/d.log'], index: 1,
+    })
+    expect(await service.listLocalPeers(workspace, 'noext')).toEqual({ peers: ['noext'], index: 0 })
+    // 当前项不在清单（已删/不存在）→ 退化为单元素组
+    expect(await service.listLocalPeers(workspace, 'ghost.log')).toEqual({ peers: ['ghost.log'], index: 0 })
+    await expect(service.listLocalPeers(workspace, '../escape')).rejects.toThrow('unsafe')
   })
 })

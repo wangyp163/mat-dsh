@@ -74,12 +74,17 @@ describe('mat-files content route', () => {
 
   it('serves text and structure files (including extension-less POSCAR) as utf-8 text', async () => {
     await writeFile(join(workspace, 'result.json'), 'a=1\n')
+    await writeFile(join(workspace, 'events.jsonl'), '{"event":"step"}\n')
     await writeFile(join(workspace, 'POSCAR'), 'Si\n1.0\n5.43 0 0\n0 5.43 0\n0 0 5.43\nSi\n1\nDirect\n0 0 0\n')
     const { get } = harness(workspace, async path => join(workspace, path))
     const text = await get('/mat-files/content?jobId=j1&path=result.json')
     expect(text.statusCode).toBe(200)
     expect(text.headers.get('content-type')).toBe('text/plain; charset=utf-8')
     expect(Buffer.concat(text.chunks).toString('utf8')).toBe('a=1\n')
+    const jsonl = await get('/mat-files/content?jobId=j1&path=events.jsonl')
+    expect(jsonl.statusCode).toBe(200)
+    expect(jsonl.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+    expect(Buffer.concat(jsonl.chunks).toString('utf8')).toBe('{"event":"step"}\n')
     const structure = await get('/mat-files/content?jobId=j1&path=POSCAR')
     expect(structure.statusCode).toBe(200)
     expect(structure.headers.get('content-type')).toBe('text/plain; charset=utf-8')

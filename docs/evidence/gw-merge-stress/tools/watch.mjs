@@ -92,11 +92,20 @@ function approvalDecision(sessionId, payload) {
   return 'rejected'
 }
 
+const ALLOWED = new Set(
+  (process.env.WATCH_SESSIONS || '').split(',').map(s => s.trim()).filter(Boolean)
+)
+
 function handleFrame(msg) {
   let frame
   try { frame = JSON.parse(msg) } catch { return }
   if (frame.type !== 'server-request') return
   const { rpcId, method, payload } = frame
+  // r12 lesson (stress SOP §9-22): only answer whitelisted sessions; log-only otherwise
+  if (ALLOWED.size > 0 && payload?.sessionId && !ALLOWED.has(payload.sessionId)) {
+    log({ kind: 'foreign-session-ignored', sessionId: payload.sessionId, method })
+    return
+  }
   if (method === 'question/requested') {
     const questions = payload?.questions || []
     log({ kind: 'question', sessionId: payload?.sessionId, rpcId, questions })
@@ -107,7 +116,7 @@ function handleFrame(msg) {
   } else if (method === 'approval/requested') {
     log({ kind: 'approval', sessionId: payload?.sessionId, rpcId, payload })
     const outcome = approvalDecision(payload?.sessionId, payload)
-    respond(rpcId, { ok: true, value: { sessionId: payload.sessionId, approvalId: payload.id, outcome } })
+    respond(rpcId, { ok: true, value: { sessionId: payload.sessionId, approvalId: payload.approvalId ?? payload.id, outcome } })
   } else if (method && /requested/.test(method)) {
     log({ kind: 'other-request', method, rpcId, payload: JSON.stringify(payload).slice(0, 300) })
   }

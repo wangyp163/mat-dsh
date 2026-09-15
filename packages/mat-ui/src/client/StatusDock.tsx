@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { fileManagerState } from './file-manager-state'
-import { jobsForSession } from './status-model'
+import { jobOptionLabel, jobsForSession } from './status-model'
 import type { MonitorJob } from './status-model'
 
 type Job = MonitorJob & {
@@ -61,7 +61,7 @@ export function StatusDock({
         value={selected.jobId}
         onChange={(event) => { fileManagerState.selectJob(event.target.value) }}
       >
-        {visible.map(job => <option key={job.jobId} value={job.jobId}>{job.label ?? job.jobId}</option>)}
+        {visible.map(job => <option key={job.jobId} value={job.jobId}>{jobOptionLabel(job)}</option>)}
       </select>
       <span className="mat-status-strip__count">{visible.length} tasks</span>
       <Button size="sm" variant="outline" aria-label={`打开任务面板 ${selected.jobId}`} onClick={onOpenTask}>任务</Button>

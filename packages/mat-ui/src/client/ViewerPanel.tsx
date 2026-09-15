@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { Button, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { loadScript } from './load-script'
 import { viewerState } from './viewer-state'
 import type { ViewerTarget } from './viewer-state'
@@ -17,6 +16,7 @@ interface NglStage {
   loadFile(source: Blob, params: { ext: string; defaultRepresentation?: boolean }): Promise<NglComponent>
   setSpin(on: boolean): void
   autoView(): void
+  handleResize(): void
   dispose(): void
 }
 
@@ -27,7 +27,10 @@ type RepresentationStyle = 'ball+stick' | 'line' | 'spacefill'
 const TEXT_PREVIEW_LIMIT = 512 * 1024
 
 const contentUrl = (target: ViewerTarget): string =>
-  `/mat-files/content?jobId=${encodeURIComponent(target.jobId)}&path=${encodeURIComponent(target.path)}`
+  // session:<id> 是工作区目标（服务端解析共享 cwd）——走 content 路由的 session 参数。
+  target.jobId.startsWith('session:')
+    ? `/mat-files/content?session=${encodeURIComponent(target.jobId.slice('session:'.length))}&path=${encodeURIComponent(target.path)}`
+    : `/mat-files/content?jobId=${encodeURIComponent(target.jobId)}&path=${encodeURIComponent(target.path)}`
 
 const KIND_LABELS: Record<ViewerTarget['kind'], string> = {
   structure: '结构',
@@ -43,7 +46,17 @@ function rebuild(style: RepresentationStyle, component: NglComponent, unitcell: 
   if (unitcell) component.addRepresentation('unitcell')
 }
 
-export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): JSX.Element {
+/** 同后缀导航（A 方案）：清单与当前项由 ViewerOverlay 从 /mat-files/peers 取得。 */
+export interface PeersNav {
+  peers: string[]
+  index: number
+  onNavigate: (path: string) => void
+}
+
+/**
+ * 视图主体（沉浸层专用，09-07 起侧栏不再保留查看 tab）。
+ */
+export function ViewerSurface({ variant = 'overlay', peersNav, localPath }: { variant?: 'panel' | 'overlay'; peersNav?: PeersNav; localPath?: string }): JSX.Element {
   const [snapshot, setSnapshot] = useState(viewerState.snapshot())
   useEffect(() => viewerState.subscribe(() => { setSnapshot(viewerState.snapshot()) }), [])
 
@@ -64,6 +77,9 @@ export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): J
     if (target?.kind !== 'structure') return
     let disposed = false
     let stage: NglStage | undefined
+    // NGL 无容器自适应（vendored 产物零 ResizeObserver）：rail 拖宽/沉浸大画布
+    // 都靠这里补的观察器驱动 handleResize，否则位图被 CSS 拉伸糊掉。
+    let resizeObserver: ResizeObserver | undefined
     void (async () => {
       try {
         await loadScript('/mat-vendor/ngl.js')
@@ -74,6 +90,8 @@ export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): J
         const NGL = (window as unknown as { NGL?: NglFactory }).NGL
         if (NGL === undefined || containerRef.current === null) throw new Error('3D 引擎未就绪')
         stage = new NGL.Stage(containerRef.current, { backgroundColor: 'white' })
+        resizeObserver = new ResizeObserver(() => { stage?.handleResize() })
+        resizeObserver.observe(containerRef.current)
         const component = await stage.loadFile(new Blob([structureBody(target.path, source)]), { ext: 'cif', defaultRepresentation: false })
         if (disposed) return
         // 解析器会为跨胞成键把边界邻像原子一并加进结构（Si 8 位点 → 31 原子，
@@ -90,9 +108,13 @@ export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): J
     })()
     return () => {
       disposed = true
+      resizeObserver?.disconnect()
       stageRef.current = undefined
       componentRef.current = undefined
       stage?.dispose()
+      // dispose 只销毁 NGL 实例，注入的 canvas 与事件层仍挂在容器上：
+      // 不清掉的话翻页后旧画布盖住新画布（画面不更新）且截走鼠标事件。
+      containerRef.current?.replaceChildren()
     }
   }, [target?.jobId, target?.path])
 
@@ -146,11 +168,26 @@ export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): J
     setCopyFailed(false)
     void writeClipboard(text ?? '').then(ok => { setCopyFailed(!ok) })
   }
+  const [pathCopied, setPathCopied] = useState(false)
+  const copyPath = (): void => {
+    if (localPath === undefined) return
+    void writeClipboard(localPath).then(ok => {
+      setPathCopied(ok)
+      if (ok) window.setTimeout(() => { setPathCopied(false) }, 1500)
+    })
+  }
 
-  return <section className="mat-view" aria-label="HPC 文件预览">
+  return <section className={variant === 'overlay' ? 'mat-view mat-view--overlay' : 'mat-view'} aria-label="HPC 文件预览">
     <header className="mat-view__toolbar">
       <span className="mat-view__title">{target === undefined ? '未选择文件' : target.path.split('/').at(-1)}</span>
       {target !== undefined && <span className="mat-view__kind">{KIND_LABELS[target.kind]}</span>}
+      {peersNav !== undefined && peersNav.peers.length > 1 && <>
+        <span className="mat-view__seg mat-view__peers">
+          <Button size="sm" variant="outline" aria-label="上一个同后缀文件" onClick={() => { peersNav.onNavigate(peersNav.peers[(peersNav.index - 1 + peersNav.peers.length) % peersNav.peers.length]!) }}>‹</Button>
+          <span className="mat-view__count">{peersNav.index + 1}/{peersNav.peers.length}</span>
+          <Button size="sm" variant="outline" aria-label="下一个同后缀文件" onClick={() => { peersNav.onNavigate(peersNav.peers[(peersNav.index + 1) % peersNav.peers.length]!) }}>›</Button>
+        </span>
+      </>}
       {target?.kind === 'structure' && <>
         <span className="mat-view__seg">
           <Button size="sm" variant={style === 'ball+stick' ? 'primary' : 'outline'} aria-label="球棍风格" onClick={() => { onStyle('ball+stick') }}>球棍</Button>
@@ -161,7 +198,13 @@ export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): J
         <Button size="sm" variant="outline" aria-label="重置视角" onClick={() => { stageRef.current?.autoView() }}>重置</Button>
       </>}
       {target?.kind === 'text' && <Button size="sm" variant="outline" aria-label="复制文本" disabled={text === undefined} onClick={copy}>复制</Button>}
+      {variant === 'overlay'
+        && <Button size="sm" variant="outline" className="mat-view__zoom" aria-label="收起沉浸预览" onClick={() => { viewerState.exitImmersive() }}>收起</Button>}
     </header>
+    {localPath !== undefined && <div className="mat-view__path">
+      <code title={localPath}>{localPath.length > 72 ? `…${localPath.slice(-71)}` : localPath}</code>
+      <Button size="sm" variant="outline" aria-label="复制本地镜像路径" onClick={copyPath}>{pathCopied ? '已复制' : '复制路径'}</Button>
+    </div>}
     {target === undefined
       ? <p className="mat-view__empty">点击文件面板中的文件以预览。</p>
       : snapshot.status === 'error'
@@ -169,7 +212,7 @@ export function ViewerPanel(_props: PropsRuntime<'conversation.details.tab'>): J
         : <>
           {busy && <p role="status" aria-live="polite" className="mat-view__loading">正在取回文件… {elapsed}s{slowHint}</p>}
           {copyFailed && <p role="alert" className="mat-view__error">复制失败</p>}
-          {target.kind === 'structure' && <div ref={containerRef} className="mat-view__canvas" />}
+          {target.kind === 'structure' && <div key={`ngl-${target.jobId}-${target.path}`} ref={containerRef} className="mat-view__canvas" />}
           {target.kind === 'image' && <img
             className="mat-view__media"
             src={contentUrl(target)}

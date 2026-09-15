@@ -79,3 +79,25 @@ pnpm --dir ../deepseek-harness dsh web --no-open --patch "$PWD/profiles/mat.yml"
 
 证据：`docs/evidence/m2/`。
 
+## M3+：远端命令输出串扰修复（exec-gate + exec-guard）
+
+2026-09-04 压测轮 15:19 三并发会话实锤：HPC remote-shell 通道对同一
+(mcpKey, clusterId) 的并发命令**无输出路由隔离**——S3 的 sbatch 返回了 S1 目录的
+stat/ls 列表（job id 丢失）、S1 下载的 stat 解析到他人输出、S2 的 post/grep
+stdout/stderr 双双混线。服务端按 (密钥, 集群) 复用 shell，与本侧 MCP 会话无关，
+「每个 MatClient 独立会话」的隔离在服务端无效。修复为本侧双层防护：
+
+- **`mat-core/src/exec-gate.ts`（防发生）**：所有 `remote_shell_execute` 按
+  (mcpKey, clusterId) 串行——进程内 FIFO 链覆盖全部 MatClient 实例（单例/watch/
+  gaussian），跨进程文件锁（mtime 保活 + 过期抢占，异常 fail-open）覆盖多 dsh 进程。
+- **`mat-core/src/exec-guard.ts`（防漏网）**：每条命令随机 token 标记包裹
+  （开始标记 stdout、结束标记 stderr 带 rc，逐语句独立成行不破坏 heredoc），
+  响应缺本调用标记即判串扰抛错，由 `execCommand` 既有 3 次重试换新标记重发——
+  「静默拿错数据」变「可检测失败」，且失败信封的精确退出码经标记透传（127 不再
+  被 `test` 压成 1）。
+
+开关：`MAT_EXEC_GATE=off` 整闸旁路；`MAT_EXEC_FILE_LOCK=off` 只留进程内链；
+`MAT_EXEC_LOCK_DIR` 自定义锁目录。事故五例、设计与验证：
+`docs/evidence/post-m3/2026-09-04-exec-channel-crosstalk-fix.md`。
+
+

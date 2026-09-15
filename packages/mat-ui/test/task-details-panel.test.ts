@@ -51,15 +51,46 @@ describe('native HPC task details tab', () => {
     expect(style).toContain('.mat-task-details{')
   })
 
-  it('composes the task tab as a footer-anchored spec sheet', async () => {
+  it('composes the task tab as a content-following spec sheet', async () => {
     const panel = await source('TaskDetailsPanel.tsx')
     const style = await source('style.ts')
     // 元数据进 layer-1 规格卡；文件数与动作合成页脚行（不再靠 grid justify-self 定位）。
     expect(panel).toContain('mat-task-details__footer')
     expect(style).toContain('.mat-task-details__footer{')
     expect(style).toContain('var(--dsw-alias-bg-layer-1)')
-    // 字阶：大写小标签 + 等宽定宽数字（数据前置的仪器面板语言）。
+    // 打开文件按钮贴近内容，不吸底（margin-top:auto 会把它钉到面板最底）。
+    expect(style).not.toContain('margin-top:auto')
+    // 字阶（09-04 美化定稿）：大写小标签 10px；值默认无衬线 500，
+    // 纯数值/ID 走等宽变体（dd--mono）——文字值不再披打字机字体。
     expect(style).toContain('letter-spacing:.08em;text-transform:uppercase')
-    expect(style).toContain('font:11px/1.4 ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums')
+    expect(style).toContain('font:500 12px/1.45 var(--dsw-font-family);font-variant-numeric:tabular-nums')
+    expect(style).toContain('font:11.5px/1.45 ui-monospace,SFMono-Regular,monospace;font-variant-numeric:tabular-nums')
+  })
+
+  it('renders the red failure block only for failed jobs, never for completed ones', async () => {
+    const panel = await source('TaskDetailsPanel.tsx')
+    // 红色失败块按失败态渲染；正确完成的作业不得出现红字红底（此前无条件跟着 job.detail 渲染）。
+    expect(panel).toContain("stateOf(job) === 'error'")
+    expect(panel).not.toMatch(/\{job\.detail !== undefined && <p/)
+  })
+
+  it('美化：值字体分型（mono 变体）+ status/converged 语义色点', async () => {
+    const panel = await source('TaskDetailsPanel.tsx')
+    const style = await source('style.ts')
+    expect(panel).toContain('mat-task-details__dd--mono')
+    expect(panel).toContain('metadataStateOf')
+    expect(panel).toContain('<StateDot')
+    expect(style).toContain('.mat-task-details__dd--state{')
+    expect(style).toContain('.mat-task-details__dd--done{')
+    expect(style).toContain('.mat-task-details__dd--error{')
+  })
+
+  it('美化：打开文件按钮带文件夹图标（icon 走宿主 Button 原生位）', async () => {
+    const panel = await source('TaskDetailsPanel.tsx')
+    expect(panel).toContain('IconFolderOpen16')
+    expect(panel).toMatch(/icon=\{/)
+    // 继续交出按钮外观（不得用插件元素选择器压宿主按钮模块类）。
+    const style = await source('style.ts')
+    expect(style).not.toContain('.mat-task-details button')
   })
 })

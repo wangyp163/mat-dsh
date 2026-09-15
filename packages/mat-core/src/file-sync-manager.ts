@@ -13,6 +13,12 @@ export type FileSyncStatus = 'queued' | 'downloading' | 'verifying' | 'completed
 
 export interface FileSyncRequest {
   id: string
+  /**
+   * Local task-directory segment; defaults to `id`. Required when `id` is a board
+   * key (`cluster:slurm`) that is not itself a safe path segment — the directory
+   * then carries the real Slurm job number while `id` stays the correlation key.
+   */
+  localDir?: string
   workdir: string
   remotePath: string
   conflictPolicy?: 'keep-both' | 'overwrite'
@@ -36,7 +42,8 @@ export class FileSyncManager {
   list(): FileSyncRecord[] { return [...this.records.values()].map((value) => ({ ...value })) }
 
   async enqueue(request: FileSyncRequest): Promise<FileSyncRecord> {
-    if (!/^[A-Za-z0-9._-]+$/.test(request.id) || request.id === '.' || request.id === '..') throw new Error('sync id must be a safe path segment')
+    const dirName = request.localDir ?? request.id
+    if (!/^[A-Za-z0-9._-]+$/.test(dirName) || dirName === '.' || dirName === '..') throw new Error('sync id must be a safe path segment')
     const key = `${request.id}\0${request.workdir}\0${request.remotePath}`
     const existingId = this.keys.get(key)
     if (existingId !== undefined) {
@@ -66,7 +73,7 @@ export class FileSyncManager {
   private async run(record: FileSyncRecord): Promise<FileSyncRecord> {
     let temporaryPath: string | undefined
     try {
-      const taskRoot = join(this.options.localRoot, record.id)
+      const taskRoot = join(this.options.localRoot, record.localDir ?? record.id)
       let destination = mapRemotePath(taskRoot, record.workdir, record.remotePath)
       await ensureSafeDirectory(taskRoot, dirname(destination))
       if ((record.conflictPolicy ?? 'keep-both') === 'keep-both') destination = await keepBothPath(destination)

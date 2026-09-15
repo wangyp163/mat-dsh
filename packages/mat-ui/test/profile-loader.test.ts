@@ -21,14 +21,26 @@ describe('HPC profile entries under the Harmony ESM loader', () => {
     const profile = await readFile(new URL('profiles/mat.yml', repoRoot), 'utf8')
     const script = await readFile(new URL('scripts/dsh-web.sh', repoRoot), 'utf8')
     expect(profile).toContain("name: 'mat-ui'")
-    expect(script).toContain('MAT_UI_PACKAGE=~/mat-harness/mat-dsh/packages/mat-ui')
+    expect(script).toContain('MAT_UI_PACKAGE="$REPO_ROOT/packages/mat-ui"')
     expect(script).toContain('ln -sfn "$MAT_UI_PACKAGE" "$MAT_UI_LINK"')
+  })
+
+  it('loads mat-tools as a bare package name, never a !!js expression', async () => {
+    const profile = await readFile(new URL('profiles/mat.yml', repoRoot), 'utf8')
+    const script = await readFile(new URL('scripts/dsh-web.sh', repoRoot), 'utf8')
+    // loader 的 interpolate 只作用于 config/disabled；entry.name 原样传给
+    // tree.import，harmony 的包扫描也先于求值急切读 name——!!js 拼接会以
+    // {__jsExpr} 对象进 packageNameOf 直接崩（dsh-harmony 0.8.8 实证）。
+    expect(profile).toContain("name: 'mat-tools'")
+    expect(profile).not.toContain('name: !!js')
+    expect(script).toContain('MAT_TOOLS_PACKAGE="$REPO_ROOT/packages/mat-tools"')
+    expect(script).toContain('ln -sfn "$MAT_TOOLS_PACKAGE" "$MAT_TOOLS_LINK"')
   })
 
   it('isolates skill discovery to the repository skill root', async () => {
     const profile = await readFile(new URL('profiles/mat.yml', repoRoot), 'utf8')
     expect(profile).toContain('includeDefaultRoots: false')
-    expect(profile).toContain('- ~/mat-harness/mat-dsh/skills')
+    expect(profile).toContain("!!js process.env.MAT_DSH_ROOT + '/skills'")
     expect(profile).not.toContain('/tmp/mat-dsh-m0-home')
   })
 })

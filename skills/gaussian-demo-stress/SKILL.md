@@ -1,11 +1,11 @@
 ---
 name: gaussian-demo-stress
-description: 'Plan and execute authorized end-to-end stress tests for the demo Gaussian workflow through mat-dsh: decompose a user goal into cases, select one-shot or stepwise execution, validate gates, plots, results, session delivery, and produce an evidence-based report.'
-version: 0.2.0
+description: 'demo Gaussian workflow 压测编排 skill——触发词:压测、回归、端到端验证、链路验证、plots 验证、稳定性测试(stress test)。用户对 demo/mat-dsh 的 Gaussian workflow 提出这类目标时加载本 skill:把目标拆成 case 矩阵,选一站式或分步链路,先出计划待用户确认再投放真实任务,验收门禁/plots/结果/会话交付并产出证据报告;收口必跑 session-debug L0 轻扫并把摘要表写进报告,缺摘要表视为未收口。单个 Gaussian 计算走 gaussian-calc,普通计算不要加载本 skill。'
+version: 0.2.2
 metadata:
   adapted-for: mat-dsh
-  companion-sop: ~/dev/mat-aitool/docs/gaussian-demo-stress-test-sop.md
-  adaptation: 2026-09-03 M2 把 session-debug 纳入压测收口必做步骤（用户要求：压测完成后自动按 session 轨迹 debug，无需再指示）：两级模型——L0 收口必跑（对全部本轮 session 本地跑 `anomalies --json` 轻扫，零 token，产出报告 session-debug 摘要表）+ L1 异常升级（沿用最小成本顺序）。新增强制执行规则第 8 条、交付节收口程序与摘要表字段；版本 0.2.0 续跳号
+  companion-sop: ~/dev/sops/docs/gaussian-demo-stress-test-sop.md
+  adaptation: 2026-09-03 M2 把 session-debug 纳入压测收口必做步骤（用户要求：压测完成后自动按 session 轨迹 debug，无需再指示）：两级模型——L0 收口必跑（对全部本轮 session 本地跑 `anomalies --json` 轻扫，零 token，产出报告 session-debug 摘要表）+ L1 异常升级（沿用最小成本顺序）。新增强制执行规则第 8 条、交付节收口程序与摘要表字段；版本 0.2.0 续跳号；2026-09-04 SOP 固化第 1 步——description 载入中文触发词与收口红线摘要（触发词随 description 常驻模型上下文，用户说"压测"即可靠命中，无需先读正文），同轮 mat-tools 系统提示新增 tool:mat-stress 引导段、scripts/stress-report-lint.ts 报告检查器；版本 0.2.1；2026-09-11 落实约束归属原则——结果/plots 消费契约只保留在 gaussian-calc 及其血脉（产品本体），本 skill 两处复述（Case 选择 plots 验收行、强制执行规则第 4 条）降为纯引用，压测报告仍记录 kind/PNG/CSV 路径作交付证据；版本 0.2.2
 ---
 
 # demo Gaussian 压测编排
@@ -19,7 +19,7 @@ metadata:
 完整操作细节、case 库和报告模板见：
 
 ```text
-~/dev/mat-aitool/docs/gaussian-demo-stress-test-sop.md
+~/dev/sops/docs/gaussian-demo-stress-test-sop.md
 ```
 
 只按需读取相关章节，不要把整份 SOP 或完整 session transcript 注入模型上下文。
@@ -43,7 +43,7 @@ metadata:
 - 单作业且参数齐备：优先 `mat_gaussian` 一站式。
 - 用户要查看每一步输入/Slurm 脚本、多波任务、二次 run 或诊断：使用 `pre → run → sbatch → mat_job_watch → post` 分步链路。
 - 至少安排一个新会话验证冷启动；追加 case 只复用健康会话。
-- 光谱/优化/TS/IRC 等可视化任务验收 `job_output` 的 `plots:` 行优先，无则 `result.json` 兜底；纯数值任务允许 `plots: []` 或旧部署无 `plots` 键。
+- 光谱/优化/TS/IRC 等可视化任务的 plots 消费与验收方式按 `gaussian-calc` 现行结果消费契约执行（本 skill 不复述，防双源漂移）；纯数值任务允许 `plots: []` 或旧部署无 `plots` 键，不误报缺失。
 - 多阶段任务必须把上游明确完成的结果作为下游输入；不得猜测、伪造或静默改变任务范围。
 
 常见 kind：`scf_convergence`、`ir_spectrum`、`uvvis_spectrum`、`emission_spectrum`、`irc_profile`。完整映射和数据行断言查 SOP，不要凭记忆扩大断言。
@@ -60,7 +60,7 @@ metadata:
 
 2. 一站式任务由 `gaussian-calc` 调用 `mat_gaussian`；记录 Slurm job id 和 background job id，等待终态后用一次 `job_output`。
 3. 分步任务严格保持 phase 边界：`pre` 只生成并检查输入，`run` 只生成脚本，提交后一次性使用 `mat_job_watch`，终态后才 `post`。
-4. 按 `gaussian-calc` 0.7.9+ 契约：`job_output` 直读 `plots:` 行优先，无则只读 `{workdir}/result.json` 的 `plots` 字段；报告 kind、PNG 和 CSV 路径。不要 cat PNG 或通读 CSV。
+4. 结果与 plots 的消费方式一律按 `gaussian-calc` 现行结果消费契约执行，本 skill 不复述其内容（约束只保留在 gaussian-calc 及其血脉，防双源漂移）；压测报告只需记录 plots 的 kind、PNG 和 CSV 路径作为交付证据。
 5. 重试优先复用原 workdir；必须换目录时说明旧/新路径和原因。失败现场、result、job id 和 session trace 不得清理。
 6. 不手动循环 `squeue`/`sacct`；不未经用户确认执行 `rm`、`rm -rf`、`mv` 或覆盖/清空既有目录；不把凭据写入文件、prompt 或报告。
 7. 区分 workflow 已完成、结果解析成功、文件已生成、agent 已向用户交付和 session turn 已完成这五个层次；任一层失败都要单独记录。
@@ -112,7 +112,8 @@ docs/<YYYY-MM-DD>-<feature>-demo-stress-report.md
 1. 停止 mux 看门狗等编排辅助进程；确认所有 case 的 turn 已闭合；
 2. 等过 zstd 落盘延迟（≥15 分钟）后，对全部 session 跑 L0 anomalies --json，填摘要表；
 3. 对 L0 命中项跑 L1 升级，归因到 skill/agent、workflow 或 deployment/provider；
-4. 摘要表与归因写入报告，本轮才算收口。
+4. 摘要表与归因写入报告，跑机检 `pnpm stress:report-lint <报告路径>` 0 error 才算收口；
+5. 没有摘要表或 lint 不过的报告视为未完成，不得宣布压测完成。
 ```
 
 session-debug 摘要表字段：

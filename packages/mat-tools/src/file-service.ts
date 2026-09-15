@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, writeFile, readdir, lstat, realpath, stat, unlink } from 'node:fs/promises'
-import { dirname, join, relative, resolve, posix } from 'node:path'
+import { mkdir, readFile, rename, writeFile, readdir, lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
+import { dirname, join, resolve, posix } from 'node:path'
 import { FileSyncManager, mergeWorkspaceTree, projectDegradedPrimary, projectPrimaryFiles } from 'mat-core'
 import type { FileDownloadPort, FileSyncRecord, ListFilesOptions, RemoteFileEntry, RemoteFilePage } from 'mat-core'
 import { normalizeRemotePath, remoteRelativePath } from 'mat-core'
@@ -52,6 +52,12 @@ export interface MatFileServiceOptions {
    * resolver failures fall back to the raw value so callers can degrade.
    */
   resolveWorkdir?: (clusterId: string, workdir: string, hints?: string[]) => Promise<string>
+}
+
+/** 板键 `cluster:slurm` 的目录段 = 真实 Slurm 作业号；旧键（无冒号）原样返回。 */
+function workspaceSegment(jobId: string): string {
+  const colon = jobId.lastIndexOf(':')
+  return colon === -1 ? jobId : jobId.slice(colon + 1)
 }
 
 function crc32(data: Uint8Array): number {
@@ -126,9 +132,14 @@ export class MatFileServiceImpl {
   }
 
   async listWorkspace(request: WorkspaceRequest): Promise<WorkspaceTree> {
-    if (!/^[A-Za-z0-9._-]+$/.test(request.jobId) || !/^[A-Za-z0-9._-]+$/.test(request.clusterId)) throw new Error('unsafe workspace identity')
+    // 板键（cluster:slurm）允许冒号；clusterId 始终是严格安全段。
+    if (!/^[A-Za-z0-9._:-]+$/.test(request.jobId) || !/^[A-Za-z0-9._-]+$/.test(request.clusterId)) throw new Error('unsafe workspace identity')
     if (request.path.includes('\0') || request.path.startsWith('/') || request.path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
-    const expectedRoot = resolve(this.options.localRoot, request.clusterId, request.jobId)
+    // 身份严格绑定：工作区必须恰是 <localRoot>/<clusterId>/<板键段名>（真实 Slurm 作业号）。
+    // 板键只是身份，不随键名拼目录——同 cluster 下其它作业目录、`..` 伪装段一律拒绝。
+    const segment = workspaceSegment(request.jobId)
+    if (!/^[A-Za-z0-9._-]+$/.test(segment) || segment === '.' || segment === '..') throw new Error('unsafe workspace identity')
+    const expectedRoot = join(resolve(this.options.localRoot, request.clusterId), segment)
     const mappedRoot = resolve(request.localWorkspace ?? expectedRoot)
     if (mappedRoot !== expectedRoot) throw new Error('workspace identity does not match configured local root')
     const root = resolve(mappedRoot, request.path)
@@ -178,10 +189,74 @@ export class MatFileServiceImpl {
     return manager
   }
 
+  /**
+   * 会话工作区（无作业回退）：纯本地浏览，不并远端、不进同步记录。
+   * cwd 由路由层从宿主 session projcache 解析（身份真相源），本方法只做
+   * 路径安全校验与目录投影——绝不接受客户端直接传来的绝对路径树请求。
+   */
+  async listSessionWorkspace(request: { cwd: string; path: string }): Promise<{ root: string; path: string; entries: Array<Record<string, unknown>>; primary: [] }> {
+    if (request.path.includes('\0') || request.path.startsWith('/') || request.path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
+    const root = resolve(request.cwd)
+    const target = resolve(root, request.path)
+    if (target !== root && !target.startsWith(`${root}/`)) throw new Error('unsafe workspace path')
+    const entries: Array<Record<string, unknown>> = []
+    for (const item of await readdir(target, { withFileTypes: true }).catch(() => [] as import('node:fs').Dirent[])) {
+      if (item.name.includes('\0') || item.name.endsWith('.mat-part-') || item.name.includes('.mat-part-')) continue
+      const info = await lstat(join(target, item.name)).catch(() => undefined)
+      if (info === undefined) continue
+      const path = request.path ? `${request.path}/${item.name}` : item.name
+      entries.push({ path, name: item.name, directory: info.isDirectory(), regularFile: info.isFile(), symbolicLink: info.isSymbolicLink(), readable: info.isFile() ? Boolean(info.mode & 0o444) : true, size: info.isFile() ? info.size : 0 })
+    }
+    return { root, path: request.path, entries, primary: [] }
+  }
+
+  /** 会话工作区下载：不经同步记录，直接按安全相对路径打包 cwd 下文件。 */
+  async prepareLocalDownload(cwd: string, paths: string[]): Promise<DownloadArtifact> {
+    if (paths.length < 1 || paths.length > MAX_FILES) throw new Error('invalid download request')
+    const root = resolve(cwd)
+    for (const path of paths) {
+      if (!path || path.includes('\0') || path.startsWith('/') || path.split('/').some((part) => part === '..')) throw new Error('unsafe download path')
+      const target = resolve(root, path)
+      if (target !== root && !target.startsWith(`${root}/`)) throw new Error('unsafe download path')
+    }
+    const files: Array<{ path: string; name: string; data: Buffer }> = []
+    let bytes = 0
+    const guard = (total: number) => {
+      if (files.length >= MAX_FILES || bytes + total > MAX_BYTES) throw new Error('download size limit exceeded')
+      bytes += total
+    }
+    for (const path of paths) await this.walkLocalFile(files, resolve(root, path), posix.basename(path), 0, guard)
+    if (files.length === 1 && paths.length === 1) return { kind: 'file', filename: files[0]!.name, body: files[0]!.data, contentType: 'application/octet-stream' }
+    return { kind: 'zip', filename: 'workspace-files.zip', body: makeZip(files), contentType: 'application/zip' }
+  }
+
+  /** 递归收集本地文件（目录递归进 zip 相对名）；sizeGuard 在读取前核对条数/字节上限。 */
+  private async walkLocalFile(files: Array<{ path: string; name: string; data: Buffer }>, filePath: string, name: string, depth: number, sizeGuard: (bytes: number) => void): Promise<void> {
+    if (depth > MAX_DEPTH) throw new Error('download depth limit exceeded')
+    const info = await lstat(filePath)
+    if (info.isSymbolicLink() || !info.isFile() && !info.isDirectory()) throw new Error('unsupported local file type')
+    if (info.isDirectory()) {
+      for (const entry of await readdir(filePath)) {
+        if (entry.includes('.mat-part-')) continue
+        await this.walkLocalFile(files, join(filePath, entry), `${name}/${entry}`, depth + 1, sizeGuard)
+      }
+      return
+    }
+    if (!(info.mode & 0o444)) throw new Error('file is not readable')
+    sizeGuard(info.size)
+    const data = await readFile(filePath)
+    files.push({ path: filePath, name, data })
+  }
+
   async syncFile(jobId: string, clusterId: string, workdir: string, remotePath: string, conflictPolicy: 'keep-both' | 'overwrite' = 'keep-both'): Promise<FileSyncRecord> {
     const resolved = await this.expandWorkdir(clusterId, workdir)
     remoteRelativePath(resolved, normalizeRemotePath(remotePath))
-    return this.manager(clusterId).enqueue({ id: jobId, workdir: resolved, remotePath, conflictPolicy })
+    // 板键（cluster:slurm）只作同步记录的关联 id；本地任务目录段用真实作业号。
+    const segment = workspaceSegment(jobId)
+    return this.manager(clusterId).enqueue({
+      id: jobId, ...(segment === jobId ? {} : { localDir: segment }),
+      workdir: resolved, remotePath, conflictPolicy,
+    })
   }
 
   async materializeFile(jobId: string, clusterId: string, workdir: string, path: string): Promise<string> {
@@ -199,12 +274,105 @@ export class MatFileServiceImpl {
 
   listSyncs(): FileSyncRecord[] { return [...this.managers.values()].flatMap((manager) => manager.list()) }
 
+  /**
+   * 删除本地工作区中已同步的文件/目录（只动本地副本，远端不动）。
+   * 身份绑定与 listWorkspace 同源：工作区必须恰是 <localRoot>/<clusterId>/<板键段名>，
+   * 每个目标路径解析后必须仍在该根内。未同步（仅远端）条目报告为 missing 而不是报错。
+   * 删除后清掉指向已删路径的 pins，避免残留死引用。
+   */
+  async deleteLocalFiles(request: WorkspaceRequest & { paths: string[] }): Promise<{ deleted: string[]; missing: string[] }> {
+    const { paths } = request
+    if (!/^[A-Za-z0-9._:-]+$/.test(request.jobId) || !/^[A-Za-z0-9._-]+$/.test(request.clusterId)) throw new Error('unsafe workspace identity')
+    if (paths.length < 1 || paths.length > MAX_FILES) throw new Error('paths must contain 1 to 100 entries')
+    const segment = workspaceSegment(request.jobId)
+    if (!/^[A-Za-z0-9._-]+$/.test(segment) || segment === '.' || segment === '..') throw new Error('unsafe workspace identity')
+    const expectedRoot = join(resolve(this.options.localRoot, request.clusterId), segment)
+    const mappedRoot = resolve(request.localWorkspace ?? expectedRoot)
+    if (mappedRoot !== expectedRoot) throw new Error('workspace identity does not match configured local root')
+    const deleted: string[] = []
+    const missing: string[] = []
+    for (const path of paths) {
+      if (!path || path.includes('\0') || path.startsWith('/') || path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
+      const target = resolve(mappedRoot, path)
+      if (target !== mappedRoot && !target.startsWith(`${mappedRoot}/`)) throw new Error('unsafe workspace path')
+      const info = await lstat(target).catch(() => undefined)
+      if (info === undefined) { missing.push(path); continue }
+      await rm(target, { recursive: true, force: true })
+      deleted.push(path)
+    }
+    // pins 卫生：指向已删路径（或位于其下）的 pin 一并移除。
+    if (deleted.length > 0) {
+      const prefs = await this.getPreferences(request.jobId)
+      if (prefs.pins !== undefined && prefs.pins.length > 0) {
+        const kept = prefs.pins.filter((pin) => !deleted.some((path) => pin === path || pin.startsWith(`${path}/`)))
+        if (kept.length !== prefs.pins.length) {
+          await this.setPreferences(request.jobId, { ...prefs, pins: kept })
+        }
+      }
+    }
+    return { deleted, missing }
+  }
+
+  /**
+   * 工作区自由删除：按 cwd 根删安全相对路径（与 listSessionWorkspace 同根）。
+   * 无板身份绑定（cwd 即真相源）、无 pins 卫生（工作区文件不参与固定）。
+   */
+  async deleteSessionFiles(request: { cwd: string; paths: string[] }): Promise<{ deleted: string[]; missing: string[] }> {
+    const { paths } = request
+    if (paths.length < 1 || paths.length > MAX_FILES) throw new Error('paths must contain 1 to 100 entries')
+    const root = resolve(request.cwd)
+    const deleted: string[] = []
+    const missing: string[] = []
+    for (const path of paths) {
+      if (!path || path.includes('\0') || path.startsWith('/') || path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
+      const target = resolve(root, path)
+      if (target !== root && !target.startsWith(`${root}/`)) throw new Error('unsafe workspace path')
+      const info = await lstat(target).catch(() => undefined)
+      if (info === undefined) { missing.push(path); continue }
+      await rm(target, { recursive: true, force: true })
+      deleted.push(path)
+    }
+    return { deleted, missing }
+  }
+
+  /**
+   * 同后缀导航清单：递归收集 root 下与 path 同后缀（大小写不敏感；无后缀按
+   * "无点文件"组）的本地普通文件，字典序排序返回，附当前项索引。当前项不在
+   * 清单（已删/未同步）时退化为单元素组——导航 UI 得以优雅降级。
+   */
+  async listLocalPeers(root: string, path: string): Promise<{ peers: string[]; index: number }> {
+    if (!path || path.includes('\0') || path.startsWith('/') || path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
+    const base = resolve(root)
+    const suffixOf = (name: string): string | null => {
+      const dot = name.lastIndexOf('.')
+      return dot <= 0 ? null : name.slice(dot + 1).toLowerCase()
+    }
+    const wanted = suffixOf(path.split('/').at(-1) ?? path)
+    const found: string[] = []
+    const walk = async (dir: string, prefix: string, depth: number): Promise<void> => {
+      if (depth > MAX_DEPTH || found.length >= MAX_FILES) return
+      for (const item of await readdir(dir, { withFileTypes: true }).catch(() => [] as import('node:fs').Dirent[])) {
+        if (item.name.includes('\0') || item.name.includes('.mat-part-')) continue
+        const full = join(dir, item.name)
+        const info = await lstat(full).catch(() => undefined)
+        if (info === undefined || info.isSymbolicLink()) continue
+        const relative = prefix === '' ? item.name : `${prefix}/${item.name}`
+        if (info.isDirectory()) await walk(full, relative, depth + 1)
+        else if (info.isFile() && suffixOf(item.name) === wanted) found.push(relative)
+      }
+    }
+    await walk(base, '', 0)
+    found.sort()
+    const index = found.indexOf(path)
+    return index === -1 ? { peers: [path], index: 0 } : { peers: found, index }
+  }
+
   async listFiles(_clusterId: string, _path: string, _options?: ListFilesOptions): Promise<RemoteFilePage> {
     throw new Error('efile list service must be supplied by the runtime adapter')
   }
 
   async prepareDownload(jobId: string, paths: string[], context?: { clusterId: string; workdir: string }): Promise<DownloadArtifact> {
-    if (!/^[A-Za-z0-9._-]+$/.test(jobId) || paths.length < 1 || paths.length > MAX_FILES) throw new Error('invalid download request')
+    if (!/^[A-Za-z0-9._:-]+$/.test(jobId) || paths.length < 1 || paths.length > MAX_FILES) throw new Error('invalid download request')
     const records = this.listSyncs().filter((record) => record.id === jobId && record.status === 'completed' && record.localPath !== undefined)
     const roots: Array<string | undefined> = []
     const missing: Array<{ index: number; value: string }> = []
@@ -224,24 +392,13 @@ export class MatFileServiceImpl {
     }
     const files: Array<{ path: string; name: string; data: Buffer }> = []
     let bytes = 0
-    const walk = async (filePath: string, name: string, depth: number): Promise<void> => {
-      if (depth > MAX_DEPTH) throw new Error('download depth limit exceeded')
-      const info = await lstat(filePath)
-      if (info.isSymbolicLink() || !info.isFile() && !info.isDirectory()) throw new Error('unsupported local file type')
-      if (info.isDirectory()) {
-        for (const entry of await readdir(filePath)) {
-          if (entry.includes('.mat-part-')) continue
-          await walk(join(filePath, entry), `${name}/${entry}`, depth + 1)
-        }
-        return
-      }
-      if (!(info.mode & 0o444)) throw new Error('file is not readable')
-      if (files.length >= MAX_FILES || bytes + info.size > MAX_BYTES) throw new Error('download size limit exceeded')
-      const data = await readFile(filePath); files.push({ path: filePath, name, data }); bytes += data.length
+    const guard = (total: number) => {
+      if (files.length >= MAX_FILES || bytes + total > MAX_BYTES) throw new Error('download size limit exceeded')
+      bytes += total
     }
-    for (const root of roots) await walk(root!, posix.basename(root!), 0)
+    for (const root of roots) await this.walkLocalFile(files, root!, posix.basename(root!), 0, guard)
     if (files.length === 1 && roots.length === 1) return { kind: 'file', filename: files[0]!.name, body: files[0]!.data, contentType: 'application/octet-stream' }
-    return { kind: 'zip', filename: `${jobId}-files.zip`, body: makeZip(files) , contentType: 'application/zip' }
+    return { kind: 'zip', filename: `${workspaceSegment(jobId)}-files.zip`, body: makeZip(files) , contentType: 'application/zip' }
   }
 
   async handleSettledJob(job: SettledFileJob): Promise<FileSyncRecord[]> {

@@ -5,7 +5,7 @@ export type ViewKind = 'structure' | 'image' | 'pdf' | 'text' | 'unsupported'
 const STRUCTURE_EXTENSIONS = new Set(['xyz', 'cif', 'poscar', 'vasp'])
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp'])
 const TEXT_EXTENSIONS = new Set([
-  'log', 'out', 'txt', 'json', 'sh', 'com', 'gjf', 'inp', 'py', 'csv', 'md', 'yml', 'yaml', 'slurm', 'pbs', 'job',
+  'log', 'out', 'txt', 'json', 'jsonl', 'sh', 'com', 'gjf', 'inp', 'py', 'csv', 'md', 'yml', 'yaml', 'slurm', 'pbs', 'job',
 ])
 
 function extensionOf(name: string): string {

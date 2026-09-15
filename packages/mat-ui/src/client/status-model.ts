@@ -28,13 +28,29 @@ export function jobsForSession<T extends { ownerSession?: string }>(jobs: T[], s
 }
 
 export function monitorMetadata(job: MonitorJob): Array<[string, string]> {
-  const slurm = job.slurm?.[0]
+  const ids = slurmIds(job)
   return [
     ['completed', job.phase === 'settled' ? formatCompletionTime(job.settledAt ?? job.updatedAt) : 'in progress'],
     ['partition', job.partition ?? '—'],
-    ['job ID', job.jobId],
-    ['job number', slurm?.id ?? '—'],
-    ['status', slurm?.state ?? job.outcomeStatus ?? (job.phase === 'settled' ? '—' : 'monitoring')],
+    ['job ID', ids.length > 0 ? ids.join(', ') : job.jobId],
+    ['status', job.slurm?.[0]?.state ?? job.outcomeStatus ?? (job.phase === 'settled' ? '—' : 'monitoring')],
     ['converged', job.converged === undefined ? '—' : job.converged ? 'yes' : 'no'],
   ]
+}
+
+/** 条目携带的真实 Slurm 作业号（板序）。 */
+export function slurmIds(job: Pick<MonitorJob, 'slurm'>): string[] {
+  return job.slurm?.map(entry => entry.id) ?? []
+}
+
+/**
+ * 下拉/卡片展示名：job-id 槽位要可直接解析/复制——有 Slurm 投影且 label 没把号带全
+ * （watch 批量条目）时就是作业号本身（单个裸号、多个逗号分隔），不拼 ×N/括号噪声；
+ * label 已含号（gaussian `… #id`）或无投影时原样返回。
+ */
+export function jobOptionLabel(job: Pick<MonitorJob, 'jobId' | 'slurm'> & { label?: string }): string {
+  const ids = slurmIds(job)
+  if (ids.length === 0) return job.label ?? job.jobId
+  const base = job.label ?? job.jobId
+  return ids.every(id => base.includes(id)) ? base : ids.join(', ')
 }

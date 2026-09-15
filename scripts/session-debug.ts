@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { promisify } from 'node:util'
 
 export type DiagnosticKind =
@@ -53,12 +53,24 @@ export interface SessionReport {
   storageRows: number
   eventCount: number
   timeSpanMs: number | null
+  firstEventTime: number | null
+  lastEventTime: number | null
+  endSeedTime: number | null
   eventTypes: Record<string, number>
   turns: TurnReport[]
   steps: StepReport[]
   tools: ToolReport[]
   errors: Array<{ type: string; seq: number | null; detail: string }>
   diagnostics: Diagnostic[]
+}
+
+export interface Freshness {
+  readAt: number
+  fileMtime: number | null
+  lastEventTime: number | null
+  endSeedTime: number | null
+  settleMs: number | null
+  durableFinal: boolean
 }
 
 type AnyRecord = Record<string, any>
@@ -171,7 +183,14 @@ function staleSkillRoot(content: string): { name: string; path: string } | undef
   return name && path ? { name, path } : undefined
 }
 
-export function analyzeSession(input: string): SessionReport {
+interface ParsedStorage {
+  session: AnyRecord
+  events: AnyRecord[]
+  diagnostics: Diagnostic[]
+  storageRows: number
+}
+
+function parseStorage(input: string): ParsedStorage {
   const diagnostics: Diagnostic[] = []
   const events: AnyRecord[] = []
   let session: AnyRecord = {}
@@ -193,6 +212,118 @@ export function analyzeSession(input: string): SessionReport {
       diagnostics.push({ kind: 'invalid-json', detail: `line ${index + 1} is not valid JSON` })
     }
   }
+  return { session, events, diagnostics, storageRows }
+}
+
+export interface TrajectoryCall {
+  seq: number | null
+  time: number | null
+  turn: number
+  step: number
+  callId: string | null
+  name: string
+  /** Redacted raw argument text exactly as the model emitted it (JSON string). */
+  arguments: string | null
+  /** null when no result was recorded for the call. */
+  failed: boolean | null
+}
+
+export interface TrajectoryUserMessage {
+  seq: number | null
+  time: number | null
+  turn: number
+  text: string
+}
+
+export interface Trajectory {
+  session: Record<string, unknown>
+  calls: TrajectoryCall[]
+  userMessages: TrajectoryUserMessage[]
+  openTurns: number[]
+  /** Names passed to the `skill` tool, in call order. */
+  skills: string[]
+}
+
+function parseArgumentsObject(raw: unknown): AnyRecord | undefined {
+  if (isRecord(raw)) return raw
+  if (typeof raw !== 'string') return undefined
+  try {
+    const value: unknown = JSON.parse(raw)
+    return isRecord(value) ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Chronological tool calls with their arguments plus the user messages around
+ * them. Unlike `analyzeSession`, this keeps argument text (redacted) because
+ * workflow conformance rules are mostly stated over command strings.
+ */
+export function extractTrajectory(input: string): Trajectory {
+  const { session, events } = parseStorage(input)
+  const calls: Array<TrajectoryCall & { order: number }> = []
+  const byCallId = new Map<string, TrajectoryCall>()
+  const userMessages: TrajectoryUserMessage[] = []
+  const openTurns = new Set<number>()
+  const skills: string[] = []
+  let activeTurn: number | undefined
+
+  for (const [order, event] of events.entries()) {
+    const type = typeof event.type === 'string' ? event.type : ''
+    const seq = Number.isSafeInteger(event.seq) ? event.seq as number : null
+    const time = Number.isSafeInteger(event.time) ? event.time as number : null
+    const data = isRecord(event.data) ? event.data : {}
+    if (type === 'turn/start' && typeof data.turn === 'number') {
+      activeTurn = data.turn
+      openTurns.add(data.turn)
+    } else if (type === 'turn/end' && typeof data.turn === 'number') {
+      openTurns.delete(data.turn)
+      if (activeTurn === data.turn) activeTurn = undefined
+    } else if (type === 'user/message' && data.source?.kind === 'user') {
+      const turn = typeof data.turn === 'number' ? data.turn : activeTurn
+      const text = textOf(data.content)
+      if (turn !== undefined && text) userMessages.push({ seq, time, turn, text: redact(text) as string })
+    } else if (type === 'tool/call' && typeof data.turn === 'number' && typeof data.step === 'number') {
+      const rawArguments = typeof data.arguments === 'string'
+        ? data.arguments
+        : data.arguments === undefined ? null : JSON.stringify(data.arguments)
+      const call: TrajectoryCall & { order: number } = {
+        order,
+        seq,
+        time,
+        turn: data.turn,
+        step: data.step,
+        callId: typeof data.callId === 'string' ? data.callId : null,
+        name: String(data.name ?? '<unknown>'),
+        arguments: rawArguments === null ? null : redact(rawArguments) as string,
+        failed: null,
+      }
+      calls.push(call)
+      if (call.callId) byCallId.set(call.callId, call)
+      if (call.name === 'skill') {
+        const name = parseArgumentsObject(data.arguments)?.name
+        if (typeof name === 'string') skills.push(name)
+      }
+    } else if (type === 'tool/result') {
+      const callId = resultCallId(data)
+      const call = callId ? byCallId.get(callId) : undefined
+      if (call) call.failed = resultFailed(data)
+    }
+  }
+
+  calls.sort((a, b) => (a.seq ?? a.order) - (b.seq ?? b.order) || a.order - b.order)
+  return {
+    session,
+    calls: calls.map(({ order: _order, ...call }) => call),
+    userMessages,
+    openTurns: [...openTurns].sort((a, b) => a - b),
+    skills,
+  }
+}
+
+export function analyzeSession(input: string): SessionReport {
+  const { session, events, diagnostics, storageRows } = parseStorage(input)
 
   const eventTypes: Record<string, number> = {}
   const turns = new Map<number, AnyRecord>()
@@ -204,13 +335,16 @@ export function analyzeSession(input: string): SessionReport {
   let previousSeq: number | undefined
   let firstTime: number | undefined
   let lastTime: number | undefined
+  let endSeedTime: number | undefined
 
   for (const event of events) {
     const type = typeof event.type === 'string' ? event.type : '<missing-type>'
     eventTypes[type] = (eventTypes[type] ?? 0) + 1
     const seq = Number.isSafeInteger(event.seq) ? event.seq as number : undefined
     const time = Number.isSafeInteger(event.time) ? event.time as number : undefined
-    if (time !== undefined && type !== 'session/end-seed') {
+    if (time !== undefined && type === 'session/end-seed') {
+      endSeedTime = time
+    } else if (time !== undefined) {
       firstTime ??= time
       lastTime = time
     }
@@ -330,6 +464,9 @@ export function analyzeSession(input: string): SessionReport {
     storageRows,
     eventCount: events.length,
     timeSpanMs: firstTime != null && lastTime != null ? lastTime - firstTime : null,
+    firstEventTime: firstTime ?? null,
+    lastEventTime: lastTime ?? null,
+    endSeedTime: endSeedTime ?? null,
     eventTypes,
     turns: turnReport,
     steps: stepReport,
@@ -350,13 +487,14 @@ function formatDuration(value: number | null): string {
   return `${(value / 1000).toFixed(1)} s`
 }
 
-export function formatTextReport(report: SessionReport): string {
+export function formatTextReport(report: SessionReport, freshness?: Freshness): string {
   return [
     'Session:',
     `  id: ${report.session.id ?? '<unknown>'}`,
     `  cwd: ${report.session.cwd ?? '<unknown>'}`,
     `  storage rows / events: ${report.storageRows} / ${report.eventCount}`,
     `  activity span: ${formatDuration(report.timeSpanMs)}`,
+    ...(freshness ? [`  read freshness: ${formatFreshness(freshness)}`] : []),
     '',
     `Turns (${report.turns.length}):`,
     ...report.turns.map(turn => `  ${turn.turn}: ${turn.state}, ${formatDuration(turn.durationMs)}${turn.userMessages[0] ? ` — ${oneLine(turn.userMessages[0])}` : ''}`),
@@ -372,10 +510,52 @@ export function formatTextReport(report: SessionReport): string {
   ].join('\n')
 }
 
-async function readInput(path: string): Promise<string> {
+function formatFreshness(value: Freshness): string {
+  const lastEvent = value.lastEventTime != null ? new Date(value.lastEventTime).toISOString() : 'n/a'
+  const endSeed = value.endSeedTime != null ? new Date(value.endSeedTime).toISOString() : 'absent'
+  const final = value.durableFinal ? 'durable-final' : 'not-final'
+  if (value.fileMtime == null) {
+    return `last event ${lastEvent}, end-seed ${endSeed} (${final}; file mtime unavailable)`
+  }
+  return `last event ${lastEvent}, end-seed ${endSeed} (${final}), file mtime ${new Date(value.fileMtime).toISOString()}, quiet for ${formatDuration(value.settleMs)}`
+}
+
+export async function readInput(path: string): Promise<string> {
   if (!path.endsWith('.zstd') && !path.endsWith('.zst')) return readFile(path, 'utf8')
-  const result = await execFileAsync('zstd', ['-dc', '--', path], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024 })
-  return result.stdout
+  try {
+    const result = await execFileAsync('zstd', ['-dc', '--', path], { encoding: 'utf8', maxBuffer: 1024 * 1024 * 1024 })
+    return result.stdout
+  } catch (error) {
+    // A torn final frame (session still live or killed mid-write) makes `zstd -dc`
+    // exit non-zero while stdout still carries every complete frame before it.
+    const partial = (error as { stdout?: unknown }).stdout
+    if (typeof partial !== 'string' || partial.length === 0) throw error
+    const lastNewline = partial.lastIndexOf('\n')
+    return lastNewline === -1 ? partial : partial.slice(0, lastNewline + 1)
+  }
+}
+
+async function fileFreshness(path: string, report: SessionReport): Promise<Freshness> {
+  const readAt = Date.now()
+  let fileMtime: number | null = null
+  try {
+    fileMtime = (await stat(path)).mtimeMs
+  } catch {
+    // Non-file input; freshness degrades to the in-file timestamps alone.
+  }
+  // An end-seed row after the last real event marks the durable close written at
+  // dispose; mid-file end-seeds (dsh restarts) leave the session not-final.
+  const durableFinal = report.endSeedTime != null
+    && report.lastEventTime != null
+    && report.endSeedTime >= report.lastEventTime
+  return {
+    readAt,
+    fileMtime,
+    lastEventTime: report.lastEventTime,
+    endSeedTime: report.endSeedTime,
+    settleMs: fileMtime == null ? null : readAt - fileMtime,
+    durableFinal,
+  }
 }
 
 async function main(): Promise<void> {
@@ -390,11 +570,12 @@ async function main(): Promise<void> {
     return
   }
   const report = analyzeSession(await readInput(path))
-  const output = command === 'timeline' ? { session: report.session, turns: report.turns, steps: report.steps }
-    : command === 'tools' ? { session: report.session, tools: report.tools }
-      : command === 'anomalies' ? { session: report.session, diagnostics: report.diagnostics, errors: report.errors }
-        : report
-  process.stdout.write(args.includes('--json') ? `${JSON.stringify(output, null, 2)}\n` : `${formatTextReport(report)}\n`)
+  const freshness = await fileFreshness(path, report)
+  const output = command === 'timeline' ? { session: report.session, turns: report.turns, steps: report.steps, freshness }
+    : command === 'tools' ? { session: report.session, tools: report.tools, freshness }
+      : command === 'anomalies' ? { session: report.session, diagnostics: report.diagnostics, errors: report.errors, freshness }
+        : { ...report, freshness }
+  process.stdout.write(args.includes('--json') ? `${JSON.stringify(output, null, 2)}\n` : `${formatTextReport(report, freshness)}\n`)
 }
 
 if (process.argv[1]?.endsWith('session-debug.ts')) void main()

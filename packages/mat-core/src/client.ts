@@ -2,6 +2,8 @@ import { CurlMcpTransport } from './transport.ts'
 import { FetchMcpTransport } from './fetch-transport.ts'
 import type { FetchLike } from './fetch-transport.ts'
 import { buildMcpUrl } from './url.ts'
+import { withExecGate } from './exec-gate.ts'
+import { newGuardToken, verifyGuardedPayload, wrapGuardedCommand } from './exec-guard.ts'
 
 export interface ExecResult {
   code: number
@@ -52,10 +54,13 @@ export class MatClient {
   /**
    * 三级容错第三级宿主：exec 整体重试 3 次，每次失败后置空会话促重建（对齐 plugin.py exec_command）。
    *
-   * 并发策略：本实现未做调用串行化。JS 单线程保证 JSON-RPC id 分配不会竞争，
-   * 但同一会话上的并发请求在服务端的行为未经验证——M0 仅验证过串行单调用。
-   * 需要并发的路径（如 mat_job_watch 的后台轮询）使用独立的 MatClient 实例，
-   * 与 mat_exec 的模块级单例隔离。
+   * 并发策略（2026-09-04 15:19 三会话串扰事故后重写）：服务端 remote-shell 通道
+   * 按 (密钥, 集群) 复用 shell、无输出路由隔离，与本侧 MCP 会话无关，因此：
+   * 1. 每次调用经 withExecGate 按 (mcpKey, clusterId) 串行——进程内所有实例
+   *    （单例/watch/gaussian）+ 跨进程文件锁，见 exec-gate.ts；
+   * 2. 每次尝试独立防护标记（exec-guard.ts），响应缺本调用标记即判串扰抛错，
+   *    由下方重试换新标记重发——静默拿错数据（sbatch 丢 job id、stat 解析到
+   *    他人 ls）变为可检测失败。重试期间释放闸，退避不阻塞其它调用方。
    */
   async execCommand(clusterId: string, command: string, timeoutSeconds = 30): Promise<ExecResult> {
     const key = this.opts.mcpKey || process.env.MAT_MCP_KEY || ''
@@ -68,8 +73,15 @@ export class MatClient {
     let last: Error | undefined
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        const payload = await this.transport.callTool('remote_shell_execute', { clusterId, command, timeoutSeconds }, timeoutSeconds)
-        return normalizeExec(payload)
+        return await withExecGate({ mcpKey: key, clusterId }, async () => {
+          const token = newGuardToken()
+          const payload = await this.transport.callTool(
+            'remote_shell_execute',
+            { clusterId, command: wrapGuardedCommand(command, token), timeoutSeconds },
+            timeoutSeconds,
+          )
+          return normalizeExec(verifyGuardedPayload(payload, token))
+        })
       } catch (err) {
         last = err instanceof Error ? err : new Error(String(err))
         this.transport.invalidate()

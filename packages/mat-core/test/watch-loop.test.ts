@@ -56,7 +56,7 @@ describe('createWatchLoop', () => {
     const { loop, fake } = makeLoop([{ out: row('100', 'RUNNING') }], ['100'])
     await advance(0)
     expect(fake.commands).toHaveLength(1)
-    expect(fake.commands[0]).toBe("sacct -j 100 -P -n -o JobID,State,ExitCode,ElapsedRaw")
+    expect(fake.commands[0]).toBe("sacct -j 100 -P -n -o JobID,State,ExitCode,ElapsedRaw,WorkDir")
     expect(loop.readOutput()).toContain('100 RUNNING')
   })
 

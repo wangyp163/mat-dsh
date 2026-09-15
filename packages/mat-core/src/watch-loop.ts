@@ -148,7 +148,9 @@ export function createWatchLoop(options: WatchLoopOptions): WatchLoopHooks {
       return
     }
 
-    const command = `sacct -j ${jobIds.join(',')} -P -n -o JobID,State,ExitCode,ElapsedRaw`
+    // WorkDir 列随批量 sacct 一次取回（零额外往返）：watch 作业的远端工作目录权威来源，
+    // 文件面板据此浏览（sbatch 手动提交的作业只有这里知道 workdir）。
+    const command = `sacct -j ${jobIds.join(',')} -P -n -o JobID,State,ExitCode,ElapsedRaw,WorkDir`
     try {
       const r = await execCommand(clusterId, command, 30)
       if (r.code === 0) {

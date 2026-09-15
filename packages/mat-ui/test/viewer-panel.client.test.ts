@@ -42,14 +42,12 @@ describe('viewer state module', () => {
   })
 })
 
-describe('viewer details tab wiring', () => {
-  it('registers mat-view as an additive details tab after the file tab', async () => {
+describe('viewer wiring（09-07 重设计：侧栏不再保留查看 tab）', () => {
+  it('不再注册 mat-view details tab——查看器只活在沉浸层', async () => {
     const index = await source('index.tsx')
-    expect(index).toContain("id: 'mat-view'")
-    expect(index).toContain('order: 20')
-    expect(index).toContain('label: \'查看\'')
-    expect(index).toContain('ViewerPanel')
-    expect(index.indexOf("id: 'mat-view'")).toBeGreaterThan(index.indexOf("id: 'mat-files'"))
+    expect(index).not.toContain("id: 'mat-view'")
+    expect(index).not.toContain('ViewerPanel')
+    expect(index).toContain('ViewerOverlay')
   })
 
   it('keeps NGL loading lazy: script injection inside the component, never at module scope', async () => {
@@ -90,11 +88,12 @@ describe('viewer details tab wiring', () => {
 })
 
 describe('file manager click-through into the viewer', () => {
-  it('routes previewable clicks to viewerState plus the mat-view tab', async () => {
+  it('可预览点击直达沉浸层（enterImmersive），不再切侧栏 tab', async () => {
     const panel = await source('FileManagerPanel.tsx')
     expect(panel).toContain('classifyFile')
     expect(panel).toContain("viewerState.open(")
-    expect(panel).toContain("openTab?.('mat-view')")
+    expect(panel).toContain('enterImmersive()')
+    expect(panel).not.toContain("openTab?.('mat-view')")
   })
 
   it('stops opening files through the host workspace and reports unsupported types', async () => {
@@ -103,7 +102,7 @@ describe('file manager click-through into the viewer', () => {
     expect(panel).not.toContain('openWorkspace(payload.path)')
     expect(panel).toContain('该类型暂不支持预览')
     // 目录按钮保留宿主域行为：openWorkspace 只服务本地工作区目录。
-    expect(panel).toContain('job.localWorkspace')
+    expect(panel).toContain('focusedJob.localWorkspace')
   })
 })
 
@@ -142,5 +141,59 @@ describe('viewer styles', () => {
     expect(style).toContain('.mat-view__kind{')
     // 文本预览是文档卡片：layer-1 底 + 发丝边，不是裸 pre。
     expect(style).toContain('mat-view__text{flex:1;min-height:0;overflow:auto;margin:10px 12px 12px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1)')
+  })
+})
+
+describe('沉浸层同后缀导航（A 方案）', () => {
+  it('peers 清单由服务端遍历 scope 根给出（含 session 通道）', async () => {
+    const overlay = await source('ViewerOverlay.tsx')
+    expect(overlay).toContain('/mat-files/peers?')
+    expect(overlay).toContain('peers')
+    expect(overlay).toContain('navigate')
+  })
+  it('工具条 ‹ i/n › + ←/→ 键盘翻页（首尾循环）', async () => {
+    const overlay = await source('ViewerOverlay.tsx')
+    const panel = await source('ViewerPanel.tsx')
+    expect(panel).toMatch(/‹/)
+    expect(panel).toMatch(/›/)
+    expect(panel).toContain('peersNav')
+    expect(overlay).toContain("'ArrowLeft'")
+    expect(overlay).toContain("'ArrowRight'")
+    expect(overlay).toMatch(/%/)
+  })
+})
+
+describe('翻页可用性 + 本地路径可见（09-07 用户报障）', () => {
+  const src = (file: string) => readFile(new URL(`../src/client/${file}`, import.meta.url), 'utf8')
+
+  it('翻页保持沉浸态与导航簇：open 后不复位 immersive，peers 刷新期间不卸载导航', async () => {
+    const overlay = await src('ViewerOverlay.tsx')
+    // 重取 peers 时不得把已有清单清空（否则按钮整簇消失，看起来"点了没反应"）
+    expect(overlay).not.toContain('setPeers(undefined)')
+    // 翻页后本地路径也要跟着刷新
+    expect(overlay).toContain('localPath')
+  })
+
+  it('工具条显示本地镜像路径且可复制', async () => {
+    const panel = await src('ViewerPanel.tsx')
+    expect(panel).toContain('localPath')
+    expect(panel).toContain('writeClipboard')
+    expect(panel).toContain('复制路径')
+  })
+})
+
+describe('结构翻页：容器复用不残留死画布（09-07 报障）', () => {
+  const src = (file: string) => readFile(new URL(`../src/client/${file}`, import.meta.url), 'utf8')
+
+  it('切换目标时容器按 target 重建（key），且 dispose 后清空残留 DOM', async () => {
+    const panel = await src('ViewerPanel.tsx')
+    // NGL dispose 不移除它注入的 canvas/事件层：容器必须带 key 强制重建 + 显式清空
+    expect(panel).toMatch(/key=\{`ngl-\$\{target\.jobId\}/)
+    expect(panel).toContain('replaceChildren()')
+  })
+
+  it('路径条不再用 direction:rtl（会把开头的 / 甩到行尾）', async () => {
+    const style = await src('style.ts')
+    expect(style).not.toContain('direction:rtl')
   })
 })

@@ -24,8 +24,7 @@ describe('compact computational monitor model', () => {
     expect(metadata).toEqual([
       ['completed', formatCompletionTime(1_000)],
       ['partition', 'Agent0'],
-      ['job ID', 'mat-slurm-1'],
-      ['job number', '700'],
+      ['job ID', '700'],
       ['status', 'COMPLETED'],
       ['converged', 'yes'],
     ])
@@ -36,7 +35,7 @@ describe('compact computational monitor model', () => {
     expect(monitorMetadata({
       jobId: 'watch-2', phase: 'settled', startedAt: 1, updatedAt: 2,
       outcomeStatus: 'completed',
-    })[4]).toEqual(['status', 'completed'])
+    })[3]).toEqual(['status', 'completed'])
   })
 
   it('uses an em dash for unavailable optional task metadata', () => {
@@ -47,7 +46,6 @@ describe('compact computational monitor model', () => {
       ['completed', 'in progress'],
       ['partition', '—'],
       ['job ID', 'watch-1'],
-      ['job number', '—'],
       ['status', 'monitoring'],
       ['converged', '—'],
     ])
