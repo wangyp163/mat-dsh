@@ -103,8 +103,62 @@
 # 本仓库 skills/ 目录进模型技能目录（gaussian-calc 等；dsh-skill-filesystem 只扫
 # 项目 .dsh/skills、$DSH_HOME/skills 等固定根，本目录不在其默认扫描范围）。
 - id: skill-filesystem
+  # 基 bundle 默认 disabled: true（2026-09-15 spike 前置核对发现：服务重启后
+  # gaussian-calc 报 unknown skill，dump-config 见本行 disabled: true——config
+  # patch 不改 disabled 位，必须显式重启）。
+  disabled: false
   config:
     # 只从本仓库发现 skill，避免旧 DSH_HOME 或临时目录成为候选根。
     includeDefaultRoots: false
     customSkillDirs:
       - !!js process.env.MAT_DSH_ROOT + '/skills'
+
+# ── batch-subagent spike（plans/2026-09-15-mat-batch-subagent-spike.md）──
+# web-app patch 层把 tool-subagent 默认 disabled: true（运行时 registry/providers
+# 仍在）；主 agent 的 subagent 工具与三个角色实例（P4）都要显式启用/挂载。
+# 角色协议见 skills/batch-roles/SKILL.md；层间契约校验在 mat-core/contracts.ts。
+- id: tool-subagent
+  disabled: false
+- insert:
+    # 制备工：本地生成输入结构，零集群访问（H8——调不出任何 mat 工具）。
+    - id: subagent-prep
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_prep
+        backgroundMode: one-shot
+        toolFilter:
+          allow: ['skill', 'read', 'bash']
+        agentOptions:
+          provider: mat
+          model: deepseek-v4-flash
+          maxTokens: 8192
+        persona: 批量制备工（batch-roles skill 角色 prep）——只做输入结构制备，先读 skill batch-roles 再干活，按契约回传 JSON。
+    # 分诊工：只读远端取证（cat/tail/sacct），禁提交类工具。
+    - id: subagent-triage
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_triage
+        backgroundMode: one-shot
+        toolFilter:
+          allow: ['skill', 'read', 'mat_exec']
+        agentOptions:
+          provider: mat
+          model: deepseek-v4-flash
+          maxTokens: 8192
+        persona: 批量分诊工（batch-roles skill 角色 triage）——读失败证据归类，只读远端禁提交，先读 skill batch-roles，按契约回传 JSON。
+    # 分析师：消费结构化结果做科学判定，无任何 mat 工具。
+    - id: subagent-analyst
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_analyst
+        backgroundMode: one-shot
+        toolFilter:
+          allow: ['skill', 'read', 'bash', 'job_output']
+        agentOptions:
+          provider: mat
+          model: deepseek-v4-flash
+          maxTokens: 8192
+        persona: 批量分析师（batch-roles skill 角色 analyst）——判定结果科学可用性，数值逐位来自输入数据，先读 skill batch-roles，按契约回传 JSON。
