@@ -1,0 +1,1 @@
+{"schema":"mat.interpret-verdict.v1","taskId":"F2","converged":true,"imaginaryFrequencies":0,"scientificallyUsable":true,"headline":"H2CO E=-114.500472605 Eh imaginaryFreq=0 converged=true 可用","concerns":["opt(MaxCycles=3)注入实验：3步上限贴边收敛，虽四项判据均达标（MaxForce=0.000365 < 0.000450阈），但上限值等于实际收敛步数，属紧贴边界场景","同体系V6与F2能量完全一致（-114.500472605 Eh），一致性良好"]}

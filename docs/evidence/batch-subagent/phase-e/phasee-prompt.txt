@@ -1,0 +1,14 @@
+执行批量组合的 Phase E（解读 fan-out + 汇总收官）。新会话，状态在磁盘清单（manifest/portfolio.json，cwd ~/workspace/batch-subagent）。先读 skill batch-orchestrator。
+
+背景：9 个 COMPLETED 任务待解读。后台 job id 映射（读 job_output 用）：
+V1=mat-slurm-1 V2=mat-slurm-2 V3=mat-slurm-3 V4=mat-slurm-4 V6=mat-slurm-6 V7=mat-slurm-7 V8=mat-slurm-8 F2=mat-slurm-10 V5=mat-slurm-11（重试轮）
+（F1=mat-slurm-9 已上报、V9 未提交——两者本相位只做 final 收口。）
+
+执行：
+1. 逐个 job_output 取 9 份结构化 properties（energy/converged/imaginary_frequency_count/frequencies 等；不读 log 原文）。
+2. 解读 fan-out：同一回复并行派 2 个 subagent_analyst 工人（prompt 自含：每任务 taskId + 完整 properties JSON + 体系名；指示先读 skill batch-roles 的 analyst 角色）——工人 A 拿 V1–V5（5 个），工人 B 拿 V6–V8、F2（4 个）。各自按 mat.interpret-verdict.v1 契约逐任务回传（一次回传多个任务的裁决时用 JSON 数组，每元素一个任务裁决）。
+   特别注意 F2（H2CO，注入项）：其 route 被覆盖为 opt(MaxCycles=3) 而实际 3 步收敛——converged=true 是否站得住、是否需要 concerns 标注（route 上限贴边收敛的科学性），让工人按数据判断。
+3. 每份裁决落盘 manifest/verdicts/<taskId>.interpret.json → validate interpret → update --phase interpreted --verdict-file。
+4. Fan-in 汇总（必须你亲自写，不委托）：≤30 行最终批量报告——逐任务一行（taskId/体系/能量/虚频数/科学可用/concerns），加 3 行总结（可用率、失败处置回顾、产物位置说明）。数值逐位来自结构化裁决。
+5. 收口：全部 11 任务 update --phase final（F1/V9 直接 final，note 已在）。
+6. 输出 ≤10 行相位摘要：解读完成数、拒收数、F2 的 concerns 结论、最终清单相位分布。

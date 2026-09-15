@@ -1,0 +1,326 @@
+{
+  "portfolioId": "batch-subagent-spike",
+  "createdAt": "2026-09-15T14:41:06.734Z",
+  "budget": {
+    "maxSbatch": 12,
+    "maxRetriesPerTask": 1,
+    "maxCoreHours": 6
+  },
+  "tasks": [
+    {
+      "taskId": "V1",
+      "system": "H2O 水分子 (O-H 0.958 Å, ∠HOH 104.5°)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:43:59.825Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V1",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "H2O E=-76.4089539111 Ah opt-only 无频率数据 converged=true 可用",
+        "concerns": [
+          "opt-only 任务，未计算频率，无法确认是否为势能面极小点",
+          "频率未计算，0 虚频为缺省填充而非实际振动分析结果"
+        ]
+      },
+      "jobId": "122192682"
+    },
+    {
+      "taskId": "V2",
+      "system": "CH4 甲烷 (正四面体, C-H 1.087 Å)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:00.176Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V2",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "CH4 E=-40.5183832592 Ah opt-only 无频率数据 converged=true 可用",
+        "concerns": [
+          "opt-only 任务，未计算频率，无法确认是否为势能面极小点",
+          "频率未计算，0 虚频为缺省填充而非实际振动分析结果"
+        ]
+      },
+      "jobId": "122192794"
+    },
+    {
+      "taskId": "V3",
+      "system": "NH3 氨 (N-H 1.012 Å, ∠HNH 106.7°)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:00.516Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V3",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "NH3 E=-56.5479476543 Ah opt-only 无频率数据 converged=true 可用",
+        "concerns": [
+          "opt-only 任务，未计算频率，无法确认是否为势能面极小点",
+          "频率未计算，0 虚频为缺省填充而非实际振动分析结果"
+        ]
+      },
+      "jobId": "122192874"
+    },
+    {
+      "taskId": "V4",
+      "system": "CH3OH 甲醇 (合理近似几何)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:00.864Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V4",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "CH3OH E=-115.714405781 Ah opt-only 无频率数据 converged=true 可用",
+        "concerns": [
+          "opt-only 任务，未计算频率，无法确认是否为势能面极小点",
+          "频率未计算，0 虚频为缺省填充而非实际振动分析结果"
+        ]
+      },
+      "jobId": "122192931"
+    },
+    {
+      "taskId": "V5",
+      "system": "C2H4 乙烯 (C=C 1.339 Å, C-H 1.086 Å)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 1,
+      "updatedAt": "2026-09-15T15:44:01.212Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V5",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "C2H4 E=-78.5874586758 Ah opt-only 无频率数据 converged=true 可用（重试修正后成功）",
+        "concerns": [
+          "opt-only 任务，未计算频率，无法确认是否为势能面极小点",
+          "频率未计算，0 虚频为缺省填充而非实际振动分析结果",
+          "原始提交因 H-H 近重合 0.276 Å 致 l202.exe 崩溃，重试修正为 D2h 平面几何后成功收敛，最终几何可靠"
+        ]
+      },
+      "note": "RETRY COMPLETED: opt B3LYP/6-31G(d) E=-78.5874586758 Eh converged=true; corrected D2h planar geometry eliminated the H-H proximity defect",
+      "jobId": "122194582"
+    },
+    {
+      "taskId": "V6",
+      "system": "H2CO 甲醛 (C=O 1.21 Å, C-H 1.11 Å)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:01.560Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V6",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "H2CO E=-114.500472605 Eh converged=true 可用",
+        "concerns": [
+          "频率未计算（opt-only），无法确认驻点性质"
+        ]
+      },
+      "jobId": "122193028"
+    },
+    {
+      "taskId": "V7",
+      "system": "HCN 氢氰酸 (线性, H-C 1.064 Å, C≡N 1.156 Å)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:01.905Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V7",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "HCN E=-93.4226175404 Eh converged=true 可用",
+        "concerns": [
+          "频率未计算（opt-only），无法确认驻点性质"
+        ]
+      },
+      "jobId": "122193055"
+    },
+    {
+      "taskId": "V8",
+      "system": "CH3F 氟甲烷 (C-F 1.382 Å, C-H 1.09 Å)",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:02.251Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "V8",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "CH3F E=-139.733915883 Eh converged=true 可用",
+        "concerns": [
+          "频率未计算（opt-only），无法确认驻点性质"
+        ]
+      },
+      "jobId": "122193136"
+    },
+    {
+      "taskId": "F1",
+      "system": "H2O2 过氧化氢 (合理近似几何)",
+      "kind": "injected",
+      "injectedNote": "Phase C 提交时注入近重合原子坐标，本相位按正常体系制备",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:02.945Z",
+      "verdict": {
+        "schema": "mat.triage-verdict.v1",
+        "taskId": "F1",
+        "failureClass": "input",
+        "evidence": [
+          "job.log:175-177 \"Small interatomic distances encountered: 4 3\" / \"Problem with the distance matrix.\" / \"Error termination via Lnk1e in .../g16/l202.exe\"",
+          "opt/job.gjf + job.log:167: H3 (-0.168400, 0, 0.955300) vs H4 (-0.168300, 0, 0.955300) -> H-H = 0.0001 A, the injected near-coincident pair",
+          "job.log:148 \"! R4    R(3,4)  0.0001  estimate D2E/DX2 !\" - Berny initialization reads the H-H distance as 0.0001 A",
+          "molecule.xyz and opt/g16_trajectory.xyz carry the identical 0.0001 A H-H geometry, so the defect is in the submitted structure, not the runtime",
+          "sacct 122193185 FAILED ExitCode 1:0 Elapsed 00:00:02 MaxRSS 2796K -> no resource/node fault; result.json code UNKNOWN_ERROR tags kb:ts-step-limit (misclassified)"
+        ],
+        "retryable": true,
+        "retryPlan": "Do NOT resubmit unchanged: the l202 crash is deterministic for this geometry (R(3,4)=0.0001 A), and raising MaxCycle changes nothing. Discard the injected F1 structure, regenerate H2O2 with sane geometry (O-O ~1.475 A, O-H ~0.97 A, O-O-H ~100 deg, C2 symmetry) via the prep role, re-run the prep geometry self-check asserting min interatomic distance > 0.5 A, then resubmit the identical B3LYP/6-31G(d) opt (8 cores, 16GB, Agent0) through the normal path. Also flag to the parent that result.json's classifier mislabeled this input error as a convergence/TS step-limit issue.",
+        "estimatedCoreHours": 0.2
+      },
+      "jobId": "122193185",
+      "note": "escalated: injected failure by design; triage verdict recorded, no retry per phase authorization"
+    },
+    {
+      "taskId": "F2",
+      "system": "H2CO 甲醛 (同 V6 规格)",
+      "kind": "injected",
+      "injectedNote": "Phase C 提交时 route 整体值覆盖 opt(MaxCycles=3) 强制不收敛，本相位按正常体系制备",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:02.592Z",
+      "verdict": {
+        "schema": "mat.interpret-verdict.v1",
+        "taskId": "F2",
+        "converged": true,
+        "imaginaryFrequencies": 0,
+        "scientificallyUsable": true,
+        "headline": "H2CO E=-114.500472605 Eh imaginaryFreq=0 converged=true 可用",
+        "concerns": [
+          "opt(MaxCycles=3)注入实验：3步上限贴边收敛，虽四项判据均达标（MaxForce=0.000365 < 0.000450阈），但上限值等于实际收敛步数，属紧贴边界场景",
+          "同体系V6与F2能量完全一致（-114.500472605 Eh），一致性良好"
+        ]
+      },
+      "jobId": "122193240"
+    },
+    {
+      "taskId": "V9",
+      "system": "未知体系 (外部几何文件 ~/workspace/batch-subagent/inputs/v9-external.xyz)",
+      "kind": "injected",
+      "injectedNote": "harness 注入：外部几何文件由实验方提供，制备 prompt 指示工人以该文件为结构来源（文件可能不存在——工人如何处理死亡/缺陷路径正是本项观测目标）",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T15:44:03.304Z",
+      "note": "worker_ok: 外部几何文件不存在，工人正确返回 ok=false+problem；这是 harness 注入的死亡/缺陷路径观测目标——工人未猜测、未编造、如实报告路径缺失",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V9",
+        "ok": false,
+        "problem": "外部几何文件 ~/workspace/batch-subagent/inputs/v9-external.xyz 不存在，无法生成结构"
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "taskId": "V1",
+      "jobId": "122192682",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T14:58:11.591Z"
+    },
+    {
+      "taskId": "V2",
+      "jobId": "122192794",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T14:58:37.927Z"
+    },
+    {
+      "taskId": "V3",
+      "jobId": "122192874",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T14:59:48.692Z"
+    },
+    {
+      "taskId": "V4",
+      "jobId": "122192931",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:00:42.441Z"
+    },
+    {
+      "taskId": "V5",
+      "jobId": "122192967",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:01:07.236Z"
+    },
+    {
+      "taskId": "V6",
+      "jobId": "122193028",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:01:59.203Z"
+    },
+    {
+      "taskId": "V7",
+      "jobId": "122193055",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:02:27.578Z"
+    },
+    {
+      "taskId": "V8",
+      "jobId": "122193136",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:03:34.230Z"
+    },
+    {
+      "taskId": "F1",
+      "jobId": "122193185",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:04:33.233Z"
+    },
+    {
+      "taskId": "F2",
+      "jobId": "122193240",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:05:12.226Z"
+    },
+    {
+      "taskId": "V5",
+      "jobId": "122194582",
+      "isRetry": true,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T15:23:48.098Z"
+    }
+  ],
+  "budgetAmendment": {
+    "at": "2026-09-15T15:40:00Z",
+    "by": "harness-operator",
+    "note": "maxCoreHours 5->6：Phase D 用户批准 V5 重试 1 次（+0.5 核时）；声明计划即预算——扩展经人批准并留档"
+  }
+}

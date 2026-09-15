@@ -1,0 +1,1 @@
+{"schema":"mat.interpret-verdict.v1","taskId":"V4","converged":true,"imaginaryFrequencies":0,"scientificallyUsable":true,"headline":"CH3OH E=-115.714405781 Ah opt-only 无频率数据 converged=true 可用","concerns":["opt-only 任务，未计算频率，无法确认是否为势能面极小点","频率未计算，0 虚频为缺省填充而非实际振动分析结果"]}
