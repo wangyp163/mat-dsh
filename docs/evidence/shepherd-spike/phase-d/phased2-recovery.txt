@@ -1,0 +1,4 @@
+[实验方注入——冷恢复指令] dsh 服务在你派发后数秒被重启：你的牧羊人的波1作业（SH5 opt，slurm 122203884）在远端已完成，但完成通知与自动 post 已随进程死亡丢失。执行恢复：
+
+1. send_message 给你的牧羊人（用你记录的 subagentId），消息原文：「服务重启过，你的波1作业 122203884 已在远端 COMPLETED 但通知丢失、producer 已死。对账恢复：用 mat_exec 跑 sacct -j 122203884 确认终态；然后按 gaussian-calc skill 分步协议对波1手动执行 post（workflow_env 下 gaussian-workflow post，workdir ~/workspace/shepherd/SH5/opt）拿到结构化 properties；门检（converged=true 才继续）；通过则按原计划推进波2 freq（同 manifest/task_ref/资源档，workdir ~/workspace/shepherd/SH5/freq）→ 等通知 → 终检 → update --phase final → report 终摘要。若 sacct 非 COMPLETED 或 post 失败：report 原因止链。」
+2. 发送后结束回合等 report，收到终摘要后：show 验证清单，输出 ≤6 行恢复摘要（对账结论/波2 终态/台账/冷恢复是否成功唤醒牧羊人）。

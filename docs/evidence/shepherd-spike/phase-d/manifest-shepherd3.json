@@ -1,0 +1,70 @@
+{
+  "portfolioId": "shepherd-cold",
+  "createdAt": "2026-09-15T16:48:27.199Z",
+  "budget": {
+    "maxSbatch": 4,
+    "maxRetriesPerTask": 1,
+    "maxCoreHours": 3
+  },
+  "tasks": [
+    {
+      "taskId": "SH5",
+      "system": "H2O 水分子",
+      "kind": "valid",
+      "phase": "final",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T16:53:20.671Z",
+      "spec": {
+        "task": "opt>freq",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/shepherd/SH5/freq",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); freq E=-76.4089539034 converged=true imag=0",
+        "energy": -76.4089539034,
+        "converged": true,
+        "frequencies_cm-1": [
+          1713.6374,
+          3727.3647,
+          3848.9151
+        ],
+        "imaginary_frequency_count": 0,
+        "temperature_k": 298.15,
+        "pressure_atm": 1,
+        "zero_point_correction_hartree": 0.021164,
+        "thermal_correction_energy_hartree": 0.023999,
+        "thermal_correction_enthalpy_hartree": 0.024943,
+        "thermal_correction_gibbs_hartree": 0.003497,
+        "sum_electronic_zpe_hartree": -76.38779,
+        "sum_electronic_thermal_hartree": -76.384955,
+        "sum_electronic_enthalpy_hartree": -76.384011,
+        "sum_electronic_free_energy_hartree": -76.405457,
+        "files": [
+          "/public/home/hpc-user-a/workspace/shepherd/SH5/freq/freq/artifacts.json",
+          "/public/home/hpc-user-a/workspace/shepherd/SH5/freq/freq/events.jsonl"
+        ]
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "taskId": "SH5",
+      "jobId": "122203884",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:50:27.838Z"
+    },
+    {
+      "taskId": "SH5",
+      "jobId": "122204097",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T16:52:34.664Z"
+    }
+  ]
+}
