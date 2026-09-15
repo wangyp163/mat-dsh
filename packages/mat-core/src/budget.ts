@@ -90,3 +90,29 @@ export function createBudgetGuard(declaration: BudgetDeclaration): BudgetGuard {
     },
   }
 }
+
+/**
+ * 清单驱动的预算闸（工具入口接线形态）：按 manifest 的声明 + 台账回放判定新请求。
+ * 语义：未声明预算 = 不受闸（opt-in）；计划外 taskId = 拒绝（声明计划即预算）。
+ */
+export function checkBudgetAgainstManifest(
+  portfolio: { budget?: BudgetDeclaration; ledger?: Array<{ taskId: string; isRetry: boolean; estimatedCoreHours: number }>; tasks: Array<{ taskId: string }> },
+  request: SbatchRequest,
+): BudgetDecision {
+  if (portfolio.budget === undefined) return { ok: true }
+  if (!portfolio.tasks.some((t) => t.taskId === request.taskId)) {
+    return {
+      ok: false,
+      reason: `task ${request.taskId} is not in the portfolio plan; plan-external submission refused (raise the declared plan to continue)`,
+    }
+  }
+  const guard = createBudgetGuard(portfolio.budget)
+  for (const entry of portfolio.ledger ?? []) {
+    guard.record({
+      taskId: entry.taskId,
+      isRetry: entry.isRetry,
+      estimatedCoreHours: entry.estimatedCoreHours,
+    })
+  }
+  return guard.check(request)
+}

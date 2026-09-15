@@ -28,6 +28,7 @@ import { EfileClient, ShellFileTransferClient, TokenClient } from 'mat-core'
 import { createStatusBoard } from 'mat-core'
 import type { GaussianProducerResult, RemoteWorkflowAdapter, MatJobStatus, SlurmJobInfo, StatusBoard } from 'mat-core'
 import { MatFileServiceImpl } from './file-service.ts'
+import { openBudgetGate } from './budget-hook.ts'
 import type { SettledFileJob } from './file-service.ts'
 import { resolveEfileCredentials } from './efile-env.ts'
 import { createWorkdirResolver } from './workdir-resolver.ts'
@@ -353,6 +354,13 @@ export function apply(ctx: Context): void {
       cluster_id: { type: 'string', required: true, description: 'HPC cluster id, e.g. 11250' },
       workdir: { type: 'string', required: true, description: 'Absolute working directory containing the script' },
       filename: { type: 'string', required: true, description: 'Job script filename (relative to workdir), e.g. slurm.sh' },
+      task_ref: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Optional budget gate: {portfolio_file, task_id}. Present = submission checked against the ' +
+          "portfolio's declared budget (sbatch/retry/core-hour caps); refusal returns BUDGET_REJECTED without submitting, " +
+          'and a successful submit is recorded in the portfolio ledger automatically. Omit for standalone use.',
+      },
     },
     output: {
       schema: { type: 'string' },
@@ -362,8 +370,10 @@ export function apply(ctx: Context): void {
       if (!args.workdir.trim() || !args.filename.trim()) {
         throw new Error('workdir and filename must be non-empty')
       }
+      const budgetGate = openBudgetGate(args.task_ref)
       const r = await getClient().execCommand(args.cluster_id, sbatchCommand(args.workdir, args.filename))
       const jobId = parseSbatchSubmission(outputText(r))
+      budgetGate?.record(jobId)
       return `submitted batch job ${jobId} on ${args.cluster_id} (workdir: ${args.workdir})`
     },
   }))
@@ -553,6 +563,14 @@ export function apply(ctx: Context): void {
         description: 'Optional passthrough: pre_json, run_json (full phase configs overriding defaults), ' +
           'workflow_env, g16_env (env script paths), poll_seconds (poll cap, min 10, default 30), max_wait_seconds (default 1800)',
       },
+      task_ref: {
+        type: 'object',
+        additionalProperties: true,
+        description: 'Optional budget gate: {portfolio_file, task_id}. Present = submission checked against the ' +
+          "portfolio's declared budget (sbatch/retry/core-hour caps; core-hour estimate from pre_json.resources.ncores); " +
+          'refusal returns BUDGET_REJECTED without submitting, and a successful submit is recorded in the portfolio ' +
+          'ledger automatically. Omit for standalone use.',
+      },
     },
     output: {
       schema: { type: 'string' },
@@ -567,6 +585,7 @@ export function apply(ctx: Context): void {
         throw new Error('task, structure and workdir must be non-empty')
       }
       const options = gaussianOptions(args.options)
+      const budgetGate = openBudgetGate(args.task_ref, options.preJson)
       const runSlurm = options.runJson?.['slurm']
       const runPartition = typeof runSlurm === 'object' && runSlurm !== null
         ? (runSlurm as Record<string, unknown>)['partition']
@@ -606,6 +625,7 @@ export function apply(ctx: Context): void {
         requestedOutputs: ['properties', 'artifact_manifest'],
       })
       const { executionId: slurmJobId } = await adapter.run(request)
+      budgetGate?.record(slurmJobId)
       // producer：再一个独立客户端（终态后自动 post，与同步段/前台隔离）
       const producerClient = newWatchClient()
       // 同 watch：板键 = cluster:slurmJobId，workspace 直接落在真实作业号目录。

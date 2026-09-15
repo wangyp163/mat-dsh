@@ -48,7 +48,18 @@ export interface Portfolio {
   createdAt: string
   /** 声明计划即预算：Phase C 预算闸的数据源（缺省未声明=不受预算闸管辖）。 */
   budget?: BudgetDeclaration
+  /** 提交台账（append-only）：预算闸回放数据源，工具侧 sbatch 成功后自动追加。 */
+  ledger?: SubmissionLedgerEntry[]
   tasks: PortfolioTask[]
+}
+
+/** 一次真实 sbatch 的台账记录（预算闸按此回放判定后续提交）。 */
+export interface SubmissionLedgerEntry {
+  taskId: string
+  jobId?: string
+  isRetry: boolean
+  estimatedCoreHours: number
+  at: string
 }
 
 export interface PortfolioTaskSpec {
@@ -139,6 +150,12 @@ export function resetForRetry(p: Portfolio, taskId: string): PortfolioTask {
   }
   p.tasks = p.tasks.map((x) => (x.taskId === taskId ? next : x))
   return next
+}
+
+/** 追加一条提交台账（append-only；工具侧 sbatch 成功后调用）。 */
+export function appendSubmission(p: Portfolio, entry: Omit<SubmissionLedgerEntry, 'at'> & { at?: string }): void {
+  if (p.ledger === undefined) p.ledger = []
+  p.ledger.push({ ...entry, at: entry.at ?? now() })
 }
 
 /** 序列化/反序列化；fromJson 严格校验防手改清单静默污染。 */

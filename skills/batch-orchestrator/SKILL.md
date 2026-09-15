@@ -77,3 +77,19 @@ pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/portfolio-cli.ts <cmd>
 - **Phase E（解读+汇总）**：成功任务 → analyst fan-out → 经理汇总报告。
 
 每相位结束时输出：相位摘要 ≤10 行（任务计数/相位分布/拒收与死亡数/token 无需你报）。
+
+## Phase C 提交协议（预算闸实弹）
+
+- 环境门禁一次（gaussian-calc skill 第一条），然后逐任务串行 `mat_gaussian`。
+- **每次提交必传 `task_ref`**：`{"portfolio_file": "<绝对路径 manifest>", "task_id": "<taskId>"}`——
+  预算闸在工具内生效：`BUDGET_REJECTED` 前缀错误 = 未提交，如实记录该任务的
+  note（"budget_rejected: <reason>"）并继续；提交成功则台账自动记账（你无需手动记），
+  你只需照常 `update --phase submitted --jobid <slurm id>`。
+- 重试路径：先 `portfolio-cli retry`（attempts+1、相位回 prepared）再重新提交——
+  预算闸按 attempts 派生重试身份。
+- 注入任务按清单 injectedNote 执行（F1 改坐标、F2 覆盖 route 属实验设计，照做）；
+  **V9 跳过提交**（needs_human）。
+- 资源档：小体系统一 8 核/16GB（pre_json.resources + run_json.slurm 同步降档，
+  slurm.ntasks_per_node ≥ resources.ncores 校验仍生效）。
+- 全部提交后：挂起等通知（一站式 producer 终态自动 post 并投递完成通知），醒来后
+  逐任务 `update --phase settled`（终态以 job_output/通知为准，禁手 poll sacct）。

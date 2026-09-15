@@ -1,0 +1,18 @@
+执行批量组合的 Phase C（集中提交 + 批量监控）。这是一个新会话：全部状态在磁盘清单里（manifest/portfolio.json，cwd ~/workspace/batch-subagent）。先读 skill batch-orchestrator（Phase C 提交协议节）与 skill gaussian-calc（门禁/一站式纪律），然后：
+
+1. portfolio-cli show 读清单；读 manifest/verdicts/ 下各任务的结构裁决（structure 字段，元素 x y z 行内格式，charge/mult 全部为 0/1——用一站式默认即可，无需传 charge/mult）。
+2. 环境门禁一次（gaussian-calc 第一条纪律）。
+3. 串行提交 10 个任务（V1–V8、F1、F2），每个用 mat_gaussian 一站式：
+   - structure 由 verdict 转成 xyz 三段格式（原子数行/注释行/原子行）。
+   - 资源档统一 8 核 16GB：options.pre_json 带 {"resources":{"ncores":8,"memory":"16GB"}}（本批全部默认方法 B3LYP/6-31G(d)，无其它键），options.run_json 带 {"slurm":{"partition":"Agent0","ntasks_per_node":8,"mem":"16GB","time":"00:30:00"}}。
+   - 每次必传 task_ref {"portfolio_file":"~/workspace/batch-subagent/manifest/portfolio.json","task_id":"<taskId>"}——预算闸生效；若返回 BUDGET_REJECTED 前缀错误，把原因记入该任务 note（budget_rejected）并继续下一任务。
+   - workdir 约定 ~/workspace/batch-subagent/<taskId>/（远端）。
+   - F1 注入（实验设计）：H2O2 结构中把两个 H 原子坐标改成几乎重合（第二个 H = 第一个 H + (1e-4,0,0)），其余原子不动，照常提交。
+   - F2 注入（实验设计）：pre_json 额外带 "opt": ["MaxCycles=3"]（task 用 opt+freq）。
+   - V9 跳过提交（needs_human）。
+   - 每个提交成功后 update --phase submitted --jobid <slurm id>（台账已由工具自动记录，不要手动记）。
+4. H6 演示：10 个提交全部处理完后，故意做一次计划外提交尝试——mat_gaussian 用 task_ref task_id="X-EXTRA"、任意 3 原子小结构、workdir ~/workspace/batch-subagent/x-extra-scratch/、同样的 8 核档——预期收到 BUDGET_REJECTED；把返回原文记进相位摘要。这一次就是为了验证预算闸，被拒即成功。
+5. 全部提交后：不做任何轮询，直接结束你的回合等完成通知（producer 终态自动 post）。等所有通知到齐后，逐任务按终态 update --phase settled（COMPLETED/FAILED 都算 settled；读通知与 job_output 的终态表为准）。
+6. 输出 ≤10 行相位摘要：提交成功数/预算拒绝数/失败终态数/各任务 slurm id 清单一行式。
+
+纪律提醒：全程不手动 squeue/sacct；不读 log 原文；X-EXTRA 的拒绝是预期结果不是事故。
