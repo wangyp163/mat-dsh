@@ -107,6 +107,16 @@ describe('json 往返', () => {
     expect(round).toEqual(p)
   })
 
+  it('预算声明随清单往返（声明计划即预算——Phase C 预算闸的数据源）', () => {
+    const p = createPortfolio({
+      portfolioId: 'spike',
+      budget: { maxSbatch: 12, maxRetriesPerTask: 1, maxCoreHours: 5 },
+      tasks: [{ taskId: 'V1', system: 'H2O', kind: 'valid' }],
+    })
+    const round = portfolioFromJson(portfolioToJson(p))
+    expect(round.budget).toEqual({ maxSbatch: 12, maxRetriesPerTask: 1, maxCoreHours: 5 })
+  })
+
   it('fromJson 拒绝坏 JSON 与缺字段载荷（防手改清单静默污染）', () => {
     expect(() => portfolioFromJson('not json')).toThrow()
     expect(() => portfolioFromJson('{"portfolioId":"x"}')).toThrow(/tasks/)

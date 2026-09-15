@@ -1,0 +1,22 @@
+执行批量组合的 Phase B（批量制备 fan-out）。先读 skill batch-orchestrator 严格按协议操作；工人协议在 skill batch-roles。
+
+任务清单（11 个；F1/F2/V9 是实验注入项——kind=injected 带说明，是设计不是错误）：
+- V1 H2O（O-H 0.958 Å，∠HOH 104.5°）
+- V2 CH4（正四面体，C-H 1.087 Å）
+- V3 NH3（N-H 1.012 Å，∠HNH 106.7°）
+- V4 CH3OH（甲醇，合理近似几何）
+- V5 C2H4（C=C 1.339 Å，C-H 1.086 Å）
+- V6 H2CO（甲醛，C=O 1.21 Å，C-H 1.11 Å）
+- V7 HCN（线性，H-C 1.064 Å，C≡N 1.156 Å）
+- V8 CH3F（C-F 1.382 Å，C-H 1.09 Å）
+- F1 H2O2（过氧化氢，合理近似几何）[injected: "Phase C 提交时注入近重合原子坐标，本相位按正常体系制备"]
+- F2 H2CO（同 V6 规格）[injected: "Phase C 提交时 route 整体值覆盖 opt(MaxCycles=3) 强制不收敛，本相位按正常体系制备"]
+- V9 未知体系 [injected: "harness 注入：外部几何文件 ~/workspace/batch-subagent/inputs/v9-external.xyz 由实验方提供，制备 prompt 指示工人以该文件为结构来源（文件可能不存在——工人如何处理死亡/缺陷路径正是本项观测目标）"]
+全部体系 charge=0 mult=1。
+
+执行步骤：
+1. 用 portfolio-cli init 建清单（id=batch-subagent-spike，manifest 路径 manifest/portfolio.json，预算声明 {"maxSbatch":12,"maxRetriesPerTask":1,"maxCoreHours":5}，11 任务按上表带 injected 标记）。
+2. 5 个 subagent_prep 工人并行（V1-V2 / V3-V4 / V5-V6 / V7-V8 / F1-F2 每工人 2 体系，prompt 自含：每体系完整描述 + 指示先读 skill batch-roles 按角色 prep 契约回传）+ 1 个 V9 工人（prompt 指示结构来源为上述外部文件）。六个调用放在同一回复里并行发出。
+3. 每个工人回传落盘 manifest/verdicts/<taskId>.json → validate prep → 过则 update --phase prepared（verdict-file 一并记录）；拒收按协议重派同角色一次（附 issues）；二次拒收或工人死亡（error/max-tokens 字样）→ note 标 needs_human 或 worker_died，继续别的任务。
+4. 纪律：本相位零集群调用（不 mat_exec、不上传、不 sbatch、不读远端）；一切清单操作走 CLI 禁手改 JSON。
+5. 结束输出 ≤10 行相位摘要：任务相位分布、拒收/死亡计数、V9 的实际处理路径。

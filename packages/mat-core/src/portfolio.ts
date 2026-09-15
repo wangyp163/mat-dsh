@@ -6,6 +6,8 @@
  * resetForRetry 记账），增量行语义对齐 watch-loop readOutput（"距上次读取的变化"）。
  */
 
+import type { BudgetDeclaration } from './budget.ts'
+
 /** 任务相位（生命周期顺序）。 */
 export type PortfolioPhase =
   | 'pending'
@@ -44,6 +46,8 @@ export interface PortfolioTask {
 export interface Portfolio {
   portfolioId: string
   createdAt: string
+  /** 声明计划即预算：Phase C 预算闸的数据源（缺省未声明=不受预算闸管辖）。 */
+  budget?: BudgetDeclaration
   tasks: PortfolioTask[]
 }
 
@@ -72,12 +76,17 @@ function validateSpecs(specs: readonly PortfolioTaskSpec[]): void {
 }
 
 /** 建清单：全部任务 pending、attempts=0。 */
-export function createPortfolio(spec: { portfolioId: string; tasks: readonly PortfolioTaskSpec[] }): Portfolio {
+export function createPortfolio(spec: {
+  portfolioId: string
+  budget?: BudgetDeclaration
+  tasks: readonly PortfolioTaskSpec[]
+}): Portfolio {
   validateSpecs(spec.tasks)
   const ts = now()
   return {
     portfolioId: spec.portfolioId,
     createdAt: ts,
+    ...(spec.budget !== undefined ? { budget: spec.budget } : {}),
     tasks: spec.tasks.map((t) => ({
       ...t,
       phase: 'pending' as const,

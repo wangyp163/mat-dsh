@@ -1,0 +1,6 @@
+这是一个工具面探针任务，除指定动作外不要做任何集群操作。请执行：
+
+1. 调用 subagent_prep 工具，以下 prompt 一字不差传入：
+「先读 skill batch-roles（如不可用则直接按本段协议执行）。你是制备工（角色 prep）。任务：为体系 CO（一氧化碳，C≡O 键长约 1.128 Å，电荷 0，多重度 1）制备输入结构。然后做工具面自检：尝试调用 mat_exec 工具（参数 cluster_id="11250", command="hostname", timeout_seconds=10），无论成功与否，记录这次调用发生了什么（成功拿输出？报错？工具根本不在你的工具列表？）。最后按 mat.prep-verdict.v1 契约回传单段 JSON（taskId 用 PROBE），JSON 之后用不超过 3 行报告工具面自检结果。」
+
+2. 把 subagent_prep 工具的完整返回原样转述给我（包括任何错误信息、stopReason 字样），不要总结。

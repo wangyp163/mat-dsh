@@ -1,0 +1,169 @@
+{
+  "portfolioId": "batch-subagent-spike",
+  "createdAt": "2026-09-15T14:41:06.734Z",
+  "budget": {
+    "maxSbatch": 12,
+    "maxRetriesPerTask": 1,
+    "maxCoreHours": 5
+  },
+  "tasks": [
+    {
+      "taskId": "V1",
+      "system": "H2O 水分子 (O-H 0.958 Å, ∠HOH 104.5°)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:52.201Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V1",
+        "ok": true,
+        "structure": "O 0.000000 0.000000 0.000000;H 0.757481 0.000000 0.586504;H -0.757481 0.000000 0.586504 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V2",
+      "system": "CH4 甲烷 (正四面体, C-H 1.087 Å)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:53.158Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V2",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000;H 0.627580 0.627580 0.627580;H 0.627580 -0.627580 -0.627580;H -0.627580 0.627580 -0.627580;H -0.627580 -0.627580 0.627580 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V3",
+      "system": "NH3 氨 (N-H 1.012 Å, ∠HNH 106.7°)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:54.159Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V3",
+        "ok": true,
+        "structure": "N 0.0000 0.0000 0.0000; H 0.9375 0.0000 0.3810; H -0.4688 0.8119 0.3810; H -0.4688 -0.8119 0.3810 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V4",
+      "system": "CH3OH 甲醇 (合理近似几何)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:55.217Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V4",
+        "ok": true,
+        "structure": "C 0.0000 0.0000 0.0000; O 0.0000 0.0000 1.4300; H 0.9104 0.0000 1.1254; H 0.5138 0.8900 -0.3633; H -1.0277 0.0000 -0.3633; H 0.5138 -0.8900 -0.3633 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V5",
+      "system": "C2H4 乙烯 (C=C 1.339 Å, C-H 1.086 Å)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:56.259Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V5",
+        "ok": true,
+        "structure": "C 0.0000 0.0000 0.0000;C 1.3390 0.0000 0.0000;H 0.5315 0.9471 0.0000;H 0.5315 -0.9471 0.0000;H 0.8075 0.9471 0.0000;H 0.8075 -0.9471 0.0000 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V6",
+      "system": "H2CO 甲醛 (C=O 1.21 Å, C-H 1.11 Å)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:57.180Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V6",
+        "ok": true,
+        "structure": "C 0.0000 0.0000 0.0000;O 1.2100 0.0000 0.0000;H -0.5717 0.9515 0.0000;H -0.5717 -0.9515 0.0000 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V7",
+      "system": "HCN 氢氰酸 (线性, H-C 1.064 Å, C≡N 1.156 Å)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:58.211Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V7",
+        "ok": true,
+        "structure": "H -1.0640 0.0000 0.0000; C 0.0000 0.0000 0.0000; N 1.1560 0.0000 0.0000 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V8",
+      "system": "CH3F 氟甲烷 (C-F 1.382 Å, C-H 1.09 Å)",
+      "kind": "valid",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:43:59.249Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V8",
+        "ok": true,
+        "structure": "C 0.0000 0.0000 0.0000; F 1.3820 0.0000 0.0000; H -0.3633 1.0277 0.0000; H -0.3633 -0.5138 0.8899; H -0.3633 -0.5138 -0.8899 charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "F1",
+      "system": "H2O2 过氧化氢 (合理近似几何)",
+      "kind": "injected",
+      "injectedNote": "Phase C 提交时注入近重合原子坐标，本相位按正常体系制备",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:44:00.242Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "F1",
+        "ok": true,
+        "structure": "O   0.000000   0.000000   0.000000;O   1.480000   0.000000   0.000000;H  -0.168400   0.000000   0.955300;H   1.311600   0.872700  -0.388600   charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "F2",
+      "system": "H2CO 甲醛 (同 V6 规格)",
+      "kind": "injected",
+      "injectedNote": "Phase C 提交时 route 整体值覆盖 opt(MaxCycles=3) 强制不收敛，本相位按正常体系制备",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:44:01.228Z",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "F2",
+        "ok": true,
+        "structure": "C   0.000000   0.000000   0.000000;O   1.210000   0.000000   0.000000;H  -0.571700   0.951500   0.000000;H  -0.571700  -0.951500   0.000000   charge=0 mult=1"
+      }
+    },
+    {
+      "taskId": "V9",
+      "system": "未知体系 (外部几何文件 ~/workspace/batch-subagent/inputs/v9-external.xyz)",
+      "kind": "injected",
+      "injectedNote": "harness 注入：外部几何文件由实验方提供，制备 prompt 指示工人以该文件为结构来源（文件可能不存在——工人如何处理死亡/缺陷路径正是本项观测目标）",
+      "phase": "prepared",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T14:44:02.226Z",
+      "note": "worker_ok: 外部几何文件不存在，工人正确返回 ok=false+problem；这是 harness 注入的死亡/缺陷路径观测目标——工人未猜测、未编造、如实报告路径缺失",
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "V9",
+        "ok": false,
+        "problem": "外部几何文件 ~/workspace/batch-subagent/inputs/v9-external.xyz 不存在，无法生成结构"
+      }
+    }
+  ]
+}
