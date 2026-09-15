@@ -1,0 +1,15 @@
+{
+  "schema": "mat.triage-verdict.v1",
+  "taskId": "F1",
+  "failureClass": "input",
+  "evidence": [
+    "job.log:175-177 \"Small interatomic distances encountered: 4 3\" / \"Problem with the distance matrix.\" / \"Error termination via Lnk1e in .../g16/l202.exe\"",
+    "opt/job.gjf + job.log:167: H3 (-0.168400, 0, 0.955300) vs H4 (-0.168300, 0, 0.955300) -> H-H = 0.0001 A, the injected near-coincident pair",
+    "job.log:148 \"! R4    R(3,4)  0.0001  estimate D2E/DX2 !\" - Berny initialization reads the H-H distance as 0.0001 A",
+    "molecule.xyz and opt/g16_trajectory.xyz carry the identical 0.0001 A H-H geometry, so the defect is in the submitted structure, not the runtime",
+    "sacct 122193185 FAILED ExitCode 1:0 Elapsed 00:00:02 MaxRSS 2796K -> no resource/node fault; result.json code UNKNOWN_ERROR tags kb:ts-step-limit (misclassified)"
+  ],
+  "retryable": true,
+  "retryPlan": "Do NOT resubmit unchanged: the l202 crash is deterministic for this geometry (R(3,4)=0.0001 A), and raising MaxCycle changes nothing. Discard the injected F1 structure, regenerate H2O2 with sane geometry (O-O ~1.475 A, O-H ~0.97 A, O-O-H ~100 deg, C2 symmetry) via the prep role, re-run the prep geometry self-check asserting min interatomic distance > 0.5 A, then resubmit the identical B3LYP/6-31G(d) opt (8 cores, 16GB, Agent0) through the normal path. Also flag to the parent that result.json's classifier mislabeled this input error as a convergence/TS step-limit issue.",
+  "estimatedCoreHours": 0.2
+}

@@ -1,0 +1,15 @@
+{
+  "schema": "mat.triage-verdict.v1",
+  "taskId": "V5",
+  "failureClass": "input",
+  "evidence": [
+    "opt/job.log line 116-117: H5=(0.8075,+0.9471), H6=(0.8075,-0.9471) — H5 and H3 share +y",
+    "opt/job.log line 158: ! R10   R(3,5)                  0.276          estimate D2E/DX2",
+    "opt/job.log line 201: Small interatomic distances encountered:      5     3     6     4",
+    "opt/job.log line 202: Problem with the distance matrix.",
+    "opt/job.log line 203: Error termination via Lnk1e in ... l202.exe; sacct ExitCode 1:0, no SCF ran"
+  ],
+  "retryable": true,
+  "retryPlan": "Re-prepare C2H4 with correct D2h planar geometry: keep C1=(0,0,0), C2=(1.339,0,0); swap y-signs of H5/H6: H5→(0.8075,-0.9471,0), H6→(0.8075,+0.9471,0) so each C has one H above, one below y=0 plane — eliminating the 0.276 Å same-side H–H contact. Then resubmit opt B3LYP/6-31G(d).",
+  "estimatedCoreHours": 0.1
+}

@@ -1,0 +1,15 @@
+执行批量组合的 Phase D（失败分诊 fan-out + 重试决策）。新会话，状态在磁盘清单（manifest/portfolio.json，cwd ~/workspace/batch-subagent）。先读 skill batch-orchestrator。
+
+背景：Phase C 终态 8 COMPLETED / 2 FAILED。失败任务两个：
+- V5 C2H4（job 122192967，workdir 远端 ~/workspace/batch-subagent/V5/，FAILED——距离矩阵报错，同侧 H 间距 0.276Å，制备几何缺陷）
+- F1 H2O2（job 122193185，workdir ~/workspace/batch-subagent/F1/，FAILED——Small interatomic distances，注入设计）
+预算说明：harness 操作员已按用户批准把 maxCoreHours 5→6（清单 budgetAmendment 留档），V5 重试一次的余量已备好。
+
+执行：
+1. 分诊 fan-out：同一回复并行派 2 个 subagent_triage 工人（prompt 自含：taskId、cluster_id=11250、远端 workdir、job id 与终态摘要；指示工人先读 skill batch-roles 的 triage 角色，用只读 mat_exec 自行取证——tail job 日志/result.json 相关行，禁 sbatch/写操作——按 mat.triage-verdict.v1 契约回传）。
+2. 两份裁决落盘 manifest/verdicts/<taskId>.triage.json → validate triage → update --phase diagnosed --verdict-file。
+3. 重试决策（按协议+本相位授权）：
+   - V5：预期 retryable=true——执行重试链：portfolio-cli retry V5（attempts 记账、相位回 prepared）→ 派 1 个 subagent_prep 工人重新制备乙烯（给工人正确参数：平面 D2h，C=C 1.339Å 居中，每 C 上两 H 键长 1.086Å、∠HCH 117.6°，四个 H 分列 ±x/±y 四角对称，严禁同侧近距）→ validate prep → 提交（mat_gaussian 一站式，task_ref 同前，attempts=1 会按重试身份过闸）→ update --phase submitted --jobid → 等完成通知 → 按终态 update --phase settled（本次预期 COMPLETED，把能量记进 note）。
+   - F1：无论裁决如何——注入任务不重试（用户本相位只批了 V5），update --note "escalated: injected failure by design; triage verdict recorded, no retry per phase authorization"，相位保持 diagnosed。
+4. 若 V5 重试提交收到 BUDGET_REJECTED：原文记 note 并停止重试（预算权威高于相位目标）。
+5. 输出 ≤10 行相位摘要：两份裁决要点各一行（failureClass/retryable/一句话证据）、V5 重试结果（新 job id/终态/能量）、F1 上报确认、预算台账终值。
