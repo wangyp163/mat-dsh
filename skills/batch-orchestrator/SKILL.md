@@ -45,6 +45,14 @@ pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/portfolio-cli.ts <cmd>
 
 独立调用**在同一个回复里并行发出**（`run_in_background: false` 等结果时才串行）。
 
+### 瘦委托红线（scale-round 实测教训）
+
+**自含 prompt 不随规模线性扩展**：50 任务时经理撰写第 10 份工人 prompt 即耗尽
+单回合输出预算（max-tokens 截断）。批量委托默认瘦形态：
+- 共享数据先落盘（基准结构→文件、任务规格→manifest spec、properties→快照），
+  工人 prompt 只给**指针**（文件路径/taskId 列表）+ 缩放等变换规则；
+- 每条回复最多 **3 个工人**，分批发；工人自己 read 文件、自己 portfolio-cli show。
+
 ## 契约校验循环（拒收只重试一次）
 
 1. 工人回传 → heredoc 落盘 `manifest/verdicts/<taskId>.json`
