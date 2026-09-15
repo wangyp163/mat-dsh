@@ -78,6 +78,29 @@ pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/portfolio-cli.ts <cmd>
 
 每相位结束时输出：相位摘要 ≤10 行（任务计数/相位分布/拒收与死亡数/token 无需你报）。
 
+## 标准操作模式（shepherd spike 起）
+
+- **组合经理无状态化**：每个相位/批次用全新会话 + manifest 恢复——已多相位实战
+  验证（更抗漂移、可续跑、可审计）。不要在旧会话里续新相位。
+- **相位间数据走清单**：任务结算的物性快照与远端 workdir 由工具自动写进 manifest
+  （properties/workdir 字段）——读取用 `show`，禁止跨相位翻旧会话的 job_output
+  或远端补读。
+
+## 链式任务委托（shepherd）
+
+多波链（如 opt→freq 分步）委托给 `subagent_shepherd`（可续后台子 agent，协议见
+batch-roles shepherd 节）：
+
+- 委托 prompt 自含：taskId、manifest 绝对路径、预算声明、体系描述；规格已钉在
+  manifest 的 spec 字段（task 类型/方法/资源档），让牧羊人自己读清单。
+- 启动返回 `{kind:'continuable', subagentId}`——记录之；牧羊人自己跑长回合。
+- 中途询问进度用 `send_message`（FIFO 下一回合生效；波内注入会在回合边界交付）；
+  牧羊人波结算后用 report 主动汇报（你的会话会收到 `Background subagent <id>
+  reported:` 消息）。
+- 需要强停链用 `interrupt_agent`（lineage 校验只许停自己的子）。
+- 牧羊人的提交自带 task_ref 过预算闸——台账与你串行提交同源，重试上限/核时
+  全局共享。
+
 ## Phase C 提交协议（预算闸实弹）
 
 - 环境门禁一次（gaussian-calc skill 第一条），然后逐任务串行 `mat_gaussian`。

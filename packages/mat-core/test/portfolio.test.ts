@@ -107,6 +107,27 @@ describe('json 往返', () => {
     expect(round).toEqual(p)
   })
 
+  it('任务规格/工作目录/物性快照随清单往返（shepherd spike C1/C2）', () => {
+    const p = createPortfolio({
+      portfolioId: 'shepherd',
+      tasks: [{ taskId: 'S1', system: 'H2O', kind: 'valid' }],
+    })
+    updateTask(p, 'S1', {
+      spec: { task: 'opt+freq', method: 'B3LYP/6-31G(d)', resources: { ncores: 8, memory: '16GB' } },
+      workdir: '/public/home/hpc-user-a/workspace/shepherd/S1',
+      properties: { energy: -76.4089, converged: true, imaginary_frequency_count: 0 },
+    })
+    const round = portfolioFromJson(portfolioToJson(p))
+    expect(round.tasks[0].spec).toEqual({ task: 'opt+freq', method: 'B3LYP/6-31G(d)', resources: { ncores: 8, memory: '16GB' } })
+    expect(round.tasks[0].workdir).toBe('/public/home/hpc-user-a/workspace/shepherd/S1')
+    expect(round.tasks[0].properties).toMatchObject({ energy: -76.4089 })
+  })
+
+  it('spec.task 空串即拒（规格钉死纪律的校验面）', () => {
+    const p = makeSpikePortfolio()
+    expect(() => updateTask(p, 'V1', { spec: { task: '' } })).toThrow(/spec\.task/)
+  })
+
   it('预算声明随清单往返（声明计划即预算——Phase C 预算闸的数据源）', () => {
     const p = createPortfolio({
       portfolioId: 'spike',

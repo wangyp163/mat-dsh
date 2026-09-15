@@ -28,6 +28,14 @@ const PHASE_ORDER: readonly PortfolioPhase[] = [
   'final',
 ]
 
+/** 任务计算规格（shepherd spike C2：规格钉死——提交时从清单读，禁现场发挥）。 */
+export interface TaskSpec {
+  /** 计算类型，如 'opt'、'opt+freq'、分步链写 'opt>freq'。 */
+  task: string
+  method?: string
+  resources?: { ncores: number; memory: string }
+}
+
 /** 清单里的一个任务。verdict 是 P2 契约产物（最后一次结构化裁决）。 */
 export interface PortfolioTask {
   taskId: string
@@ -37,6 +45,12 @@ export interface PortfolioTask {
   injectedNote?: string
   phase: PortfolioPhase
   jobId?: string
+  /** 远端作业工作目录的绝对路径（提交成功时由工具写入——路径歧义根治）。 */
+  workdir?: string
+  /** 结算时的物性摘要快照（settle 时由 producer 写入——相位间数据走清单）。 */
+  properties?: Record<string, unknown>
+  /** 计算规格（钉死纪律）。 */
+  spec?: TaskSpec
   attempts: number
   verdict?: Record<string, unknown>
   note?: string
@@ -117,6 +131,9 @@ function findTask(p: Portfolio, taskId: string): PortfolioTask {
 export interface PortfolioTaskPatch {
   phase?: PortfolioPhase
   jobId?: string
+  workdir?: string
+  properties?: Record<string, unknown>
+  spec?: TaskSpec
   verdict?: Record<string, unknown>
   note?: string
   system?: string
@@ -125,6 +142,7 @@ export interface PortfolioTaskPatch {
 /**
  * 推进任务；相位只能沿 PHASE_ORDER 前进（相等幂等），倒退抛错——
  * 重试语义走 resetForRetry（attempts 记账），不允许静默回卷。
+ * spec.task 空串拒绝（规格钉死纪律的校验面）。
  */
 export function updateTask(p: Portfolio, taskId: string, patch: PortfolioTaskPatch): PortfolioTask {
   const t = findTask(p, taskId)
@@ -132,6 +150,9 @@ export function updateTask(p: Portfolio, taskId: string, patch: PortfolioTaskPat
     const from = PHASE_ORDER.indexOf(t.phase)
     const to = PHASE_ORDER.indexOf(patch.phase)
     if (to < from) throw new Error(`portfolio: phase regression ${t.phase} -> ${patch.phase} for ${taskId}`)
+  }
+  if (patch.spec !== undefined && (typeof patch.spec.task !== 'string' || patch.spec.task.length === 0)) {
+    throw new Error('portfolio: spec.task must be a non-empty string')
   }
   const next: PortfolioTask = { ...t, ...patch, updatedAt: now() }
   p.tasks = p.tasks.map((x) => (x.taskId === taskId ? next : x))

@@ -1,0 +1,8 @@
+机制探针任务（零集群操作）。按步骤执行并把每步原文转述：
+
+1. 用 subagent 工具（后台 continuable 模式，默认即可，不要 run_in_background: false）启动一个子 agent，prompt 一字不差传入：「启动一个 bash 后台作业：命令 sleep 60，run_in_background 传 true。拿到后台作业 id 后立即结束你的回合，只输出一行：已提交后台作业 <job_id>。」
+2. 记下返回的 subagentId，等约 20 秒（可 sleep）。
+3. job_list 查看作业列表，完整转述与该 bash 作业相关的行（状态字段原文）。
+4. send_message 给该 subagentId：「用 report 工具汇报：你提交的那个 bash 后台作业现在什么状态（用 job_list 或 job_output 查一下再说）」。
+5. 等子 agent 的汇报到达（你的会话会收到 Background subagent reported 消息），转述其内容。
+6. 最后 interrupt_agent 停掉该子 agent，转述返回。

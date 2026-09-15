@@ -29,6 +29,7 @@ import { createStatusBoard } from 'mat-core'
 import type { GaussianProducerResult, RemoteWorkflowAdapter, MatJobStatus, SlurmJobInfo, StatusBoard } from 'mat-core'
 import { MatFileServiceImpl } from './file-service.ts'
 import { openBudgetGate } from './budget-hook.ts'
+import { parseManifestRef, recordWorkdir, snapshotProperties } from './manifest-hook.ts'
 import type { SettledFileJob } from './file-service.ts'
 import { resolveEfileCredentials } from './efile-env.ts'
 import { createWorkdirResolver } from './workdir-resolver.ts'
@@ -586,6 +587,7 @@ export function apply(ctx: Context): void {
       }
       const options = gaussianOptions(args.options)
       const budgetGate = openBudgetGate(args.task_ref, options.preJson)
+      const manifestRef = parseManifestRef(args.task_ref)
       const runSlurm = options.runJson?.['slurm']
       const runPartition = typeof runSlurm === 'object' && runSlurm !== null
         ? (runSlurm as Record<string, unknown>)['partition']
@@ -626,6 +628,7 @@ export function apply(ctx: Context): void {
       })
       const { executionId: slurmJobId } = await adapter.run(request)
       budgetGate?.record(slurmJobId)
+      if (manifestRef !== undefined) recordWorkdir(manifestRef, args.workdir.trim())
       // producer：再一个独立客户端（终态后自动 post，与同步段/前台隔离）
       const producerClient = newWatchClient()
       // 同 watch：板键 = cluster:slurmJobId，workspace 直接落在真实作业号目录。
@@ -661,7 +664,10 @@ export function apply(ctx: Context): void {
               })
             } catch { /* 状态板旁路故障不影响 producer */ }
           },
-          onResult: (result) => settleBoard(statusBoard, statusKey, result, fileService),
+          onResult: (result) => {
+            settleBoard(statusBoard, statusKey, result, fileService)
+            if (manifestRef !== undefined) snapshotProperties(manifestRef, result)
+          },
           })
         },
       })

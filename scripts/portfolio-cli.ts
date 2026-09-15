@@ -85,18 +85,27 @@ function main(): void {
           phase: { type: 'string' },
           jobid: { type: 'string' },
           note: { type: 'string' },
+          workdir: { type: 'string' },
+          spec: { type: 'string' },
           'verdict-file': { type: 'string' },
+          'properties-file': { type: 'string' },
         },
       })
       const p = portfolioFromJson(readFileSync(path, 'utf8'))
       const verdict = values['verdict-file'] !== undefined
         ? (JSON.parse(readPayload(values['verdict-file'])) as Record<string, unknown>)
         : undefined
+      const properties = values['properties-file'] !== undefined
+        ? (JSON.parse(readPayload(values['properties-file'])) as Record<string, unknown>)
+        : undefined
       const t = updateTask(p, taskId, {
         ...(values.phase !== undefined ? { phase: values.phase as never } : {}),
         ...(values.jobid !== undefined ? { jobId: values.jobid } : {}),
         ...(values.note !== undefined ? { note: values.note } : {}),
+        ...(values.workdir !== undefined ? { workdir: values.workdir } : {}),
+        ...(values.spec !== undefined ? { spec: JSON.parse(values.spec) as never } : {}),
         ...(verdict !== undefined ? { verdict } : {}),
+        ...(properties !== undefined ? { properties } : {}),
       })
       writeFileSync(path, portfolioToJson(p))
       console.log(`${t.taskId} -> ${t.phase}${t.jobId !== undefined ? ` job=${t.jobId}` : ''}`)
