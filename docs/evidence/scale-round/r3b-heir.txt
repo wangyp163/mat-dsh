@@ -1,0 +1,5 @@
+你接任一个被中断的批量计算。cwd ~/workspace/batch-subagent。按 skill batch-orchestrator 的「自愈扫描」协议执行：清单 ~/workspace/batch-subagent/manifest/scale50.json。
+
+背景最小信息：50 任务几何扰动扫描（10 分子×5 缩放，task=opt 8 核档，workdir ~/workspace/scale50/<taskId>/）；前任会话在串行提交中途被服务重启打断；基准结构文件 ~/workspace/batch-subagent/scale50-base.json；batch-roles 的 prep 角色可补制备。预算与提交参数已钉在清单 spec 与预算声明里。
+
+要求：自愈扫描 → 恢复 stale → 继续完成剩余任务的提交与结算 → 收尾跑 reconcile-ledger（两本账报告贴摘要）→ 输出 ≤12 行相位摘要（含前任/接任的分界计数、终态分布、两本账 3 行）。

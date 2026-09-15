@@ -1,0 +1,25 @@
+执行 scale-round 50 任务压测（几何扰动扫描）。新会话，cwd ~/workspace/batch-subagent。先读 skill batch-orchestrator（含自愈扫描节）与 batch-roles。
+
+批次定义：10 分子 × 5 档键长缩放 = 50 个 opt 任务。taskId M01–M50（分子按序每组 5 个：M01–05=H2O，M06–10=CH4，M11–15=NH3，M16–20=CH3OH，M21–25=H2CO，M26–30=HCN，M31–35=CH3F，M36–40=CO，M41–45=HF，M46–50=N2；组内缩放序 0.95/0.98/1.00/1.02/1.05）。缩放=全部原子坐标乘以系数（质心不变性不要求，原点缩放即可）。
+
+基准结构（全部 charge=0 mult=1；缩放只动坐标）：
+H2O: O 0 0 0; H 0.757481 0 0.586504; H -0.757481 0 0.586504
+CH4: C 0 0 0; H 0.62758 0.62758 0.62758; H 0.62758 -0.62758 -0.62758; H -0.62758 0.62758 -0.62758; H -0.62758 -0.62758 0.62758
+NH3: N 0 0 0; H 0.9375 0 0.3810; H -0.4688 0.8119 0.3810; H -0.4688 -0.8119 0.3810
+CH3OH: C 0 0 0; O 0 0 1.43; H 0.9104 0 1.1254; H 0.5138 0.89 -0.3633; H -1.0277 0 -0.3633; H 0.5138 -0.89 -0.3633
+H2CO: C 0 0 0; O 1.21 0 0; H -0.5717 0.9515 0; H -0.5717 -0.9515 0
+HCN: H -1.064 0 0; C 0 0 0; N 1.156 0 0
+CH3F: C 0 0 0; F 1.382 0 0; H -0.3633 1.0277 0; H -0.3633 -0.5138 0.8899; H -0.3633 -0.5138 -0.8899
+CO: C 0 0 0; O 1.128 0 0
+HF: H 0 0 0; F 0.917 0 0
+N2: N 0 0 0; N 1.098 0 0
+
+执行：
+1. 建清单 manifest/scale50.json（id=scale-round-50，预算 {"maxSbatch":55,"maxRetriesPerTask":1,"maxCoreHours":26}）：50 任务全部 kind valid，system 写 "<分子> scale <系数>"。全部 update --spec '{"task":"opt","method":"B3LYP/6-31G(d)","resources":{"ncores":8,"memory":"16GB"}}'（可用一条 bash 循环批量做）。
+2. 制备 fan-out：10 个 subagent_prep 工人并行（每人 1 个分子的 5 档缩放；prompt 自含：基准结构行 + 5 个 taskId + 缩放系数表 + 指示先读 skill batch-roles prep 节，逐任务回传 mat.prep-verdict.v1 JSON 数组，每个元素带 taskId）。逐份 validate prep → update --phase prepared --verdict-file。
+3. 提交：串行 50 次 mat_gaussian（task=opt，structure 用对应缩放结构，workdir ~/workspace/scale50/<taskId>/，options.pre_json={"resources":{"ncores":8,"memory":"16GB"}}，options.run_json={"slurm":{"partition":"Agent0","ntasks_per_node":8,"mem":"16GB","time":"00:30:00"}}，task_ref={"portfolio_file":"~/workspace/batch-subagent/manifest/scale50.json","task_id":"<taskId>"}），每个成功后 update --phase submitted --jobid。BUDGET_REJECTED 则记 note 继续下一个。
+4. 全部提交后结束回合等通知；通知到齐后逐任务 update --phase settled（终态以通知/job_output 为准）。失败任务记 note，不阻塞。
+5. 收尾：bash 跑 pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/reconcile-ledger.ts 11250 ~/workspace/batch-subagent/manifest/scale50.json，把两本账报告贴进摘要。
+6. 输出 ≤12 行相位摘要：提交数/终态分布（COMPLETED/FAILED 计数）/首尾作业 id/两本账报告 3 行/stale 数（应为 0）。
+
+纪律：零手动 squeue/sacct（对账脚本除外）；不读 log 原文；实验方可能中途重启服务——若你的回合被打断无需自救，会有接任会话按自愈扫描协议接手。

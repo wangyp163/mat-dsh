@@ -1,0 +1,1869 @@
+{
+  "portfolioId": "scale-round-50",
+  "createdAt": "2026-09-15T17:05:13.339Z",
+  "budget": {
+    "maxSbatch": 55,
+    "maxRetriesPerTask": 1,
+    "maxCoreHours": 26
+  },
+  "tasks": [
+    {
+      "taskId": "M01",
+      "system": "H2O scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:26:31.520Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M01",
+        "ok": true,
+        "structure": "O 0.000000 0.000000 0.000000; H 0.719607 0.000000 0.557179; H -0.719607 0.000000 0.557179; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M01",
+      "jobId": "122207754"
+    },
+    {
+      "taskId": "M02",
+      "system": "H2O scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:35.690Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M02",
+        "ok": true,
+        "structure": "O 0.000000 0.000000 0.000000; H 0.742331 0.000000 0.574774; H -0.742331 0.000000 0.574774; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M02",
+      "jobId": "122207908"
+    },
+    {
+      "taskId": "M03",
+      "system": "H2O scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:36.040Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M03",
+        "ok": true,
+        "structure": "O 0.000000 0.000000 0.000000; H 0.757481 0.000000 0.586504; H -0.757481 0.000000 0.586504; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M03",
+      "jobId": "122207963"
+    },
+    {
+      "taskId": "M04",
+      "system": "H2O scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:26:54.599Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M04",
+        "ok": true,
+        "structure": "O 0.000000 0.000000 0.000000; H 0.772631 0.000000 0.598234; H -0.772631 0.000000 0.598234; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M04",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-76.4089539592 converged=true",
+        "energy": -76.4089539592,
+        "converged": true,
+        "files": [
+          "/public/home/hpc-user-a/workspace/scale50/M04/opt/g16_initial.xyz",
+          "/public/home/hpc-user-a/workspace/scale50/M04/opt/g16_optimized.xyz",
+          "/public/home/hpc-user-a/workspace/scale50/M04/opt/geometry_changes.csv",
+          "/public/home/hpc-user-a/workspace/scale50/M04/opt/g16_trajectory.xyz",
+          "/public/home/hpc-user-a/workspace/scale50/M04/opt/artifacts.json",
+          "/public/home/hpc-user-a/workspace/scale50/M04/opt/events.jsonl"
+        ]
+      },
+      "jobId": "122208093"
+    },
+    {
+      "taskId": "M05",
+      "system": "H2O scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:29:17.166Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M05",
+        "ok": true,
+        "structure": "O 0.000000 0.000000 0.000000; H 0.795355 0.000000 0.615829; H -0.795355 0.000000 0.615829; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M05",
+      "jobId": "122208146",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-76.4089538714 converged=true",
+        "energy": -76.4089538714,
+        "converged": true,
+        "files": [
+          "/public/home/hpc-user-a/workspace/scale50/M05/opt/g16_initial.xyz",
+          "/public/home/hpc-user-a/workspace/scale50/M05/opt/g16_optimized.xyz",
+          "/public/home/hpc-user-a/workspace/scale50/M05/opt/geometry_changes.csv",
+          "/public/home/hpc-user-a/workspace/scale50/M05/opt/g16_trajectory.xyz",
+          "/public/home/hpc-user-a/workspace/scale50/M05/opt/artifacts.json",
+          "/public/home/hpc-user-a/workspace/scale50/M05/opt/events.jsonl"
+        ]
+      }
+    },
+    {
+      "taskId": "M06",
+      "system": "CH4 scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:29:17.879Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M06",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; H 0.596201 0.596201 0.596201; H 0.596201 -0.596201 -0.596201; H -0.596201 0.596201 -0.596201; H -0.596201 -0.596201 0.596201; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M06",
+      "jobId": "122208305"
+    },
+    {
+      "taskId": "M07",
+      "system": "CH4 scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:29:18.591Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M07",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; H 0.615028 0.615028 0.615028; H 0.615028 -0.615028 -0.615028; H -0.615028 0.615028 -0.615028; H -0.615028 -0.615028 0.615028; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M07",
+      "jobId": "122208447"
+    },
+    {
+      "taskId": "M08",
+      "system": "CH4 scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:30:44.693Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M08",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; H 0.62758 0.62758 0.62758; H 0.62758 -0.62758 -0.62758; H -0.62758 0.62758 -0.62758; H -0.62758 -0.62758 0.62758; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M08",
+      "jobId": "122208527"
+    },
+    {
+      "taskId": "M09",
+      "system": "CH4 scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:30:45.404Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M09",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; H 0.640132 0.640132 0.640132; H 0.640132 -0.640132 -0.640132; H -0.640132 0.640132 -0.640132; H -0.640132 -0.640132 0.640132; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M09",
+      "jobId": "122208618"
+    },
+    {
+      "taskId": "M10",
+      "system": "CH4 scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:33:09.317Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M10",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; H 0.658959 0.658959 0.658959; H 0.658959 -0.658959 -0.658959; H -0.658959 0.658959 -0.658959; H -0.658959 -0.658959 0.658959; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M10",
+      "jobId": "122208739"
+    },
+    {
+      "taskId": "M11",
+      "system": "NH3 scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:33:10.049Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M11",
+        "ok": true,
+        "structure": "N 0 0 0; H 0.890625 0 0.36195; H -0.44536 0.771305 0.36195; H -0.44536 -0.771305 0.36195; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M11",
+      "jobId": "122208863"
+    },
+    {
+      "taskId": "M12",
+      "system": "NH3 scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:33:10.755Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M12",
+        "ok": true,
+        "structure": "N 0 0 0; H 0.91875 0 0.37338; H -0.459424 0.795662 0.37338; H -0.459424 -0.795662 0.37338; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M12",
+      "jobId": "122208927"
+    },
+    {
+      "taskId": "M13",
+      "system": "NH3 scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T17:35:35.944Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M13",
+        "ok": true,
+        "structure": "N 0 0 0; H 0.9375 0 0.381; H -0.4688 0.8119 0.381; H -0.4688 -0.8119 0.381; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M13",
+      "jobId": "122209097",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-56.5479476543 converged=true",
+        "energy": -56.5479476543,
+        "converged": true
+      }
+    },
+    {
+      "taskId": "M14",
+      "system": "NH3 scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:26.657Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M14",
+        "ok": true,
+        "structure": "N 0 0 0; H 0.95625 0 0.38862; H -0.478176 0.828138 0.38862; H -0.478176 -0.828138 0.38862; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M14",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-56.547947517 converged=true",
+        "energy": -56.547947517,
+        "converged": true
+      },
+      "jobId": "122209693"
+    },
+    {
+      "taskId": "M15",
+      "system": "NH3 scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:26.309Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M15",
+        "ok": true,
+        "structure": "N 0 0 0; H 0.984375 0 0.40005; H -0.49224 0.852495 0.40005; H -0.49224 -0.852495 0.40005; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M15",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-56.5479477902 converged=true",
+        "energy": -56.5479477902,
+        "converged": true
+      },
+      "jobId": "122209732"
+    },
+    {
+      "taskId": "M16",
+      "system": "CH3OH scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:27.342Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M16",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 0.000000 0.000000 1.358500; H 0.864880 0.000000 1.069130; H 0.488110 0.845500 -0.345135; H -0.976315 0.000000 -0.345135; H 0.488110 -0.845500 -0.345135; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M16",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-115.714405617 converged=true",
+        "energy": -115.714405617,
+        "converged": true
+      },
+      "jobId": "122209816"
+    },
+    {
+      "taskId": "M17",
+      "system": "CH3OH scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:26.999Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M17",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 0.000000 0.000000 1.401400; H 0.892192 0.000000 1.102892; H 0.503524 0.872200 -0.356034; H -1.007146 0.000000 -0.356034; H 0.503524 -0.872200 -0.356034; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M17",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-115.714405787 converged=true",
+        "energy": -115.714405787,
+        "converged": true
+      },
+      "jobId": "122209850"
+    },
+    {
+      "taskId": "M18",
+      "system": "CH3OH scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:28.030Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M18",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 0.000000 0.000000 1.430000; H 0.910400 0.000000 1.125400; H 0.513800 0.890000 -0.363300; H -1.027700 0.000000 -0.363300; H 0.513800 -0.890000 -0.363300; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M18",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-115.714405781 converged=true",
+        "energy": -115.714405781,
+        "converged": true
+      },
+      "jobId": "122209869"
+    },
+    {
+      "taskId": "M19",
+      "system": "CH3OH scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:27.685Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M19",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 0.000000 0.000000 1.458600; H 0.928608 0.000000 1.147908; H 0.524076 0.907800 -0.370566; H -1.048254 0.000000 -0.370566; H 0.524076 -0.907800 -0.370566; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M19",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-115.714405767 converged=true",
+        "energy": -115.714405767,
+        "converged": true
+      },
+      "jobId": "122209967"
+    },
+    {
+      "taskId": "M20",
+      "system": "CH3OH scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:24.937Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M20",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 0.000000 0.000000 1.501500; H 0.955920 0.000000 1.181670; H 0.539490 0.934500 -0.381465; H -1.079085 0.000000 -0.381465; H 0.539490 -0.934500 -0.381465; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M20",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-115.714405778 converged=true",
+        "energy": -115.714405778,
+        "converged": true
+      },
+      "jobId": "122210050"
+    },
+    {
+      "taskId": "M21",
+      "system": "H2CO scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:25.278Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M21",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 1.149500 0.000000 0.000000; H -0.543115 0.903925 0.000000; H -0.543115 -0.903925 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M21",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-114.500471897 converged=true",
+        "energy": -114.500471897,
+        "converged": true
+      },
+      "jobId": "122210101"
+    },
+    {
+      "taskId": "M22",
+      "system": "H2CO scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:25.616Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M22",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 1.185800 0.000000 0.000000; H -0.560266 0.932470 0.000000; H -0.560266 -0.932470 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M22",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-114.500472721 converged=true",
+        "energy": -114.500472721,
+        "converged": true
+      },
+      "jobId": "122210230"
+    },
+    {
+      "taskId": "M23",
+      "system": "H2CO scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:25.959Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M23",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 1.210000 0.000000 0.000000; H -0.571700 0.951500 0.000000; H -0.571700 -0.951500 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M23",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-114.500472605 converged=true",
+        "energy": -114.500472605,
+        "converged": true
+      },
+      "jobId": "122210278"
+    },
+    {
+      "taskId": "M24",
+      "system": "H2CO scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:23.543Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M24",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 1.234200 0.000000 0.000000; H -0.583134 0.970530 0.000000; H -0.583134 -0.970530 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M24",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-114.500472761 converged=true",
+        "energy": -114.500472761,
+        "converged": true
+      },
+      "jobId": "122210349"
+    },
+    {
+      "taskId": "M25",
+      "system": "H2CO scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:23.902Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M25",
+        "ok": true,
+        "structure": "C 0.000000 0.000000 0.000000; O 1.270500 0.000000 0.000000; H -0.600285 0.999075 0.000000; H -0.600285 -0.999075 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M25",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-114.500472747 converged=true",
+        "energy": -114.500472747,
+        "converged": true
+      },
+      "jobId": "122210371"
+    },
+    {
+      "taskId": "M26",
+      "system": "HCN scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:24.250Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M26",
+        "ok": true,
+        "structure": "H -1.010800 0.000000 0.000000; C 0.000000 0.000000 0.000000; N 1.098200 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M26",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-93.4226174568 converged=true",
+        "energy": -93.4226174568,
+        "converged": true
+      },
+      "jobId": "122210515"
+    },
+    {
+      "taskId": "M27",
+      "system": "HCN scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:24.591Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M27",
+        "ok": true,
+        "structure": "H -1.042720 0.000000 0.000000; C 0.000000 0.000000 0.000000; N 1.132880 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M27",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-93.4226175305 converged=true",
+        "energy": -93.4226175305,
+        "converged": true
+      },
+      "jobId": "122210563"
+    },
+    {
+      "taskId": "M28",
+      "system": "HCN scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:22.847Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M28",
+        "ok": true,
+        "structure": "H -1.064000 0.000000 0.000000; C 0.000000 0.000000 0.000000; N 1.156000 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M28",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-93.4226175404 converged=true",
+        "energy": -93.4226175404,
+        "converged": true
+      },
+      "jobId": "122210654"
+    },
+    {
+      "taskId": "M29",
+      "system": "HCN scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:23.185Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M29",
+        "ok": true,
+        "structure": "H -1.085280 0.000000 0.000000; C 0.000000 0.000000 0.000000; N 1.179120 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M29",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-93.422617538 converged=true",
+        "energy": -93.422617538,
+        "converged": true
+      },
+      "jobId": "122210753"
+    },
+    {
+      "taskId": "M30",
+      "system": "HCN scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:34.999Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M30",
+        "ok": true,
+        "structure": "H -1.117200 0.000000 0.000000; C 0.000000 0.000000 0.000000; N 1.213800 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M30",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-93.4226174145 converged=true",
+        "energy": -93.4226174145,
+        "converged": true
+      },
+      "jobId": "122210820"
+    },
+    {
+      "taskId": "M31",
+      "system": "CH3F scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:34.648Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M31",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; F 1.3129 0.0 0.0; H -0.345135 0.976315 0.0; H -0.345135 -0.48811 0.845405; H -0.345135 -0.48811 -0.845405; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M31",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-139.733915878 converged=true",
+        "energy": -139.733915878,
+        "converged": true
+      },
+      "jobId": "122210921"
+    },
+    {
+      "taskId": "M32",
+      "system": "CH3F scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:34.301Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M32",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; F 1.35436 0.0 0.0; H -0.356034 1.007146 0.0; H -0.356034 -0.503524 0.872102; H -0.356034 -0.503524 -0.872102; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M32",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-139.733915851 converged=true",
+        "energy": -139.733915851,
+        "converged": true
+      },
+      "jobId": "122210952"
+    },
+    {
+      "taskId": "M33",
+      "system": "CH3F scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:33.952Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M33",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; F 1.382 0.0 0.0; H -0.3633 1.0277 0.0; H -0.3633 -0.5138 0.8899; H -0.3633 -0.5138 -0.8899; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M33",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-139.733915883 converged=true",
+        "energy": -139.733915883,
+        "converged": true
+      },
+      "jobId": "122211040"
+    },
+    {
+      "taskId": "M34",
+      "system": "CH3F scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:33.603Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M34",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; F 1.40964 0.0 0.0; H -0.370566 1.048254 0.0; H -0.370566 -0.524076 0.907698; H -0.370566 -0.524076 -0.907698; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M34",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-139.733915929 converged=true",
+        "energy": -139.733915929,
+        "converged": true
+      },
+      "jobId": "122211101"
+    },
+    {
+      "taskId": "M35",
+      "system": "CH3F scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:33.253Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M35",
+        "ok": true,
+        "structure": "C 0.0 0.0 0.0; F 1.4511 0.0 0.0; H -0.381465 1.079085 0.0; H -0.381465 -0.53949 0.934395; H -0.381465 -0.53949 -0.934395; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M35",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-139.733915833 converged=true",
+        "energy": -139.733915833,
+        "converged": true
+      },
+      "jobId": "122211233"
+    },
+    {
+      "taskId": "M36",
+      "system": "CO scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:32.907Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M36",
+        "ok": true,
+        "structure": "C 0 0 0; O 1.071600 0 0; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M36",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-113.309453139 converged=true",
+        "energy": -113.309453139,
+        "converged": true
+      },
+      "jobId": "122211272"
+    },
+    {
+      "taskId": "M37",
+      "system": "CO scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:32.560Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M37",
+        "ok": true,
+        "structure": "C 0 0 0; O 1.105440 0 0; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M37",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-113.309453139 converged=true",
+        "energy": -113.309453139,
+        "converged": true
+      },
+      "jobId": "122211366"
+    },
+    {
+      "taskId": "M38",
+      "system": "CO scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:32.189Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M38",
+        "ok": true,
+        "structure": "C 0 0 0; O 1.128000 0 0; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M38",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-113.309453139 converged=true",
+        "energy": -113.309453139,
+        "converged": true
+      },
+      "jobId": "122211436"
+    },
+    {
+      "taskId": "M39",
+      "system": "CO scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:31.841Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M39",
+        "ok": true,
+        "structure": "C 0 0 0; O 1.150560 0 0; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M39",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-113.309453139 converged=true",
+        "energy": -113.309453139,
+        "converged": true
+      },
+      "jobId": "122211473"
+    },
+    {
+      "taskId": "M40",
+      "system": "CO scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:30.454Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M40",
+        "ok": true,
+        "structure": "C 0 0 0; O 1.184400 0 0; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M40",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-113.309453139 converged=true",
+        "energy": -113.309453139,
+        "converged": true
+      },
+      "jobId": "122211585"
+    },
+    {
+      "taskId": "M41",
+      "system": "HF scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:30.797Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M41",
+        "ok": true,
+        "structure": "H 0.000000 0.000000 0.000000; F 0.871150 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M41",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-100.42017165 converged=true",
+        "energy": -100.42017165,
+        "converged": true
+      },
+      "jobId": "122211615"
+    },
+    {
+      "taskId": "M42",
+      "system": "HF scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:29.754Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M42",
+        "ok": true,
+        "structure": "H 0.000000 0.000000 0.000000; F 0.898660 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M42",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-100.420171654 converged=true",
+        "energy": -100.420171654,
+        "converged": true
+      },
+      "jobId": "122211737"
+    },
+    {
+      "taskId": "M43",
+      "system": "HF scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:30.104Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M43",
+        "ok": true,
+        "structure": "H 0.000000 0.000000 0.000000; F 0.917000 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M43",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-100.420171654 converged=true",
+        "energy": -100.420171654,
+        "converged": true
+      },
+      "jobId": "122211790"
+    },
+    {
+      "taskId": "M44",
+      "system": "HF scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:29.057Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M44",
+        "ok": true,
+        "structure": "H 0.000000 0.000000 0.000000; F 0.935340 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M44",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-100.420171643 converged=true",
+        "energy": -100.420171643,
+        "converged": true
+      },
+      "jobId": "122211824"
+    },
+    {
+      "taskId": "M45",
+      "system": "HF scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:29.399Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M45",
+        "ok": true,
+        "structure": "H 0.000000 0.000000 0.000000; F 0.962850 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M45",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-100.420171654 converged=true",
+        "energy": -100.420171654,
+        "converged": true
+      },
+      "jobId": "122211892"
+    },
+    {
+      "taskId": "M46",
+      "system": "N2 scale 0.95",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:28.373Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M46",
+        "ok": true,
+        "structure": "N 0.000000 0.000000 0.000000; N 1.043100 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M46",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-109.524128651 converged=true",
+        "energy": -109.524128651,
+        "converged": true
+      },
+      "jobId": "122211936"
+    },
+    {
+      "taskId": "M47",
+      "system": "N2 scale 0.98",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:28.717Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M47",
+        "ok": true,
+        "structure": "N 0.000000 0.000000 0.000000; N 1.076040 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M47",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-109.524128676 converged=true",
+        "energy": -109.524128676,
+        "converged": true
+      },
+      "jobId": "122211995"
+    },
+    {
+      "taskId": "M48",
+      "system": "N2 scale 1.00",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:31.148Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M48",
+        "ok": true,
+        "structure": "N 0.000000 0.000000 0.000000; N 1.098000 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M48",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-109.524128676 converged=true",
+        "energy": -109.524128676,
+        "converged": true
+      },
+      "jobId": "122212052"
+    },
+    {
+      "taskId": "M49",
+      "system": "N2 scale 1.02",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:31.498Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M49",
+        "ok": true,
+        "structure": "N 0.000000 0.000000 0.000000; N 1.119960 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M49",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-109.524128676 converged=true",
+        "energy": -109.524128676,
+        "converged": true
+      },
+      "jobId": "122212133"
+    },
+    {
+      "taskId": "M50",
+      "system": "N2 scale 1.05",
+      "kind": "valid",
+      "phase": "settled",
+      "attempts": 0,
+      "updatedAt": "2026-09-15T18:06:35.345Z",
+      "spec": {
+        "task": "opt",
+        "method": "B3LYP/6-31G(d)",
+        "resources": {
+          "ncores": 8,
+          "memory": "16GB"
+        }
+      },
+      "verdict": {
+        "schema": "mat.prep-verdict.v1",
+        "taskId": "M50",
+        "ok": true,
+        "structure": "N 0.000000 0.000000 0.000000; N 1.152900 0.000000 0.000000; charge=0 mult=1"
+      },
+      "workdir": "/public/home/hpc-user-a/workspace/scale50/M50",
+      "properties": {
+        "status": "completed",
+        "detail": "1/1 settled (1 COMPLETED); opt E=-109.524128676 converged=true",
+        "energy": -109.524128676,
+        "converged": true
+      },
+      "jobId": "122212189"
+    }
+  ],
+  "ledger": [
+    {
+      "taskId": "M01",
+      "jobId": "122207754",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:23:16.959Z",
+      "actualCoreHours": 0.024444
+    },
+    {
+      "taskId": "M02",
+      "jobId": "122207908",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:24:28.137Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M03",
+      "jobId": "122207963",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:24:50.760Z",
+      "actualCoreHours": 0.033333
+    },
+    {
+      "taskId": "M04",
+      "jobId": "122208093",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:25:41.039Z",
+      "actualCoreHours": 0.04
+    },
+    {
+      "taskId": "M05",
+      "jobId": "122208146",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:26:12.595Z",
+      "actualCoreHours": 0.024444
+    },
+    {
+      "taskId": "M06",
+      "jobId": "122208305",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:27:23.908Z",
+      "actualCoreHours": 0.026667
+    },
+    {
+      "taskId": "M07",
+      "jobId": "122208447",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:28:27.645Z",
+      "actualCoreHours": 0.015556
+    },
+    {
+      "taskId": "M08",
+      "jobId": "122208527",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:29:00.734Z",
+      "actualCoreHours": 0.033333
+    },
+    {
+      "taskId": "M09",
+      "jobId": "122208618",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:29:59.451Z",
+      "actualCoreHours": 0.022222
+    },
+    {
+      "taskId": "M10",
+      "jobId": "122208739",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:30:37.588Z",
+      "actualCoreHours": 0.033333
+    },
+    {
+      "taskId": "M11",
+      "jobId": "122208863",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:31:34.974Z",
+      "actualCoreHours": 0.026667
+    },
+    {
+      "taskId": "M12",
+      "jobId": "122208927",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:32:08.907Z",
+      "actualCoreHours": 0.028889
+    },
+    {
+      "taskId": "M13",
+      "jobId": "122209097",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:32:56.209Z",
+      "actualCoreHours": 0.042222
+    },
+    {
+      "taskId": "M14",
+      "jobId": "122209693",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:38:17.763Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M15",
+      "jobId": "122209732",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:38:39.701Z",
+      "actualCoreHours": 0.022222
+    },
+    {
+      "taskId": "M16",
+      "jobId": "122209816",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:39:38.484Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M17",
+      "jobId": "122209850",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:39:58.268Z",
+      "actualCoreHours": 0.077778
+    },
+    {
+      "taskId": "M18",
+      "jobId": "122209869",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:40:05.815Z",
+      "actualCoreHours": 0.044444
+    },
+    {
+      "taskId": "M19",
+      "jobId": "122209967",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:40:58.321Z",
+      "actualCoreHours": 0.051111
+    },
+    {
+      "taskId": "M20",
+      "jobId": "122210050",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:42:05.638Z",
+      "actualCoreHours": 0.066667
+    },
+    {
+      "taskId": "M21",
+      "jobId": "122210101",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:42:28.217Z",
+      "actualCoreHours": 0.024444
+    },
+    {
+      "taskId": "M22",
+      "jobId": "122210230",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:43:38.934Z",
+      "actualCoreHours": 0.02
+    },
+    {
+      "taskId": "M23",
+      "jobId": "122210278",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:44:13.626Z",
+      "actualCoreHours": 0.028889
+    },
+    {
+      "taskId": "M24",
+      "jobId": "122210349",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:44:44.755Z",
+      "actualCoreHours": 0.037778
+    },
+    {
+      "taskId": "M25",
+      "jobId": "122210371",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:45:04.895Z",
+      "actualCoreHours": 0.02
+    },
+    {
+      "taskId": "M26",
+      "jobId": "122210515",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:46:16.941Z",
+      "actualCoreHours": 0.026667
+    },
+    {
+      "taskId": "M27",
+      "jobId": "122210563",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:46:41.640Z",
+      "actualCoreHours": 0.028889
+    },
+    {
+      "taskId": "M28",
+      "jobId": "122210654",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:47:49.697Z",
+      "actualCoreHours": 0.028889
+    },
+    {
+      "taskId": "M29",
+      "jobId": "122210753",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:48:46.264Z",
+      "actualCoreHours": 0.022222
+    },
+    {
+      "taskId": "M30",
+      "jobId": "122210820",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:49:29.160Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M31",
+      "jobId": "122210921",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:50:30.669Z",
+      "actualCoreHours": 0.031111
+    },
+    {
+      "taskId": "M32",
+      "jobId": "122210952",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:50:49.260Z",
+      "actualCoreHours": 0.028889
+    },
+    {
+      "taskId": "M33",
+      "jobId": "122211040",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:51:52.821Z",
+      "actualCoreHours": 0.031111
+    },
+    {
+      "taskId": "M34",
+      "jobId": "122211101",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:52:14.846Z",
+      "actualCoreHours": 0.048889
+    },
+    {
+      "taskId": "M35",
+      "jobId": "122211233",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:53:22.149Z",
+      "actualCoreHours": 0.04
+    },
+    {
+      "taskId": "M36",
+      "jobId": "122211272",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:53:52.204Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M37",
+      "jobId": "122211366",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:54:44.789Z",
+      "actualCoreHours": 0.024444
+    },
+    {
+      "taskId": "M38",
+      "jobId": "122211436",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:55:30.594Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M39",
+      "jobId": "122211473",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:55:58.438Z",
+      "actualCoreHours": 0.022222
+    },
+    {
+      "taskId": "M40",
+      "jobId": "122211585",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:57:02.960Z",
+      "actualCoreHours": 0.026667
+    },
+    {
+      "taskId": "M41",
+      "jobId": "122211615",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:57:30.886Z",
+      "actualCoreHours": 0.022222
+    },
+    {
+      "taskId": "M42",
+      "jobId": "122211737",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:58:35.741Z",
+      "actualCoreHours": 0.02
+    },
+    {
+      "taskId": "M43",
+      "jobId": "122211790",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:59:01.737Z",
+      "actualCoreHours": 0.055556
+    },
+    {
+      "taskId": "M44",
+      "jobId": "122211824",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T17:59:29.943Z",
+      "actualCoreHours": 0.033333
+    },
+    {
+      "taskId": "M45",
+      "jobId": "122211892",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T18:00:24.129Z",
+      "actualCoreHours": 0.033333
+    },
+    {
+      "taskId": "M46",
+      "jobId": "122211936",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T18:00:47.604Z",
+      "actualCoreHours": 0.026667
+    },
+    {
+      "taskId": "M47",
+      "jobId": "122211995",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T18:01:25.325Z",
+      "actualCoreHours": 0.031111
+    },
+    {
+      "taskId": "M48",
+      "jobId": "122212052",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T18:02:14.795Z",
+      "actualCoreHours": 0.022222
+    },
+    {
+      "taskId": "M49",
+      "jobId": "122212133",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T18:02:58.217Z",
+      "actualCoreHours": 0.035556
+    },
+    {
+      "taskId": "M50",
+      "jobId": "122212189",
+      "isRetry": false,
+      "estimatedCoreHours": 0.5,
+      "at": "2026-09-15T18:03:50.434Z",
+      "actualCoreHours": 0.028889
+    }
+  ]
+}

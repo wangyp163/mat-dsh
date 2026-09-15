@@ -1,0 +1,5 @@
+[实验方指令] 你上一回合因 max-tokens 被截断（10 份工人 prompt 没写完、制备工未发出）。这是规模发现，按以下瘦委托方案继续：
+
+1. 先把基准结构落盘（如果还没有）：~/workspace/batch-subagent/scale50-base.json——内容 {"H2O": "<结构行>", ...}（10 个分子，用你 prompt 里已有的基准结构，一条 bash heredoc 写完）。
+2. 分批派发制备工：每条回复最多 3 个 subagent_prep（共 10 个，4 批）。工人 prompt 改瘦形：「分子 <名>；taskId M..–M..（5 个，缩放序 0.95/0.98/1.00/1.02/1.05，坐标全乘系数）；基准结构自己 read ~/workspace/batch-subagent/scale50-base.json 的 <分子> 键；先读 skill batch-roles prep 节；逐任务回传 mat.prep-verdict.v1 的 JSON 数组」。
+3. 逐份 validate → update --phase prepared --verdict-file，然后按原计划继续串行提交（M01 起）。其余指令不变（预算/workdir/task_ref/收尾对账/摘要）。
