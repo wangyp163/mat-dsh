@@ -7,6 +7,32 @@ function fixedClock(): () => number {
   return () => (t += 1)
 }
 
+describe('R2 相位推进（upsert 携带非终态相位，rank 单调）', () => {
+  it('首建携带 queued；queued→running 推进；running→queued 迟到 tick 不回落', () => {
+    const board = createStatusBoard({})
+    board.upsert('k1', { kind: 'mat-slurm', label: 'a', clusterId: 'c', startedAt: 1, phase: 'queued' })
+    expect(board.list()[0]!.phase).toBe('queued')
+    board.upsert('k1', { phase: 'running' })
+    expect(board.list()[0]!.phase).toBe('running')
+    board.upsert('k1', { phase: 'queued' }) // 迟到的 PENDING tick
+    expect(board.list()[0]!.phase).toBe('running')
+  })
+  it('settled 不回退：upsert 带 running 也保持 settled', () => {
+    const board = createStatusBoard({})
+    board.upsert('k2', { kind: 'mat-slurm', label: 'b', clusterId: 'c', startedAt: 1, phase: 'running' })
+    board.settle('k2', { outcomeStatus: 'completed' })
+    board.upsert('k2', { phase: 'running' })
+    expect(board.list()[0]!.phase).toBe('settled')
+  })
+  it('monitoring（旧默认）可被 queued/running 覆盖', () => {
+    const board = createStatusBoard({})
+    board.upsert('k3', { kind: 'mat-watch', label: 'c', clusterId: 'c', startedAt: 1 })
+    expect(board.list()[0]!.phase).toBe('monitoring')
+    board.upsert('k3', { phase: 'queued' })
+    expect(board.list()[0]!.phase).toBe('queued')
+  })
+})
+
 describe('createStatusBoard', () => {
   it('upsert 首次建档：identity 字段齐 + phase=monitoring + updatedAt=注入时钟', () => {
     const board = createStatusBoard({ now: fixedClock() })

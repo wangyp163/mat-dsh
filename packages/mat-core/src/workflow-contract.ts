@@ -53,6 +53,31 @@ export function createGaussianMatAdapter(
   }
 }
 
+/**
+ * VASP/matstream 工作流描述符。执行形态与 gaussian 不同（作业内整链，
+ * 见 ENGINE_BOUNDARY_NOTES.vaspNotes）：inputs = {tasks, structure, structure_filename,
+ * preset, mode}；outputSchema 锚定 matstream 的收割契约（matstream.json 单 JSON）。
+ */
+export const VASP_MAT_WORKFLOW: RemoteWorkflowDescriptor = {
+  id: 'vasp-matstream-chain',
+  version: '1',
+  inputSchema: 'vasp.matstream.pre.v1',
+  outputSchema: 'matstream.result.v1',
+  artifactManifestSchema: 'mat.artifacts.v1',
+}
+
+export function createVaspMatAdapter(
+  execute: (request: RemoteWorkflowRequest) => Promise<RemoteWorkflowResult>,
+): RemoteWorkflowAdapter {
+  return {
+    workflow: VASP_MAT_WORKFLOW,
+    run(request) {
+      if (request.workflow.id !== VASP_MAT_WORKFLOW.id) throw new Error('unsupported VASP workflow')
+      return execute(createRemoteWorkflowRequest(request))
+    },
+  }
+}
+
 export function createRemoteWorkflowRequest(input: RemoteWorkflowRequest): RemoteWorkflowRequest {
   return {
     workflow: { ...input.workflow },

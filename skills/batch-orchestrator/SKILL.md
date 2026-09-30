@@ -2,8 +2,9 @@
 name: batch-orchestrator
 # description 禁半角冒号（frontmatter 纪律同 gaussian-calc）
 description: Use this skill when orchestrating the mat batch portfolio (multi-system Gaussian calculations) as the portfolio manager. Covers manifest operations via portfolio-cli, role-worker fan-out (subagent_prep/subagent_triage/subagent_analyst), contract validation with one retry, worker-death handling, and budget discipline. The manager submits and watches jobs itself; workers never touch the cluster submit path.
-version: 0.1.0
+version: 0.3.1
 metadata:
+  adaptation: 2026-09-23 M33 环境门禁机制化配套：门禁改 `mat_env_gate` 工具闸措辞（四入口 ENV_GATE_REJECTED 硬前置、一次通过按 (宿主进程,集群,引擎)+12h TTL 缓存，子 agent 自动继承不再重跑）
   adapted-for: mat-dsh batch-subagent spike
 ---
 
@@ -71,7 +72,7 @@ pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/portfolio-cli.ts <cmd>
 
 ## 经理自己的事（不委托）
 
-- 集群操作全部自己来：门禁、提交（`mat_gaussian` 一站式优先）、`mat_job_watch`
+- 集群操作全部自己来：门禁（`mat_env_gate`）、提交（`mat_gaussian` 一站式优先）、`mat_job_watch`
   批量监控、终态表读取。工人无提交权（toolFilter 已裁，但纪律上你也不许转授）。
 - fan-in 汇总自己写：最终报告 ≤30 行，数值逐位来自结构化裁决。
 - 预算纪律：清单声明的 sbatch/重试/核时上限是硬顶；计划外提交先问用户。
@@ -107,10 +108,22 @@ pnpm --dir ~/mat-harness/mat-dsh exec tsx scripts/portfolio-cli.ts <cmd>
 - 批量收尾时跑 `scripts/reconcile-ledger.ts <cluster> <manifest>` 对账两本账
   （闸的估算计费 vs sacct 实际核时），把报告贴进相位摘要。
 
-## 链式任务委托（shepherd）
+## 链式任务委托（pool / pipeline / shepherd）
 
-多波链（如 opt→freq 分步）委托给 `subagent_shepherd`（可续后台子 agent，协议见
-batch-roles shepherd 节）：
+多波链（如 tsxtb+ts+irc）有三条委托通道,按批量规模选择：
+
+- **批量通道——任务池（R6b 首选）**：多条链一次交给 `mat_pool_start(cluster_id,
+  chains=[{pkg_digest, workdir, task_ref?}], max_concurrent)`——并发上限内 admit、
+  链结算即回填,halted 链不阻塞池;每链的波间门检/attempts 记账/处方梯/死信全套
+  机制化。**每链必传 task_ref**(相位闸+预算闸在每次波提交前生效)。链 halted 时你按
+  gaussian-calc 诊断协议处置,再 `mat_pool_resume`(retry 带 route / dead_letter 带
+  reason);宿主重启后 running 链 stale 用 action=reattach 接手。进度随时
+  `mat_pool_status`。
+- **单链通道——代码 pipeline（M31 起）**：一条链时 `mat_pipeline_start(pkg_digest,
+  cluster_id, workdir)`——机制同上,无并发层。你只收通知,不逐波驱动;进度随时
+  `mat_pipeline_status`,诊断后续跑用 `mat_pipeline_resume`。
+- **过渡通道——subagent_shepherd**（可续后台子 agent,协议见 batch-roles shepherd 节;
+  适用于无 task-package 编译产物的存量链）：
 
 - 委托 prompt 自含：taskId、manifest 绝对路径、预算声明、体系描述；规格已钉在
   manifest 的 spec 字段（task 类型/方法/资源档），让牧羊人自己读清单。
@@ -124,7 +137,10 @@ batch-roles shepherd 节）：
 
 ## Phase C 提交协议（预算闸实弹）
 
-- 环境门禁一次（gaussian-calc skill 第一条），然后逐任务串行 `mat_gaussian`。
+- `mat_env_gate` 一次（门禁是四个提交工具的硬前置，未过即 ENV_GATE_REJECTED；一次通过全进程 12h 有效，子 agent 自动继承），然后逐任务串行 `mat_gaussian`。
+  **多波链任务改走任务池**：`mat_pool_start` 每链带 task_ref（见「链式任务委托」节）——
+  池的 submitGate 在每次波提交前过相位闸+预算闸,与一站式同一条纪律通道；settled 相位
+  仍由你在链终态通知后照常 `update --phase settled` 回写（池通知 per chain,终态以通知/`mat_pool_status` 为准）。
 - **每次提交必传 `task_ref`**：`{"portfolio_file": "<绝对路径 manifest>", "task_id": "<taskId>"}`——
   预算闸在工具内生效：`BUDGET_REJECTED` 前缀错误 = 未提交，如实记录该任务的
   note（"budget_rejected: <reason>"）并继续；提交成功则台账自动记账（你无需手动记），

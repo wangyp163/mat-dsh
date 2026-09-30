@@ -12,9 +12,13 @@ import { parseSbatchSubmission } from './slurm.ts'
 import { createWatchLoop } from './watch-loop.ts'
 import type { SlurmJobInfo } from './job-state.ts'
 import type { WatchLoopHooks, WatchOutcome } from './watch-loop.ts'
+import { gaussianScfTailCommand, parseScfSamples } from './scf-trend.ts'
+import type { ScfTrend, ScfTrendReport } from './scf-trend.ts'
 import { createGaussianMatAdapter } from './workflow-contract.ts'
 import type { RemoteWorkflowAdapter, RemoteWorkflowRequest, RemoteWorkflowResult } from './workflow-contract.ts'
 import type { PlotEntry } from './status-board.ts'
+import { formatPrescription } from './db.ts'
+import type { PrescriptionStep } from './db.ts'
 
 export const DEFAULT_WORKFLOW_ENV = '$HOME/workspace/demo/env.sh'
 export const DEFAULT_G16_ENV = '$HOME/workspace/g16-hy/scripts/env.sh'
@@ -60,10 +64,17 @@ export function defaultPreJson(): Record<string, unknown> {
   }
 }
 
+/**
+ * 11250 缺省分区（r1 压测 2026-09-30 实证变更）：Agent0 仍在但近饱和
+ * （624/640 核占用），缺省路由致新作业长期 PENDING(Resources)；kshcnormal
+ * 常态 2 万+ 空闲核。与 VASP 的 DEFAULT_VASP_PARTITION 同款决策。
+ */
+export const DEFAULT_GAUSSIAN_PARTITION = 'kshcnormal'
+
 export function defaultRunJson(partition?: string): Record<string, unknown> {
   return {
     slurm: {
-      partition: partition ?? 'Agent0',
+      partition: partition ?? DEFAULT_GAUSSIAN_PARTITION,
       nodes: 1, ntasks_per_node: 32, time: '00:30:00', mem: '64GB',
     },
   }
@@ -134,6 +145,32 @@ export function logTailCommand(workdir: string, task: string, lines = 50): strin
   return `tail -n ${lines} "${workdir}/${task}/job.log" 2>/dev/null || echo '(no job.log found)'`
 }
 
+/**
+ * producer 非 COMPLETED 结算输出里的诊断载荷行前缀（公开契约）。
+ *
+ * 这是 producer 与「失败环签名索引（diagnose）」之间的接口：producer 保证把
+ * Gaussian 的结构化错误（workflow post 的 error）与 job.log 尾部分别以
+ * `diagnostic_post: ` / `log_tail: ` 前缀写进终态输出；下游（pipeline driver）
+ * 用 diagnosticTextOf() 提取它们再送进 KB 签名匹配。
+ *
+ * 改动这些前缀 = 改动跨模块契约，必须同步 diagnosticTextOf 及其测试。
+ */
+export const DIAGNOSTIC_LINE_PREFIXES = ['diagnostic_post: ', 'log_tail: ', 'post failed: '] as const
+
+/**
+ * 从 producer 终态输出里提取诊断文本（供 KB 签名索引匹配）。
+ *
+ * 为什么不直接把整段 readOutput() 丢给 diagnose()：那段文本混有大量与错误
+ * 签名无关的行（状态轮询、properties、kb_hint 回显），既稀释匹配，也让
+ * 「诊断质量依赖日志格式」的耦合变得隐形。这里把契约显式化——只有带上述
+ * 前缀的行属于诊断载荷。无命中时回退整段（保守：宁可多送，不可漏诊）。
+ */
+export function diagnosticTextOf(producerOutput: string): string {
+  const lines = producerOutput.split('\n')
+  const payload = lines.filter((l) => DIAGNOSTIC_LINE_PREFIXES.some((p) => l.startsWith(p)))
+  return payload.length > 0 ? payload.join('\n') : producerOutput
+}
+
 export interface GaussianPostParseResult {
   properties: Record<string, unknown>
   files: string[]
@@ -194,11 +231,28 @@ export interface GaussianProducerInput {
   slurmJobId: string
   workflowEnv?: string
   pollSeconds?: number
+  /** 轮询抖动比(0-0.5);批量场景防 N 条链同相轮询。 */
+  pollJitter?: number
   maxWaitSeconds?: number
-  /** 每个成功 sacct 回合后触发，用于实时状态板。 */
-  onTick?: (states: ReadonlyMap<string, SlurmJobInfo>) => void
+  /** 每个成功 sacct 回合后触发，用于实时状态板（第二参为最近 SCF 趋势）。 */
+  onTick?: (states: ReadonlyMap<string, SlurmJobInfo>, scfTrends: ReadonlyMap<string, ScfTrend>) => void
+  /**
+   * SCF 收敛采样（高级作业监控）：true 用缺省 60s 采样窗，或传 {intervalMs}。
+   * 趋势行进 watch 增量输出；异常连续两窗确认后经 onScfTrend 上抛。
+   */
+  scfTrend?: boolean | { intervalMs?: number }
+  /** SCF 趋势异常确认后的通知通道；抛错被吞。 */
+  onScfTrend?: (reports: ScfTrendReport[]) => void
   /** producer 结算后触发；post 成功时携带结构化物性与文件。 */
   onResult?: (result: GaussianProducerResult) => void
+  /**
+   * 失败环 agent 侧签名索引（D0 P4）：非 COMPLETED 结算时以诊断文本
+   * （diagnostic_post + log_tail）回调，命中条目以 kb_hint: 行附加进终态输出；
+   * 与 workflow 自带 kb:<id> 引用去重。回调故障一律旁路。
+   * R5：命中条目带结构化处方（prescription）时，梯级内容直接进 hint 行，
+   * 不再让 agent 去读散文挑参数。
+   */
+  diagnose?: (errorText: string) => Array<{ id: string; path: string; prescription?: PrescriptionStep[] }>
 }
 
 /**
@@ -228,10 +282,21 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
     jobIds: [slurmJobId],
     maxWaitMs: (input.maxWaitSeconds ?? 1_800) * 1_000,
     ...(input.pollSeconds !== undefined ? { maxPollMs: Math.max(10, input.pollSeconds) * 1_000 } : {}),
+    ...(input.pollJitter !== undefined ? { jitterRatio: input.pollJitter } : {}),
     execCommand,
     scheduleTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
     clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
     ...(input.onTick !== undefined ? { onTick: input.onTick } : {}),
+    ...(input.scfTrend !== undefined ? {
+      scfSampling: {
+        buildCommand: (workdirs: string[]) => gaussianScfTailCommand(task, workdirs),
+        parse: parseScfSamples,
+        ...(typeof input.scfTrend === 'object' && input.scfTrend.intervalMs !== undefined
+          ? { intervalMs: input.scfTrend.intervalMs }
+          : {}),
+        onTrend: (reports) => input.onScfTrend?.(reports),
+      },
+    } : {}),
     onAllSettled: async (states) => {
       const state = states.get(slurmJobId)?.state ?? 'UNKNOWN'
       if (state !== 'COMPLETED') {
@@ -256,9 +321,25 @@ export function createGaussianProducerHooks(input: GaussianProducerInput): Watch
           // best-effort only — a broken diagnostic post never fails the job
         }
         const logTail = await fetchLogTail()
+        // D0 P4：agent 侧签名索引提示（与 workflow 自带 kb: 引用去重；旁路故障不影响结算）
+        let kbHints: string[] = []
+        if (input.diagnose !== undefined) {
+          try {
+            const diagText = [...diagnostic, logTail].join('\n')
+            const mentioned = new Set([...diagText.matchAll(/kb:([a-z0-9-]+)/g)].map((m) => m[1]!))
+            kbHints = input.diagnose(diagText)
+              .filter((h) => !mentioned.has(h.id))
+              .slice(0, 3)
+              .map((h) => h.prescription !== undefined && h.prescription.length > 0
+                ? `kb_hint: kb:${h.id} — ${h.path} (${formatPrescription(h.prescription)}; one submit per rung; exhausted => dead-letter 'ladder-exhausted: kb:${h.id}')`
+                : `kb_hint: kb:${h.id} — ${h.path} (agent-side signature index; read entry for prescription ladder)`)
+          } catch {
+            kbHints = []
+          }
+        }
         return {
           detailSuffix: `; ${task} ${state}, diagnostic post attached`,
-          extraLines: ['slurm_state: ' + state, ...diagnostic, ...(logTail !== '' ? [`log_tail: ${logTail}`] : [])],
+          extraLines: ['slurm_state: ' + state, ...diagnostic, ...(logTail !== '' ? [`log_tail: ${logTail}`] : []), ...kbHints],
         }
       }
       try {

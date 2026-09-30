@@ -32,7 +32,12 @@ export interface MatJobStatus {
   ownerSession?: string
   startedAt: number
   updatedAt: number
-  phase: 'monitoring' | 'settled'
+  /**
+   * 生命周期相位（R2 排队可见性）：queued=已提交全 PENDING；running=至少一个
+   * 作业 RUNNING/COMPLETING；monitoring=未细分的历史默认（兼容）；settled=终态。
+   * settled 后不回退（upsert 守卫已有）。
+   */
+  phase: 'monitoring' | 'queued' | 'running' | 'settled'
   task?: string
   workdir?: string
   /** Host-local workspace reserved for this job at submission time. */
@@ -58,8 +63,14 @@ export interface StatusSettle {
   plots?: PlotEntry[]
 }
 
-/** upsert 增量补丁：首建须含 identity 字段（kind/label/clusterId/startedAt）。 */
-export type StatusUpsert = Partial<Omit<MatJobStatus, 'jobId' | 'phase' | 'settledAt'>>
+/**
+ * upsert 增量补丁：首建须含 identity 字段（kind/label/clusterId/startedAt）。
+ * phase 可选携带非终态相位（R2 排队可见性）——合并按 rank 单调推进
+ * （monitoring < queued < running < settled），settled 永不回退、不降级。
+ */
+export type StatusUpsert = Partial<Omit<MatJobStatus, 'jobId' | 'settledAt'>> & {
+  phase?: 'monitoring' | 'queued' | 'running'
+}
 
 /** createStatusBoard 的注入依赖。 */
 export interface StatusBoardOptions {
@@ -132,7 +143,7 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
           clusterId: patch.clusterId ?? '',
           startedAt: patch.startedAt ?? updatedAt,
           updatedAt,
-          phase: 'monitoring',
+          phase: patch.phase ?? 'monitoring',
           ...clean(patch),
         })
         changed()
@@ -142,7 +153,7 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
       const merged: MatJobStatus = {
         ...existing,
         ...clean(patch),
-        phase: existing.phase,
+        phase: nextPhase(existing.phase, patch.phase),
         updatedAt: now(),
       }
       if (existing.phase === 'settled') {
@@ -185,6 +196,16 @@ export function createStatusBoard(options: StatusBoardOptions = {}): StatusBoard
 }
 
 /** 去掉 undefined 值的浅拷贝（合并时不下覆盖已有字段）。 */
+const PHASE_RANK: Record<MatJobStatus['phase'], number> = {
+  monitoring: 0, queued: 1, running: 2, settled: 3,
+}
+
+/** upsert 相位合并：只升不降（settled 终态不回退；running 不因迟到 PENDING tick 回落 queued）。 */
+function nextPhase(current: MatJobStatus['phase'], patch: StatusUpsert['phase']): MatJobStatus['phase'] {
+  if (current === 'settled' || patch === undefined) return current
+  return PHASE_RANK[patch] > PHASE_RANK[current] ? patch : current
+}
+
 function clean<T extends object>(patch: T): Partial<T> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(patch)) {

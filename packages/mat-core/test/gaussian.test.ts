@@ -66,9 +66,9 @@ describe('默认配置', () => {
     }
   })
 
-  it('defaultRunJson：仅 slurm 块，分区缺省 Agent0', () => {
+  it('defaultRunJson：仅 slurm 块，分区缺省 kshcnormal(r1:Agent0 饱和不再作缺省)', () => {
     expect(defaultRunJson()).toEqual({
-      slurm: { partition: 'Agent0', nodes: 1, ntasks_per_node: 32, time: '00:30:00', mem: '64GB' },
+      slurm: { partition: 'kshcnormal', nodes: 1, ntasks_per_node: 32, time: '00:30:00', mem: '64GB' },
     })
     expect(defaultRunJson('CPU64').slurm).toMatchObject({ partition: 'CPU64' })
   })
@@ -302,7 +302,7 @@ describe('parsePostOutput（首个可解析 { 行，对齐 plugin.py §751-758�
 describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {
   const row = (id: string, state: string, exit = '0:0', elapsed = '0') => `${id}|${state}|${exit}|${elapsed}\n`
 
-  function makeProducer(script: Array<{ out?: string; rcFail?: boolean; throw?: string }>, opts: { maxWaitSeconds?: number } = {}) {
+  function makeProducer(script: Array<{ out?: string; rcFail?: boolean; throw?: string }>, opts: { maxWaitSeconds?: number; diagnose?: (t: string) => Array<{ id: string; path: string }> } = {}) {
     let i = 0
     const commands: string[] = []
     const execCommand = async (_clusterId: string, command: string): Promise<ExecResult> => {
@@ -319,6 +319,7 @@ describe('createGaussianProducerHooks（watch 终态后自动 post）', () => {
       workdir: '/home/u/w',
       slurmJobId: '700',
       ...(opts.maxWaitSeconds !== undefined ? { maxWaitSeconds: opts.maxWaitSeconds } : {}),
+      ...(opts.diagnose !== undefined ? { diagnose: opts.diagnose } : {}),
     })
     return { hooks, commands }
   }
@@ -388,6 +389,72 @@ it('FAILED → 诊断性 post：error 全文进 diagnostic_post 行，log_tail �
     expect(out).toContain('kb:ts-step-limit')
     expect(out).toContain('log_tail:')
     expect(out).toContain('Lnk1e')
+  })
+
+  it('FAILED + diagnose 回调：签名命中且未被 workflow 引用 → kb_hint 行附加（D0 P4）', async () => {
+    const { hooks } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'FAILED', '1:0', '30') },
+      { out: '{log 崩溃无结构化错误}\n' },
+      { out: 'Error termination request processed by link 9999\n' },
+    ], {
+      diagnose: (t) => t.includes('link 9999')
+        ? [{ id: 'ts-step-limit', path: 'skills/gaussian-calc/references/ts-step-limit.md' }]
+        : [],
+    })
+    await advance(0)
+    await advance(10_000)
+    await hooks.done
+    const out = hooks.readOutput()
+    expect(out).toContain('kb_hint: kb:ts-step-limit — skills/gaussian-calc/references/ts-step-limit.md')
+    expect(out).toContain('log_tail:')
+  })
+
+  it('FAILED + diagnose 回调带结构化处方（R5）：hint 行直接携带梯级与耗尽即死信提示', async () => {
+    const { hooks } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'FAILED', '1:0', '30') },
+      { out: '{log 崩溃无结构化错误}\n' },
+      { out: 'Delta-x Convergence NOT Met\n' },
+    ], {
+      diagnose: (t) => t.includes('Delta-x')
+        ? [{
+            id: 'irc-l123-divergence',
+            path: 'skills/gaussian-calc/references/errors/irc-l123-divergence.md',
+            prescription: [
+              { level: 1, route: 'irc(CalcFC,MaxPoints=50,StepSize=5)', when: '第一档' },
+              { level: 2, route: 'irc(CalcAll,MaxPoints=50,StepSize=5)', when: '重算 Hessian' },
+              { level: 3, route: 'irc(CalcFC,Steep,MaxPoints=50,StepSize=5)', when: '兜底' },
+            ],
+          }]
+        : [],
+    })
+    await advance(0)
+    await advance(10_000)
+    await hooks.done
+    const out = hooks.readOutput()
+    expect(out).toContain('kb_hint: kb:irc-l123-divergence')
+    expect(out).toContain('ladder L1 irc(CalcFC,MaxPoints=50,StepSize=5) -> L2 irc(CalcAll,MaxPoints=50,StepSize=5) -> L3 irc(CalcFC,Steep,MaxPoints=50,StepSize=5)')
+    expect(out).toContain("dead-letter 'ladder-exhausted: kb:irc-l123-divergence'")
+  })
+
+  it('FAILED + diagnose 回调：workflow 已引用的 kb:id 去重，不重复提示', async () => {
+    const { hooks } = makeProducer([
+      { out: row('700', 'RUNNING') },
+      { out: row('700', 'FAILED', '1:0', '30') },
+      { out: '{"status": "error", "error": "ConvergenceError ... kb:ts-step-limit ... convergence_trace.csv"}\n' },
+      { out: 'Error termination request processed by link 9999\n' },
+    ], {
+      diagnose: (t) => t.includes('link 9999')
+        ? [{ id: 'ts-step-limit', path: 'skills/gaussian-calc/references/ts-step-limit.md' }]
+        : [],
+    })
+    await advance(0)
+    await advance(10_000)
+    await hooks.done
+    const out = hooks.readOutput()
+    expect(out).toContain('diagnostic_post:')       // workflow 结构化错误在场
+    expect(out).not.toContain('kb_hint:')           // 已引用 → 去重不重复
   })
 
   it('FAILED → 诊断性 post 崩溃时 best-effort：不附加不判失败', async () => {

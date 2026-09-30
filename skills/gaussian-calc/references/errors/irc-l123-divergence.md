@@ -4,6 +4,7 @@ signature: "l123\\.exe|Delta-x Convergence NOT Met|corrector steps exceded|Corre
 task: [irc, ts+irc, tsxtb+ts+irc, qst2+irc, qst3+irc]
 versions: [">=1.4.0"]
 source: sobereva.com/400（IRC 方法学）+ 压测 r6 D15/r7 D17 + 真实会话 4bd8fec0（IRC 三连败：StepSize 减半与 CalcAll 均只让死亡点后移）
+prescription: [{"level":1,"route":"irc(CalcFC,MaxPoints=50,StepSize=5)","when":"默认 30/10 失败的第一档：步长减半+点数加倍（D15 实战处方）"},{"level":2,"route":"irc(CalcAll,MaxPoints=50,StepSize=5)","when":"每点重算 Hessian，corrector 收敛的标准强化；小体系算得起"},{"level":3,"route":"irc(CalcFC,Steep,MaxPoints=50,StepSize=5)","when":"最速下降积分器绕开 predictor-corrector——最鲁棒兜底；1/2 级只让死亡点后移时直接跳此级"}]
 ---
 
 ## 症状

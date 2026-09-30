@@ -1,0 +1,38 @@
+name: ci
+
+# 最低可用 CI：typecheck + 全量测试。
+#
+# ⚠️ 注意：本仓当前 remote 是 Gitee（git@your-remote.example/mat-dsh.git），
+# 此文件不会被自动执行。它存在的意义是「若将来镜像到 GitHub 即生效」，
+# 以及作为 CI 步骤的权威声明。**当前真正可执行的是 scripts/ci.sh**——
+# 本地、pre-push hook、或任何 CI 系统都调它。
+#
+# 仓库根 = mat-dsh 本身（不是 mat-harness），故路径均相对 mat-dsh。
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  typecheck-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # mat-core 用 node:sqlite（Node ≥22.13 内置）。低版本会让 db 相关测试
+      # 直接 import 失败，故版本下限在此硬性声明。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: install
+        run: pnpm install --frozen-lockfile
+
+      # 单点定义：与本地/其他 CI 完全同一条路径，避免两套步骤漂移
+      - name: ci
+        run: bash scripts/ci.sh

@@ -241,6 +241,21 @@ var fileManagerState = {
   }
 };
 
+// packages/mat-ui/src/client/layout-room.ts
+var RAIL_FLOOR = 56 + 640 + 300;
+function sidebarTrack() {
+  const frame = document.querySelector("[data-shell-overlay]")?.parentElement ?? null;
+  const tracks = frame instanceof HTMLElement ? frame.style.gridTemplateColumns : "";
+  return Number.parseFloat(tracks.split(" ")[0] ?? "");
+}
+function openDetailsWithRoom(layout) {
+  const sidebar = sidebarTrack();
+  if (Number.isFinite(sidebar) && sidebar + 640 + 300 > window.innerWidth && window.innerWidth >= RAIL_FLOOR) {
+    layout.toggleSidebar();
+  }
+  layout.openDetails();
+}
+
 // packages/mat-ui/src/client/status-model.ts
 function formatCompletionTime(timestamp) {
   return new Intl.DateTimeFormat(void 0, {
@@ -281,6 +296,7 @@ function statusState(job) {
 function StatusDock({
   sessionId,
   openDetailsTab,
+  layout,
   onOpenTask = () => {
     openDetailsTab?.("mat-task");
   }
@@ -315,7 +331,7 @@ function StatusDock({
   if (selected === void 0) return null;
   return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "mat-status-strip", role: "status", children: [
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(import_dsh_client_ui_primitives.StateDot, { state: statusState(selected) }),
-    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "mat-status-strip__label", children: selected.phase === "settled" ? "Computation finished" : "Computation running" }),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "mat-status-strip__label", children: selected.phase === "settled" ? "Computation finished" : selected.phase === "queued" ? "Queued \u2014 waiting for partition" : "Computation running" }),
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
       "select",
       {
@@ -333,6 +349,7 @@ function StatusDock({
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(import_dsh_client_ui_primitives.Button, { size: "sm", variant: "outline", "aria-label": `\u6253\u5F00\u4EFB\u52A1\u9762\u677F ${selected.jobId}`, onClick: onOpenTask, children: "\u4EFB\u52A1" }),
     /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(import_dsh_client_ui_primitives.Button, { size: "sm", variant: "outline", "aria-label": "\u6253\u5F00\u6587\u4EF6\u9762\u677F", onClick: () => {
+      if (layout !== void 0) openDetailsWithRoom(layout);
       openDetailsTab?.("mat-files");
     }, children: "\u6587\u4EF6" })
   ] });
@@ -424,114 +441,190 @@ var viewerState = {
   }
 };
 
-// packages/mat-ui/src/client/view-model.ts
-var STRUCTURE_EXTENSIONS = /* @__PURE__ */ new Set(["xyz", "cif", "poscar", "vasp"]);
-var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp"]);
-var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
-  "log",
-  "out",
-  "txt",
-  "json",
-  "jsonl",
-  "sh",
-  "com",
-  "gjf",
-  "inp",
-  "py",
-  "csv",
-  "md",
-  "yml",
-  "yaml",
-  "slurm",
-  "pbs",
-  "job"
-]);
-function extensionOf(name) {
-  const dot = name.lastIndexOf(".");
-  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+// packages/mat-ui/src/client/structure-model.ts
+var COV_RADII = {
+  H: 0.31,
+  He: 0.28,
+  Li: 1.28,
+  Be: 0.96,
+  B: 0.84,
+  C: 0.76,
+  N: 0.71,
+  O: 0.66,
+  F: 0.57,
+  Ne: 0.58,
+  Na: 1.66,
+  Mg: 1.41,
+  Al: 1.21,
+  Si: 1.11,
+  P: 1.07,
+  S: 1.05,
+  Cl: 1.02,
+  Ar: 1.06,
+  K: 2.03,
+  Ca: 1.76,
+  Sc: 1.7,
+  Ti: 1.6,
+  V: 1.53,
+  Cr: 1.39,
+  Mn: 1.39,
+  Fe: 1.32,
+  Co: 1.26,
+  Ni: 1.24,
+  Cu: 1.32,
+  Zn: 1.22,
+  Ga: 1.22,
+  Ge: 1.2,
+  As: 1.19,
+  Se: 1.2,
+  Br: 1.2,
+  Kr: 1.16,
+  Rb: 2.2,
+  Sr: 1.95,
+  Y: 1.9,
+  Zr: 1.75,
+  Nb: 1.64,
+  Mo: 1.54,
+  Tc: 1.47,
+  Ru: 1.46,
+  Rh: 1.42,
+  Pd: 1.39,
+  Ag: 1.45,
+  Cd: 1.44,
+  In: 1.42,
+  Sn: 1.39,
+  Sb: 1.39,
+  Te: 1.38,
+  I: 1.39,
+  Xe: 1.4,
+  Cs: 2.44,
+  Ba: 2.15,
+  La: 2.07,
+  Ce: 2.04,
+  Pr: 2.03,
+  Nd: 2.01,
+  Pm: 1.99,
+  Sm: 1.98,
+  Eu: 1.98,
+  Gd: 1.96,
+  Tb: 1.94,
+  Dy: 1.92,
+  Ho: 1.92,
+  Er: 1.89,
+  Tm: 1.9,
+  Yb: 1.87,
+  Lu: 1.87,
+  Hf: 1.75,
+  Ta: 1.7,
+  W: 1.62,
+  Re: 1.51,
+  Os: 1.44,
+  Ir: 1.41,
+  Pt: 1.36,
+  Au: 1.36,
+  Hg: 1.32,
+  Tl: 1.45,
+  Pb: 1.46,
+  Bi: 1.48,
+  Po: 1.68,
+  At: 1.68,
+  Rn: 1.5,
+  Fr: 2.6,
+  Ra: 2.21,
+  Ac: 2.15,
+  Th: 2.06,
+  Pa: 2,
+  U: 1.96,
+  Np: 1.9,
+  Pu: 1.87,
+  Am: 1.8,
+  Cm: 1.69
+};
+var COV_FACTOR = 1.2;
+var MIN_BOND_D2 = 0.01;
+var MAX_BOND_ATOMS = 1600;
+var ELEM_HEX = {
+  H: "#ffffff",
+  He: "#d9ffff",
+  Li: "#cc80ff",
+  Be: "#c2ff00",
+  B: "#ffb5b5",
+  C: "#909090",
+  N: "#3050f8",
+  O: "#ff0d0d",
+  F: "#90e050",
+  Ne: "#b3e3f5",
+  Na: "#ab5cf2",
+  Mg: "#8aff00",
+  Al: "#bfa6a6",
+  Si: "#f0c8a0",
+  P: "#ff8000",
+  S: "#ffff30",
+  Cl: "#1ff01f",
+  Ar: "#80d1e3",
+  K: "#8f40d4",
+  Ca: "#3dff00",
+  Sc: "#e6e6e6",
+  Ti: "#bfc2c7",
+  V: "#a6a6ab",
+  Cr: "#8a99c7",
+  Mn: "#9c7ac7",
+  Fe: "#e45a45",
+  Co: "#f090a0",
+  Ni: "#50d050",
+  Cu: "#c88033",
+  Zn: "#7d80b0",
+  Ga: "#966733",
+  Ge: "#668f8f",
+  As: "#bd80e3",
+  Se: "#ffa100",
+  Br: "#a62929",
+  Kr: "#5cb8d1",
+  Rb: "#702eb0",
+  Sr: "#00ff00",
+  Y: "#94ffff",
+  Zr: "#94e0e0",
+  Nb: "#73c2c9",
+  Mo: "#54b5b5",
+  Tc: "#3b9e9e",
+  Ru: "#248f8f",
+  Rh: "#0a7d8c",
+  Pd: "#006985",
+  Ag: "#c0c0c0",
+  Cd: "#ffd98d",
+  In: "#a67573",
+  Sn: "#668080",
+  Sb: "#9e63b5",
+  Te: "#d47a00",
+  I: "#940094",
+  Xe: "#429eb0",
+  Cs: "#57178f",
+  Ba: "#00c900",
+  W: "#2194d6",
+  Pt: "#d0d0e0",
+  Au: "#ffd123",
+  Hg: "#ff8c00",
+  Tl: "#a6544d",
+  Pb: "#575961"
+};
+var FALLBACK_RGB = [201 / 255, 209 / 255, 217 / 255];
+function hexRgb(hex) {
+  const h = hex.replace("#", "");
+  return [0, 1, 2].map((k) => Number.parseInt(h.slice(k * 2, k * 2 + 2), 16) / 255);
 }
-function classifyFile(name) {
-  const base = name.split("/").at(-1) ?? name;
-  if (base.toLowerCase() === "poscar") return "structure";
-  const extension = extensionOf(base);
-  if (STRUCTURE_EXTENSIONS.has(extension)) return "structure";
-  if (IMAGE_EXTENSIONS.has(extension)) return "image";
-  if (extension === "pdf") return "pdf";
-  if (TEXT_EXTENSIONS.has(extension)) return "text";
-  return "unsupported";
+function covRadius(elem) {
+  const r = COV_RADII[elem];
+  return typeof r === "number" ? r : 0.75;
 }
-function isPoscarFamily(name) {
-  const base = name.split("/").at(-1) ?? name;
-  if (base.toLowerCase() === "poscar") return true;
-  const extension = extensionOf(base);
-  return extension === "poscar" || extension === "vasp";
+function elemRgb(elem) {
+  return ELEM_HEX[elem] === void 0 ? FALLBACK_RGB : hexRgb(ELEM_HEX[elem]);
 }
-function emitCif(lengths, angles, sites) {
-  const rows2 = sites.map((site, index) => `${site.symbol}${index + 1} ${site.symbol} ${site.fraction.map((value) => value.toFixed(6)).join(" ")} 1.000000`);
-  return [
-    "data_structure",
-    `_cell_length_a    ${lengths[0].toFixed(6)}`,
-    `_cell_length_b    ${lengths[1].toFixed(6)}`,
-    `_cell_length_c    ${lengths[2].toFixed(6)}`,
-    `_cell_angle_alpha ${angles[0].toFixed(3)}`,
-    `_cell_angle_beta  ${angles[1].toFixed(3)}`,
-    `_cell_angle_gamma ${angles[2].toFixed(3)}`,
-    // 旧式标签：vendored NGL 的 CifParser 非可选地读 symmetry_space_group_name_H-M。
-    "_symmetry_space_group_name_H-M 'P 1'",
-    "loop_",
-    "_atom_site_label",
-    "_atom_site_type_symbol",
-    "_atom_site_fract_x",
-    "_atom_site_fract_y",
-    "_atom_site_fract_z",
-    // occupancy 的取值虽可选，但 getField 本身非可选——缺列直接崩。
-    "_atom_site_occupancy",
-    ...rows2,
-    ""
-  ].join("\n");
-}
-function xyzToCif(text) {
-  const raw = text.split(/\r?\n/);
-  let head = 0;
-  while (head < raw.length && raw[head].trim() === "") head++;
-  if (raw.length - head < 3) throw new Error("malformed XYZ: too few lines");
-  const declared = Number(raw[head].trim());
-  if (!Number.isInteger(declared) || declared < 1) throw new Error("malformed XYZ: bad atom count");
-  const siteLines = raw.slice(head + 2).filter((line) => line.trim() !== "");
-  if (siteLines.length < declared) throw new Error("malformed XYZ: fewer sites than declared");
-  const sites = [];
-  for (const line of siteLines.slice(0, declared)) {
-    const tokens = line.trim().split(/\s+/);
-    const symbol = tokens[0]?.match(/^[A-Za-z]+/)?.[0];
-    const coordinates = tokens.slice(1, 4).map(Number);
-    if (symbol === void 0 || coordinates.length < 3 || coordinates.some((value) => !Number.isFinite(value))) {
-      throw new Error("malformed XYZ: bad site line");
-    }
-    sites.push({ symbol, cartesian: coordinates });
-  }
-  const MARGIN = 8;
-  const extent = [0, 1, 2].map((axis) => Math.max(...sites.map((site) => site.cartesian[axis])) - Math.min(...sites.map((site) => site.cartesian[axis])));
-  const origin = [0, 1, 2].map((axis) => Math.min(...sites.map((site) => site.cartesian[axis])) - MARGIN);
-  const box = extent.map((value) => value + 2 * MARGIN);
-  return emitCif(box, [90, 90, 90], sites.map((site) => ({
-    symbol: site.symbol,
-    fraction: [0, 1, 2].map((axis) => (site.cartesian[axis] - origin[axis]) / box[axis])
-  })));
-}
-function structureBody(name, text) {
-  if (isPoscarFamily(name)) return poscarToCif(text);
-  if (isXyz(name)) return xyzToCif(text);
-  return text;
-}
-function isXyz(name) {
-  return extensionOf(name) === "xyz";
-}
-function multiplyMatrixVector(matrix, vector) {
-  return [
-    vector[0] * matrix[0][0] + vector[1] * matrix[1][0] + vector[2] * matrix[2][0],
-    vector[0] * matrix[0][1] + vector[1] * matrix[1][1] + vector[2] * matrix[2][1],
-    vector[0] * matrix[0][2] + vector[1] * matrix[1][2] + vector[2] * matrix[2][2]
-  ];
+function buildLattice(a, b, c, alpha, beta, gamma) {
+  const al = alpha * Math.PI / 180, be = beta * Math.PI / 180, ga = gamma * Math.PI / 180;
+  const cx = c * Math.cos(be);
+  const cy = c * (Math.cos(al) - Math.cos(be) * Math.cos(ga)) / Math.sin(ga);
+  const cz = Math.sqrt(Math.max(c * c - cx * cx - cy * cy, 0));
+  return [[a, 0, 0], [b * Math.cos(ga), b * Math.sin(ga), 0], [cx, cy, cz]];
 }
 function invertMatrix3(matrix) {
   const [[a, b, c], [d, e, f], [g, h, i]] = matrix;
@@ -541,9 +634,16 @@ function invertMatrix3(matrix) {
     [b * f - c * e, c * d - a * f, a * e - b * d]
   ];
   const determinant = a * cofactor[0][0] + b * cofactor[0][1] + c * cofactor[0][2];
-  if (Math.abs(determinant) < 1e-12) throw new Error("malformed POSCAR: singular lattice");
-  const transpose = (matrix2) => matrix2[0].map((_, column) => matrix2.map((row) => row[column]));
+  if (Math.abs(determinant) < 1e-12) return null;
+  const transpose = (m) => m[0].map((_, column) => m.map((row) => row[column]));
   return transpose(cofactor).map((row) => row.map((value) => value / determinant));
+}
+function mulRows(v, m) {
+  return [
+    v[0] * m[0][0] + v[1] * m[1][0] + v[2] * m[2][0],
+    v[0] * m[0][1] + v[1] * m[1][1] + v[2] * m[2][1],
+    v[0] * m[0][2] + v[1] * m[1][2] + v[2] * m[2][2]
+  ];
 }
 function latticeMetrics(lattice) {
   const norm = (v) => Math.hypot(v[0], v[1], v[2]);
@@ -553,9 +653,26 @@ function latticeMetrics(lattice) {
     angles: [angle(lattice[1], lattice[2]), angle(lattice[0], lattice[2]), angle(lattice[0], lattice[1])]
   };
 }
-function poscarToCif(text) {
+function finished(lattice, atoms, hasCell, formula) {
+  const { lengths, angles } = latticeMetrics(lattice);
+  return {
+    a: lengths[0],
+    b: lengths[1],
+    c: lengths[2],
+    alpha: angles[0],
+    beta: angles[1],
+    gamma: angles[2],
+    lattice,
+    atoms,
+    hasCell,
+    formula
+  };
+}
+function numbers(line) {
+  return line.split(/\s+/).filter(Boolean);
+}
+function parsePoscar(text) {
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
-  const numbers = (line) => line.split(/\s+/).filter(Boolean);
   if (lines.length < 9) throw new Error("malformed POSCAR: too few lines");
   const scale = Number(numbers(lines[1])[0]);
   if (!Number.isFinite(scale) || scale <= 0) throw new Error("malformed POSCAR: bad scaling factor");
@@ -597,21 +714,317 @@ function poscarToCif(text) {
   if (mode === void 0) throw new Error("malformed POSCAR: missing Direct/Cartesian marker");
   cursor += 1;
   const inverse = mode === "cartesian" ? invertMatrix3(scaled) : void 0;
-  const sites = [];
+  if (inverse === null) throw new Error("malformed POSCAR: singular lattice");
+  const atoms = [];
   for (const [index, symbol] of elements.entries()) {
     for (let nth = 0; nth < counts[index]; nth++) {
       const raw = numbers(lines[cursor] ?? "").map(Number).slice(0, 3);
       if (raw.length < 3 || raw.some((value) => !Number.isFinite(value))) {
         throw new Error(`malformed POSCAR: bad coordinates for ${symbol} site ${nth + 1}`);
       }
-      const fraction = inverse === void 0 ? raw : multiplyMatrixVector(inverse, raw);
-      sites.push({ symbol, fraction });
+      const f = inverse === void 0 ? raw : mulRows(raw, inverse);
+      atoms.push({ elem: symbol, f, pos: mulRows(f, scaled) });
       cursor += 1;
     }
   }
-  if (sites.length === 0) throw new Error("malformed POSCAR: no sites");
-  const { lengths, angles } = latticeMetrics(scaled);
-  return emitCif(lengths, angles, sites);
+  if (atoms.length === 0) throw new Error("malformed POSCAR: no sites");
+  return finished(scaled, atoms, true, elements.map((symbol, index) => `${symbol}${counts[index]}`).join(""));
+}
+function parseXyz(text) {
+  const raw = text.split(/\r?\n/);
+  let head = 0;
+  while (head < raw.length && raw[head].trim() === "") head++;
+  if (raw.length - head < 3) throw new Error("malformed XYZ: too few lines");
+  const declared = Number(raw[head].trim());
+  if (!Number.isInteger(declared) || declared < 1) throw new Error("malformed XYZ: bad atom count");
+  const siteLines = raw.slice(head + 2).filter((line) => line.trim() !== "");
+  if (siteLines.length < declared) throw new Error("malformed XYZ: fewer sites than declared");
+  const atoms = [];
+  const MARGIN = 8;
+  for (const line of siteLines.slice(0, declared)) {
+    const tokens = line.trim().split(/\s+/);
+    const symbol = tokens[0]?.match(/^[A-Za-z]+/)?.[0];
+    const coordinates = tokens.slice(1, 4).map(Number);
+    if (symbol === void 0 || coordinates.length < 3 || coordinates.some((value) => !Number.isFinite(value))) {
+      throw new Error("malformed XYZ: bad site line");
+    }
+    atoms.push({ elem: symbol, f: [0, 0, 0], pos: coordinates });
+  }
+  const extent = [0, 1, 2].map((axis) => Math.max(...atoms.map((at) => at.pos[axis])) - Math.min(...atoms.map((at) => at.pos[axis])));
+  const origin = [0, 1, 2].map((axis) => Math.min(...atoms.map((at) => at.pos[axis])) - MARGIN);
+  const box = extent.map((value) => value + 2 * MARGIN);
+  const lattice = [[box[0], 0, 0], [0, box[1], 0], [0, 0, box[2]]];
+  for (const at of atoms) {
+    at.f = [0, 1, 2].map((axis) => (at.pos[axis] - origin[axis]) / box[axis]);
+  }
+  const counts = /* @__PURE__ */ new Map();
+  for (const at of atoms) counts.set(at.elem, (counts.get(at.elem) ?? 0) + 1);
+  return finished(lattice, atoms, false, [...counts.entries()].map(([elem, n]) => `${elem}${n}`).join(""));
+}
+var IDENTITY_SYMOP = { rotation: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], translation: [0, 0, 0] };
+function parseSymop(text) {
+  const parts = text.trim().replace(/^['"]|['"]$/g, "").split(",");
+  if (parts.length !== 3) return null;
+  const axisIndex = { x: 0, y: 1, z: 2 };
+  const rotation = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  const translation = [0, 0, 0];
+  for (const [row, part] of parts.entries()) {
+    const terms = part.trim().match(/[+-]?[^+-]+/g);
+    if (terms === null) return null;
+    for (const term of terms) {
+      const match = term.trim().match(/^([+-])?\s*(?:(\d+)\/(\d+)|(\d*\.?\d+))?\s*([xyz])?$/i);
+      if (match === null) return null;
+      const sign = match[1] === "-" ? -1 : 1;
+      const value = match[2] !== void 0 ? Number(match[2]) / Number(match[3]) : match[4] !== void 0 && match[4] !== "" ? Number(match[4]) : 1;
+      if (!Number.isFinite(value)) return null;
+      if (match[5] !== void 0) rotation[row][axisIndex[match[5].toLowerCase()]] = sign * value;
+      else translation[row] += sign * value;
+    }
+  }
+  return { rotation, translation };
+}
+function applySymop(f, op) {
+  return [0, 1, 2].map((k) => f[0] * op.rotation[0][k] + f[1] * op.rotation[1][k] + f[2] * op.rotation[2][k] + op.translation[k]);
+}
+var wrap01 = (value) => value - Math.floor(value);
+function sameFract(a, b) {
+  return [0, 1, 2].every((k) => {
+    const d = Math.abs(a[k] - b[k]);
+    return Math.min(d, 1 - d) < 1e-4;
+  });
+}
+function cifTokens(line) {
+  const tokens = [];
+  for (const match of line.matchAll(/'[^']*'|"[^"]*"|\S+/g)) tokens.push(match[0]);
+  return tokens;
+}
+function cleanElem(raw) {
+  const letters = raw.replace(/[^A-Za-z]/g, "");
+  if (letters === "") return "X";
+  const capped = letters.charAt(0).toUpperCase() + letters.slice(1).toLowerCase();
+  if (COV_RADII[capped] !== void 0) return capped;
+  if (capped.length > 1 && COV_RADII[capped.charAt(0)] !== void 0) return capped.charAt(0);
+  return capped;
+}
+var MAX_EXPANSION_SITES = 2e3;
+function cifLoops(block) {
+  const loops = [];
+  for (let i = 0; i < block.length; i++) {
+    if (!/^\s*loop_\s*$/i.test(block[i])) continue;
+    const headers = [];
+    let j = i + 1;
+    while (j < block.length && /^\s*_/.test(block[j])) {
+      headers.push(block[j].trim().toLowerCase());
+      j++;
+    }
+    const rows2 = [];
+    while (j < block.length) {
+      const t = block[j].trim();
+      if (t === "") {
+        j++;
+        continue;
+      }
+      if (t.startsWith("_") || t.startsWith("#") || t.startsWith(";") || /^(loop_|data_|save_|stop_|global_)/i.test(t)) break;
+      rows2.push(cifTokens(t));
+      j++;
+    }
+    loops.push({ headers, rows: rows2 });
+    i = j - 1;
+  }
+  return loops;
+}
+function parseCif(text) {
+  if (!text) return null;
+  const raw = text.split(/\r?\n/);
+  const lines = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (/^;/.test(raw[i])) {
+      i += 1;
+      while (i < raw.length && !/^;/.test(raw[i])) i += 1;
+      continue;
+    }
+    lines.push(raw[i]);
+  }
+  const blocks = [[]];
+  for (const line of lines) {
+    if (/^\s*data_[^\s]*/i.test(line)) blocks.push([]);
+    blocks.at(-1).push(line);
+  }
+  for (const block of blocks) {
+    const parsed = parseCifBlock(block);
+    if (parsed !== null) return parsed;
+  }
+  return null;
+}
+function parseCifBlock(block) {
+  const get = (tag) => {
+    const re = new RegExp(`^\\s*_${tag}(?![\\w])\\s+(\\S+)`, "i");
+    for (const line of block) {
+      const match = line.match(re);
+      if (match) {
+        const value = Number.parseFloat(match[1].replace(/^['"]|['"]$/g, "").replace(/\(\d+\)/, ""));
+        return Number.isFinite(value) ? value : null;
+      }
+    }
+    return null;
+  };
+  const a = get("cell_length_a"), b = get("cell_length_b"), c = get("cell_length_c");
+  const alpha = get("cell_angle_alpha"), beta = get("cell_angle_beta"), gamma = get("cell_angle_gamma");
+  if (a === null || b === null || c === null || alpha === null || beta === null || gamma === null) return null;
+  let formula = "";
+  for (const line of block) {
+    const match = line.match(/^\s*_chemical_formula_sum\s+'?([^']+?)'?\s*$/i);
+    if (match) {
+      formula = match[1].replace(/\s+/g, "");
+      break;
+    }
+  }
+  const lattice = buildLattice(a, b, c, alpha, beta, gamma);
+  const loops = cifLoops(block);
+  const symopTags = ["_space_group_symop_operation_xyz", "_symmetry_equiv_pos_as_xyz"];
+  const ops = [];
+  for (const loop of loops) {
+    const col = symopTags.findIndex((tag) => loop.headers.includes(tag));
+    if (col === -1) continue;
+    for (const row of loop.rows) {
+      if (row.length <= col) continue;
+      const op = parseSymop(row[col]);
+      if (op !== null) ops.push(op);
+    }
+  }
+  if (ops.length === 0) ops.push(IDENTITY_SYMOP);
+  const sites = [];
+  for (const loop of loops) {
+    const idx = {};
+    loop.headers.forEach((header, n) => {
+      idx[header] = n;
+    });
+    const fx = idx["_atom_site_fract_x"], fy = idx["_atom_site_fract_y"], fz = idx["_atom_site_fract_z"];
+    const cx = idx["_atom_site_cartn_x"], cy = idx["_atom_site_cartn_y"], cz = idx["_atom_site_cartn_z"];
+    const hasFract = fx !== void 0 && fy !== void 0 && fz !== void 0;
+    const hasCart = cx !== void 0 && cy !== void 0 && cz !== void 0;
+    if (!hasFract && !hasCart) continue;
+    const typeCol = idx["_atom_site_type_symbol"] !== void 0 ? idx["_atom_site_type_symbol"] : idx["_atom_site_label"];
+    const inverse = hasCart && !hasFract ? invertMatrix3(lattice) : null;
+    if (hasCart && !hasFract && inverse === null) return null;
+    const num = (token) => Number.parseFloat(String(token).replace(/^['"]|['"]$/g, "").replace(/\(\d+\)/, ""));
+    for (const row of loop.rows) {
+      if (row.length < loop.headers.length) continue;
+      const f = hasFract ? [num(row[fx]), num(row[fy]), num(row[fz])] : mulRows([num(row[cx]), num(row[cy]), num(row[cz])], inverse);
+      if (f.some((value) => Number.isNaN(value))) continue;
+      sites.push({ elem: cleanElem(typeCol !== void 0 ? row[typeCol] ?? "X" : "X"), f });
+    }
+    break;
+  }
+  if (sites.length === 0) return null;
+  const expanded = [];
+  if (sites.length * ops.length > MAX_EXPANSION_SITES) {
+    expanded.push(...sites);
+  } else {
+    for (const op of ops) {
+      for (const site of sites) {
+        const f = applySymop(site.f, op).map(wrap01);
+        if (!expanded.some((seen) => seen.elem === site.elem && sameFract(seen.f, f))) expanded.push({ elem: site.elem, f });
+      }
+    }
+  }
+  const atoms = expanded.map((site) => ({ elem: site.elem, f: site.f, pos: mulRows(site.f, lattice) }));
+  if (formula === "") {
+    const counts = /* @__PURE__ */ new Map();
+    for (const at of atoms) counts.set(at.elem, (counts.get(at.elem) ?? 0) + 1);
+    formula = [...counts.entries()].map(([elem, n]) => `${elem}${n}`).join("");
+  }
+  return finished(lattice, atoms, true, formula);
+}
+function computeBonds(atoms, lattice) {
+  const bonds = [];
+  if (atoms.length === 0 || atoms.length > MAX_BOND_ATOMS) return bonds;
+  const images = [];
+  const shifts = [];
+  for (let tx = -1; tx <= 1; tx++) {
+    for (let ty = -1; ty <= 1; ty++) {
+      for (let tz = -1; tz <= 1; tz++) {
+        images.push([tx, ty, tz]);
+        shifts.push([
+          tx * lattice[0][0] + ty * lattice[1][0] + tz * lattice[2][0],
+          tx * lattice[0][1] + ty * lattice[1][1] + tz * lattice[2][1],
+          tx * lattice[0][2] + ty * lattice[1][2] + tz * lattice[2][2]
+        ]);
+      }
+    }
+  }
+  for (let i = 0; i < atoms.length; i++) {
+    const pi = atoms[i].pos, ri = covRadius(atoms[i].elem);
+    for (let j = i + 1; j < atoms.length; j++) {
+      const pj = atoms[j].pos;
+      const rmax = (ri + covRadius(atoms[j].elem)) * COV_FACTOR;
+      for (let s = 0; s < shifts.length; s++) {
+        const dx = pi[0] - pj[0] - shifts[s][0];
+        const dy = pi[1] - pj[1] - shifts[s][1];
+        const dz = pi[2] - pj[2] - shifts[s][2];
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > MIN_BOND_D2 && d2 < rmax * rmax) bonds.push({ i, j, image: images[s] });
+      }
+    }
+  }
+  return bonds;
+}
+function extensionOf(name) {
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+function parseStructure(name, text) {
+  const base = name.split("/").at(-1) ?? name;
+  const extension = extensionOf(base);
+  if (base.toLowerCase() === "poscar" || extension === "poscar" || extension === "vasp") return parsePoscar(text);
+  if (extension === "xyz") return parseXyz(text);
+  if (extension === "cif") {
+    const parsed = parseCif(text);
+    if (parsed === null) throw new Error("malformed CIF: missing cell parameters or atom sites");
+    return parsed;
+  }
+  throw new Error(`unsupported structure format: ${base}`);
+}
+function imagePos(atom, image, lattice) {
+  const shift = mulRows(image, lattice);
+  return [atom.pos[0] + shift[0], atom.pos[1] + shift[1], atom.pos[2] + shift[2]];
+}
+
+// packages/mat-ui/src/client/view-model.ts
+var STRUCTURE_EXTENSIONS = /* @__PURE__ */ new Set(["xyz", "cif", "poscar", "vasp"]);
+var IMAGE_EXTENSIONS = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp"]);
+var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
+  "log",
+  "out",
+  "txt",
+  "json",
+  "jsonl",
+  "sh",
+  "com",
+  "gjf",
+  "inp",
+  "py",
+  "csv",
+  "md",
+  "yml",
+  "yaml",
+  "slurm",
+  "pbs",
+  "job"
+]);
+function extensionOf2(name) {
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+function classifyFile(name) {
+  const base = name.split("/").at(-1) ?? name;
+  if (base.toLowerCase() === "poscar") return "structure";
+  const extension = extensionOf2(base);
+  if (STRUCTURE_EXTENSIONS.has(extension)) return "structure";
+  if (IMAGE_EXTENSIONS.has(extension)) return "image";
+  if (extension === "pdf") return "pdf";
+  if (TEXT_EXTENSIONS.has(extension)) return "text";
+  return "unsupported";
 }
 
 // packages/mat-ui/src/client/FileManagerPanel.tsx
@@ -624,7 +1037,7 @@ async function getJobs() {
 }
 async function getTree(scope, path = "") {
   const query = scope.startsWith("session:") ? `session=${encodeURIComponent(scope.slice("session:".length))}` : `jobId=${encodeURIComponent(scope)}`;
-  const response = await fetch(`/mat-files/tree?${query}&path=${encodeURIComponent(path)}`, { cache: "no-store" });
+  const response = await fetch(`/mat-files/tree?${query}&path=${encodeURIComponent(path)}`, { cache: "no-store", signal: AbortSignal.timeout(15e3) });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.error?.message ?? `tree HTTP ${response.status}`);
   return {
@@ -632,7 +1045,8 @@ async function getTree(scope, path = "") {
     primary: Array.isArray(payload.primary) ? payload.primary : [],
     preferences: payload.preferences,
     warning: payload.warning,
-    ...payload.root === void 0 ? {} : { root: payload.root }
+    ...payload.root === void 0 ? {} : { root: payload.root },
+    ...payload.sessionFiles === void 0 ? {} : { sessionFiles: payload.sessionFiles }
   };
 }
 async function deleteSelection(scope, paths) {
@@ -708,6 +1122,7 @@ function FileManagerPanel({ sessionId, openTab, openWorkspace }) {
   const [trees, setTrees] = (0, import_react2.useState)({});
   const [roots, setRoots] = (0, import_react2.useState)({});
   const [primaries, setPrimaries] = (0, import_react2.useState)({});
+  const [sessionFilesByScope, setSessionFilesByScope] = (0, import_react2.useState)({});
   const [warning, setWarning] = (0, import_react2.useState)();
   const [error2, setError] = (0, import_react2.useState)();
   const visible = (0, import_react2.useMemo)(() => jobsForSession(jobs2, sessionId), [jobs2, sessionId]);
@@ -815,6 +1230,7 @@ function FileManagerPanel({ sessionId, openTab, openWorkspace }) {
       treeCache.set(cacheKey(scope), tree);
       setTrees((current2) => ({ ...current2, [scope]: tree.entries }));
       setRoots((current2) => ({ ...current2, [scope]: tree.root }));
+      if (tree.sessionFiles !== void 0) setSessionFilesByScope((current2) => ({ ...current2, [scope]: tree.sessionFiles }));
       if (!isSessionScope(scope)) {
         setPrimaries((current2) => ({ ...current2, [scope]: tree.primary }));
         fileManagerState.setPins(tree.preferences?.pins ?? [], scope);
@@ -833,6 +1249,36 @@ function FileManagerPanel({ sessionId, openTab, openWorkspace }) {
       }
     }
   }, [openScopes2.join("\0")]);
+  const pollSignatures = (0, import_react2.useRef)(/* @__PURE__ */ new Map());
+  (0, import_react2.useEffect)(() => {
+    if (sessionKey === void 0) return;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        const live = fileManagerState.snapshot();
+        if (!live.openScopes.includes(sessionKey)) return;
+        const paths = ["", ...new Set(live.scopes[sessionKey]?.expanded ?? [])].sort((a, b) => a.split("/").length - b.split("/").length);
+        for (const path of paths) {
+          try {
+            const tree = await getTree(sessionKey, path);
+            setError(void 0);
+            if (path === "" && tree.sessionFiles !== void 0) {
+              setSessionFilesByScope((current2) => ({ ...current2, [sessionKey]: tree.sessionFiles }));
+            }
+            const key = cacheKey(sessionKey, path);
+            const signature = tree.entries.map((entry) => `${entry.path}:${entry.directory ? "d" : "f"}:${entry.size}`).join("\n");
+            if (pollSignatures.current.get(key) === signature) continue;
+            pollSignatures.current.set(key, signature);
+            treeCache.set(key, tree);
+            setTrees((current2) => ({ ...current2, [sessionKey]: mergeTreeEntries(current2[sessionKey] ?? [], path, tree.entries) }));
+          } catch {
+          }
+        }
+      })();
+    }, 5e3);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [sessionKey]);
   const loadDirectory = async (path, scope) => {
     const cached = treeCache.get(cacheKey(scope, path));
     if (cached !== void 0) {
@@ -1069,6 +1515,7 @@ function FileManagerPanel({ sessionId, openTab, openWorkspace }) {
         expanded && sessionGroups.map(({ session, jobs: sessionJobs }) => {
           const sidOpen = openSessions.includes(session.sessionId);
           const sessionTitle = session.title ?? (session.sessionId === "" ? "" : session.sessionId.replace(/^session-/, "").slice(0, 8));
+          const archived = session.sessionId === "" ? [] : sessionFilesByScope[scope]?.[session.sessionId] ?? [];
           return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
             /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { role: "treeitem", tabIndex: 0, "data-scope": sessionKey, "aria-expanded": sidOpen, "aria-selected": false, className: "mat-files__row mat-files__row--session", style: { paddingInlineStart: `${5 + 16}px` }, onClick: () => {
               toggleSessionRow(session.sessionId);
@@ -1079,50 +1526,67 @@ function FileManagerPanel({ sessionId, openTab, openWorkspace }) {
                 event.stopPropagation();
                 toggleSessionRow(session.sessionId);
               }, children: sessionTitle }),
-              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__count", children: sessionJobs.length })
+              /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__count", children: sessionJobs.length + archived.length })
             ] }),
-            sidOpen && (sessionJobs.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "mat-files__row mat-files__row--loading", style: { paddingInlineStart: `${5 + 2 * 16}px` }, children: "\u65E0\u8DDF\u8E2A\u4F5C\u4E1A" }) : sessionJobs.map((job) => {
-              const jobOpen = openScopes2.includes(job.jobId);
-              const jobEntries = trees[job.jobId] ?? [];
-              const jobRows = jobOpen ? visibleTreeEntries(jobEntries, snapshot.scopes[job.jobId]?.expanded ?? []) : [];
-              return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { role: "treeitem", tabIndex: 0, "data-scope": job.jobId, "aria-expanded": jobOpen, "aria-selected": false, className: "mat-files__row mat-files__row--scope", style: { paddingInlineStart: `${5 + 2 * 16}px` }, onClick: () => {
-                  fileManagerState.toggleScope(job.jobId);
-                }, children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__kind", children: jobOpen ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderOpenOutline16, {}) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderClose16, {}) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `mat-files__tag mat-files__tag--job mat-files__tag--job-${jobTagTone(job)}`, children: "\u4F5C\u4E1A" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__name", onClick: (event) => {
+            sidOpen && (sessionJobs.length === 0 && archived.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "mat-files__row mat-files__row--loading", style: { paddingInlineStart: `${5 + 2 * 16}px` }, children: "\u65E0\u6587\u4EF6\u4E0E\u4F5C\u4E1A" }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+              archived.map((path) => {
+                const selected = snapshot.scopes[scope]?.selectedPaths.includes(path) ?? false;
+                return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { role: "treeitem", tabIndex: 0, "data-path": path, "data-scope": scope, "aria-selected": selected, className: "mat-files__row", style: { paddingInlineStart: `${5 + 2 * 16}px` }, children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("input", { type: "checkbox", "aria-label": `\u9009\u62E9 ${path}`, checked: selected, onChange: () => {
+                    fileManagerState.selectPath(path, scope);
+                  }, onClick: (event) => {
                     event.stopPropagation();
+                  } }),
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__kind", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.StateDot, { state: "done" }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__name", title: path, onClick: () => {
+                    openFile(path, scope);
+                  }, children: path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__origin mat-files__origin--local", children: "\u672C\u5730" })
+                ] }, `${session.sessionId}\0${path}`);
+              }),
+              sessionJobs.map((job) => {
+                const jobOpen = openScopes2.includes(job.jobId);
+                const jobEntries = trees[job.jobId] ?? [];
+                const jobRows = jobOpen ? visibleTreeEntries(jobEntries, snapshot.scopes[job.jobId]?.expanded ?? []) : [];
+                return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { role: "treeitem", tabIndex: 0, "data-scope": job.jobId, "aria-expanded": jobOpen, "aria-selected": false, className: "mat-files__row mat-files__row--scope", style: { paddingInlineStart: `${5 + 2 * 16}px` }, onClick: () => {
                     fileManagerState.toggleScope(job.jobId);
-                  }, children: scopeLabel(job.jobId, [job], void 0) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `mat-files__origin ${job.workdir === void 0 ? "mat-files__origin--local" : "mat-files__origin--both"}`, children: job.workdir === void 0 ? "\u672C\u5730" : "\u672C\u5730 + \u8FDC\u7AEF" })
-                ] }),
-                jobRows.map((entry) => {
-                  const selected = snapshot.scopes[job.jobId]?.selectedPaths.includes(entry.path) ?? false;
-                  const pinned = snapshot.scopes[job.jobId]?.pins.includes(entry.path) ?? false;
-                  const listing = entry.directory && (snapshot.scopes[job.jobId]?.expanded.includes(entry.path) ?? false) && snapshot.expanding.includes(entry.path);
-                  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { role: "treeitem", tabIndex: 0, "data-path": entry.path, "data-scope": job.jobId, "aria-selected": selected, "aria-expanded": entry.directory ? snapshot.scopes[job.jobId]?.expanded.includes(entry.path) : void 0, className: "mat-files__row", style: { paddingInlineStart: `${5 + (entry.depth + 3) * 16}px` }, children: [
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("input", { type: "checkbox", "aria-label": `\u9009\u62E9 ${entry.name}`, checked: selected, onChange: () => {
-                        fileManagerState.selectPath(entry.path, job.jobId);
-                      }, onClick: (event) => {
-                        event.stopPropagation();
-                      } }),
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__kind", children: entry.directory ? snapshot.scopes[job.jobId]?.expanded.includes(entry.path) ?? false ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderOpenOutline16, {}) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderClose16, {}) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.StateDot, { state: statusState2(entry) }) }),
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__name", onClick: () => {
-                        entry.directory ? (fileManagerState.toggleExpanded(entry.path, job.jobId), void loadDirectory(entry.path, job.jobId)) : openFile(entry.path, job.jobId);
-                      }, children: entry.name }),
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `mat-files__origin mat-files__origin--${entry.origin}`, children: sourceLabel(entry) }),
-                      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.Tooltip, { label: pinned ? "\u4ECE\u4E3B\u8981\u6587\u4EF6\u79FB\u9664" : "\u56FA\u5B9A\u4E3A\u4E3B\u8981\u6587\u4EF6", side: "bottom", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__pin", "aria-label": `${pinned ? "\u53D6\u6D88\u56FA\u5B9A" : "\u56FA\u5B9A"} ${entry.name}`, "aria-pressed": pinned, onClick: () => {
-                        togglePin(entry.path, job.jobId);
-                      }, children: "\u2605" }) })
-                    ] }),
-                    listing && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { role: "status", className: "mat-files__row mat-files__row--loading", style: { paddingInlineStart: `${5 + (entry.depth + 4) * 16}px` }, children: "\u6B63\u5728\u52A0\u8F7D\u5B50\u76EE\u5F55\u2026" })
-                  ] }, `${job.jobId}\0${entry.path}`);
-                }),
-                jobOpen && jobEntries.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "mat-files__row mat-files__row--loading", style: { paddingInlineStart: `${5 + 3 * 16}px` }, children: "\u6682\u65E0\u6587\u4EF6" })
-              ] }, job.jobId);
-            }))
+                  }, children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__kind", children: jobOpen ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderOpenOutline16, {}) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderClose16, {}) }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `mat-files__tag mat-files__tag--job mat-files__tag--job-${jobTagTone(job)}`, children: "\u4F5C\u4E1A" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__name", onClick: (event) => {
+                      event.stopPropagation();
+                      fileManagerState.toggleScope(job.jobId);
+                    }, children: scopeLabel(job.jobId, [job], void 0) }),
+                    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `mat-files__origin ${job.workdir === void 0 ? "mat-files__origin--local" : "mat-files__origin--both"}`, children: job.workdir === void 0 ? "\u672C\u5730" : "\u672C\u5730 + \u8FDC\u7AEF" })
+                  ] }),
+                  jobRows.map((entry) => {
+                    const selected = snapshot.scopes[job.jobId]?.selectedPaths.includes(entry.path) ?? false;
+                    const pinned = snapshot.scopes[job.jobId]?.pins.includes(entry.path) ?? false;
+                    const listing = entry.directory && (snapshot.scopes[job.jobId]?.expanded.includes(entry.path) ?? false) && snapshot.expanding.includes(entry.path);
+                    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { role: "treeitem", tabIndex: 0, "data-path": entry.path, "data-scope": job.jobId, "aria-selected": selected, "aria-expanded": entry.directory ? snapshot.scopes[job.jobId]?.expanded.includes(entry.path) : void 0, className: "mat-files__row", style: { paddingInlineStart: `${5 + (entry.depth + 3) * 16}px` }, children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("input", { type: "checkbox", "aria-label": `\u9009\u62E9 ${entry.name}`, checked: selected, onChange: () => {
+                          fileManagerState.selectPath(entry.path, job.jobId);
+                        }, onClick: (event) => {
+                          event.stopPropagation();
+                        } }),
+                        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "mat-files__kind", children: entry.directory ? snapshot.scopes[job.jobId]?.expanded.includes(entry.path) ?? false ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderOpenOutline16, {}) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.IconFolderClose16, {}) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.StateDot, { state: statusState2(entry) }) }),
+                        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__name", onClick: () => {
+                          entry.directory ? (fileManagerState.toggleExpanded(entry.path, job.jobId), void loadDirectory(entry.path, job.jobId)) : openFile(entry.path, job.jobId);
+                        }, children: entry.name }),
+                        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: `mat-files__origin mat-files__origin--${entry.origin}`, children: sourceLabel(entry) }),
+                        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(import_dsh_client_ui_primitives2.Tooltip, { label: pinned ? "\u4ECE\u4E3B\u8981\u6587\u4EF6\u79FB\u9664" : "\u56FA\u5B9A\u4E3A\u4E3B\u8981\u6587\u4EF6", side: "bottom", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("button", { type: "button", className: "mat-files__pin", "aria-label": `${pinned ? "\u53D6\u6D88\u56FA\u5B9A" : "\u56FA\u5B9A"} ${entry.name}`, "aria-pressed": pinned, onClick: () => {
+                          togglePin(entry.path, job.jobId);
+                        }, children: "\u2605" }) })
+                      ] }),
+                      listing && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { role: "status", className: "mat-files__row mat-files__row--loading", style: { paddingInlineStart: `${5 + (entry.depth + 4) * 16}px` }, children: "\u6B63\u5728\u52A0\u8F7D\u5B50\u76EE\u5F55\u2026" })
+                    ] }, `${job.jobId}\0${entry.path}`);
+                  }),
+                  jobOpen && jobEntries.length === 0 && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "mat-files__row mat-files__row--loading", style: { paddingInlineStart: `${5 + 3 * 16}px` }, children: "\u6682\u65E0\u6587\u4EF6" })
+                ] }, job.jobId);
+              })
+            ] }))
           ] }, session.sessionId || "unowned");
         }),
         rows2.map((entry) => {
@@ -1183,6 +1647,24 @@ function loadScript(src) {
 // packages/mat-ui/src/client/ViewerPanel.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
 var TEXT_PREVIEW_LIMIT = 512 * 1024;
+var SPHERE_R = 0.5;
+var BOND_R = 0.075;
+var EDGE_R = 0.04;
+var LINE_SPHERE_R = 0.15;
+var LINE_BOND_R = 0.03;
+var ATOM_OPACITY = 0.9;
+var BOND_OPACITY = 0.6;
+var CELL_OPACITY = 0.4;
+var BOND_RGB = [110 / 255, 118 / 255, 129 / 255];
+var CELL_RGB = [88 / 255, 166 / 255, 255 / 255];
+var SPACEFILL_FACTOR = 1.25;
+var SPACEFILL_CAP = 1.6;
+var CELL_EDGES = [[0, 1], [0, 2], [0, 3], [1, 4], [1, 5], [2, 4], [2, 6], [3, 5], [3, 6], [4, 7], [5, 7], [6, 7]];
+function sphereRadiusOf(style2, elem) {
+  if (style2 === "line") return LINE_SPHERE_R;
+  if (style2 === "spacefill") return Math.min(SPACEFILL_CAP, covRadius(elem) * SPACEFILL_FACTOR);
+  return SPHERE_R;
+}
 var contentUrl = (target) => (
   // session:<id> 是工作区目标（服务端解析共享 cwd）——走 content 路由的 session 参数。
   target.jobId.startsWith("session:") ? `/mat-files/content?session=${encodeURIComponent(target.jobId.slice("session:".length))}&path=${encodeURIComponent(target.path)}` : `/mat-files/content?jobId=${encodeURIComponent(target.jobId)}&path=${encodeURIComponent(target.path)}`
@@ -1193,10 +1675,48 @@ var KIND_LABELS = {
   pdf: "\u6587\u6863",
   text: "\u6587\u672C"
 };
-function rebuild(style2, component, unitcell) {
-  component.removeAllRepresentations();
-  component.addRepresentation(style2);
-  if (unitcell) component.addRepresentation("unitcell");
+function drawStructure(stage, shapeFactory, parsed, bonds, style2, showOuter) {
+  const showBonds = style2 !== "spacefill";
+  const crossesCell = (bond) => Boolean(bond.image[0] || bond.image[1] || bond.image[2]);
+  stage.removeAllComponents();
+  const addShape = (shape, opacity) => {
+    stage.addComponentFromObject(shape).addRepresentation("buffer", { opacity });
+  };
+  const atomsShape = new shapeFactory("atoms");
+  for (const atom of parsed.atoms) {
+    atomsShape.addSphere(atom.pos, elemRgb(atom.elem), sphereRadiusOf(style2, atom.elem));
+  }
+  if (showBonds && showOuter) {
+    const seen = /* @__PURE__ */ new Set();
+    for (const bond of bonds) {
+      if (!crossesCell(bond)) continue;
+      const atom = parsed.atoms[bond.j];
+      const q = imagePos(atom, bond.image, parsed.lattice);
+      const key = `${bond.j}|${q.map((value) => value.toFixed(2)).join(",")}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        atomsShape.addSphere(q, elemRgb(atom.elem), sphereRadiusOf(style2, atom.elem));
+      }
+    }
+  }
+  addShape(atomsShape, ATOM_OPACITY);
+  if (showBonds) {
+    const bondShape = new shapeFactory("bonds");
+    for (const bond of bonds) {
+      if (!showOuter && crossesCell(bond)) continue;
+      bondShape.addCylinder(parsed.atoms[bond.i].pos, imagePos(parsed.atoms[bond.j], bond.image, parsed.lattice), BOND_RGB, style2 === "line" ? LINE_BOND_R : BOND_R);
+    }
+    addShape(bondShape, BOND_OPACITY);
+  }
+  if (parsed.hasCell) {
+    const cellShape = new shapeFactory("cell");
+    const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 0], [1, 0, 1], [0, 1, 1], [1, 1, 1]].map((fraction) => mulRows(fraction, parsed.lattice));
+    for (const [from, to] of CELL_EDGES) {
+      cellShape.addCylinder(corners[from], corners[to], CELL_RGB, EDGE_R);
+    }
+    addShape(cellShape, CELL_OPACITY);
+  }
+  stage.autoView();
 }
 function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
   const [snapshot, setSnapshot] = (0, import_react4.useState)(viewerState.snapshot());
@@ -1204,14 +1724,15 @@ function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
     setSnapshot(viewerState.snapshot());
   }), []);
   const [style2, setStyle] = (0, import_react4.useState)("ball+stick");
-  const [spin, setSpin] = (0, import_react4.useState)(false);
+  const [outer, setOuter] = (0, import_react4.useState)(true);
   const [text, setText] = (0, import_react4.useState)();
   const [truncated, setTruncated] = (0, import_react4.useState)(false);
   const [copyFailed, setCopyFailed] = (0, import_react4.useState)(false);
+  const [structInfo, setStructInfo] = (0, import_react4.useState)();
   const containerRef = (0, import_react4.useRef)(null);
   const stageRef = (0, import_react4.useRef)(void 0);
-  const componentRef = (0, import_react4.useRef)(void 0);
-  const unitcellRef = (0, import_react4.useRef)(false);
+  const shapeFactoryRef = (0, import_react4.useRef)(void 0);
+  const structureRef = (0, import_react4.useRef)(void 0);
   const target = snapshot.current;
   (0, import_react4.useEffect)(() => {
     if (target?.kind !== "structure") return;
@@ -1227,18 +1748,19 @@ function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
         if (disposed) return;
         const NGL = window.NGL;
         if (NGL === void 0 || containerRef.current === null) throw new Error("3D \u5F15\u64CE\u672A\u5C31\u7EEA");
+        const parsed = parseStructure(target.path, source);
+        const bonds = computeBonds(parsed.atoms, parsed.lattice);
         stage = new NGL.Stage(containerRef.current, { backgroundColor: "white" });
         resizeObserver = new ResizeObserver(() => {
           stage?.handleResize();
         });
         resizeObserver.observe(containerRef.current);
-        const component = await stage.loadFile(new Blob([structureBody(target.path, source)]), { ext: "cif", defaultRepresentation: false });
-        if (disposed) return;
         stageRef.current = stage;
-        componentRef.current = component;
-        unitcellRef.current = !isXyz(target.path);
-        rebuild("ball+stick", component, unitcellRef.current);
-        stage.autoView();
+        shapeFactoryRef.current = NGL.Shape;
+        structureRef.current = { parsed, bonds };
+        drawStructure(stage, NGL.Shape, parsed, bonds, "ball+stick", true);
+        setOuter(true);
+        setStructInfo(`${parsed.formula} \xB7 \u6676\u80DE ${parsed.a.toFixed(3)} \xD7 ${parsed.b.toFixed(3)} \xD7 ${parsed.c.toFixed(3)} \xC5\uFF0C${parsed.alpha.toFixed(1)}/${parsed.beta.toFixed(1)}/${parsed.gamma.toFixed(1)}\xB0 \xB7 ${parsed.atoms.length} \u4F4D\u70B9 \xB7 ${bonds.length} \u952E`);
         viewerState.finish();
       } catch (cause) {
         if (!disposed) viewerState.finish(cause);
@@ -1248,7 +1770,9 @@ function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
       disposed = true;
       resizeObserver?.disconnect();
       stageRef.current = void 0;
-      componentRef.current = void 0;
+      shapeFactoryRef.current = void 0;
+      structureRef.current = void 0;
+      setStructInfo(void 0);
       stage?.dispose();
       containerRef.current?.replaceChildren();
     };
@@ -1294,8 +1818,22 @@ function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
   const slowHint = elapsed >= 10 ? "\uFF0C\u8FDC\u7AEF\u54CD\u5E94\u7F13\u6162\uFF0C\u53EF\u80FD\u7F51\u7EDC\u4E0D\u901A" : "";
   const onStyle = (next) => {
     setStyle(next);
-    if (componentRef.current !== void 0) rebuild(next, componentRef.current, unitcellRef.current);
+    const stage = stageRef.current;
+    const structure = structureRef.current;
+    if (stage !== void 0 && shapeFactoryRef.current !== void 0 && structure !== void 0) {
+      drawStructure(stage, shapeFactoryRef.current, structure.parsed, structure.bonds, next, outer);
+    }
   };
+  const onOuter = () => {
+    const next = !outer;
+    setOuter(next);
+    const stage = stageRef.current;
+    const structure = structureRef.current;
+    if (stage !== void 0 && shapeFactoryRef.current !== void 0 && structure !== void 0) {
+      drawStructure(stage, shapeFactoryRef.current, structure.parsed, structure.bonds, style2, next);
+    }
+  };
+  const [spin, setSpin] = (0, import_react4.useState)(false);
   const onSpin = () => {
     const next = !spin;
     setSpin(next);
@@ -1346,6 +1884,7 @@ function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
             onStyle("spacefill");
           }, children: "\u586B\u5145" })
         ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives3.Button, { size: "sm", variant: outer ? "primary" : "outline", "aria-label": "\u80DE\u5916\u539F\u5B50", "aria-pressed": outer, title: "\u663E\u793A\u4E0E\u80DE\u5185\u539F\u5B50\u6210\u952E\u7684\u80DE\u5916\u955C\u50CF\u539F\u5B50\uFF08Draw atoms outside unit cell bonded to atoms within unit cell\uFF09", onClick: onOuter, children: "\u80DE\u5916\u539F\u5B50" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives3.Button, { size: "sm", variant: spin ? "primary" : "outline", "aria-label": "\u81EA\u8F6C", "aria-pressed": spin, onClick: onSpin, children: spin ? "\u505C\u8F6C" : "\u81EA\u8F6C" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives3.Button, { size: "sm", variant: "outline", "aria-label": "\u91CD\u7F6E\u89C6\u89D2", onClick: () => {
           stageRef.current?.autoView();
@@ -1360,6 +1899,7 @@ function ViewerSurface({ variant = "overlay", peersNav, localPath }) {
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("code", { title: localPath, children: localPath.length > 72 ? `\u2026${localPath.slice(-71)}` : localPath }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(import_dsh_client_ui_primitives3.Button, { size: "sm", variant: "outline", "aria-label": "\u590D\u5236\u672C\u5730\u955C\u50CF\u8DEF\u5F84", onClick: copyPath, children: pathCopied ? "\u5DF2\u590D\u5236" : "\u590D\u5236\u8DEF\u5F84" })
     ] }),
+    target?.kind === "structure" && structInfo !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "mat-view__structinfo", title: structInfo, children: structInfo }),
     target === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "mat-view__empty", children: "\u70B9\u51FB\u6587\u4EF6\u9762\u677F\u4E2D\u7684\u6587\u4EF6\u4EE5\u9884\u89C8\u3002" }) : snapshot.status === "error" ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("p", { className: "mat-view__error", role: "alert", children: [
       "\u9884\u89C8\u5931\u8D25\uFF1A",
       snapshot.error
@@ -1514,10 +2054,11 @@ function metadataStateOf(label, value) {
   }
   return void 0;
 }
-function TaskDetailsPanel({ sessionId, openTab, openDetailsTab }) {
+function TaskDetailsPanel({ sessionId, openTab, openDetailsTab, layout }) {
   const [selectedJobId2, setSelectedJobId] = (0, import_react6.useState)();
   const selectFiles = () => {
     if (selectedJobId2 !== void 0) fileManagerState.selectJob(selectedJobId2);
+    if (layout !== void 0) openDetailsWithRoom(layout);
     openDetailsTab?.("mat-files");
     openTab?.("mat-files");
   };
@@ -1654,7 +2195,7 @@ function DetailsRailToggle(props) {
       style: { right: `${Math.max(0, Math.round(detailsWidth) - 11)}px` },
       onClick: () => {
         if (open2) layout.closeDetails();
-        else layout.openDetails();
+        else openDetailsWithRoom(layout);
       },
       children: open2 ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(import_dsh_client_ui_primitives5.IconChevronRightOutline14, {}) : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(import_dsh_client_ui_primitives5.IconChevronLeftOutline14, {})
     }
@@ -1678,7 +2219,7 @@ var style = `
 .mat-files__copied{flex:none;color:var(--dsw-alias-state-success-primary);font-size:11px}.mat-files__scope{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dsw-alias-label-primary);font:12px/14px ui-monospace,SFMono-Regular,monospace}
 .mat-brand-mark{display:block;width:auto;max-width:100%;object-fit:contain}
 body[data-ds-dark-theme] .mat-brand-mark{filter:invert(1)}
-.mat-view__zoom{margin-left:auto}.mat-view__path{display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2)}.mat-view__path code{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:12px/1.5 ui-monospace,SFMono-Regular,monospace;color:var(--dsw-alias-label-secondary)}.mat-view__peers{align-items:center}.mat-view__count{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap}
+.mat-view__zoom{margin-left:auto}.mat-view__path{display:flex;align-items:center;gap:8px;padding:7px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2)}.mat-view__path code{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:12px/1.5 ui-monospace,SFMono-Regular,monospace;color:var(--dsw-alias-label-secondary)}.mat-view__peers{align-items:center}.mat-view__count{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;font-size:12px;white-space:nowrap}.mat-view__structinfo{padding:6px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font:11px/1.5 var(--dsw-font-family);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mat-view-overlay{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:color-mix(in srgb,var(--dsw-alias-label-primary) 55%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
 .mat-view-overlay__card{display:flex;min-width:0;width:min(1200px,92vw);height:min(82vh,900px);overflow:hidden;border:1px solid var(--dsw-alias-border-l2);border-radius:16px;background:var(--dsw-alias-bg-base);box-shadow:0 40px 120px rgba(0,0,0,.5)}
 .mat-view--overlay{flex:1;min-width:0}
@@ -1719,12 +2260,12 @@ function apply(ctx) {
     id: "mat-task",
     order: 0,
     label: "\u4EFB\u52A1"
-  }, (props) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(TaskDetailsPanel, { ...props })));
+  }, (props) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(TaskDetailsPanel, { ...props, layout: ctx.layout })));
   ctx.slots.inject("conversation.input.dock", () => ctx.slots.register({
     name: "conversation.input.dock",
     id: "mat-status",
     order: 15
-  }, (props) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(StatusDock, { ...props })));
+  }, (props) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(StatusDock, { ...props, layout: ctx.layout })));
   ctx.slots.inject("shell.overlay", () => ctx.slots.register({
     name: "shell.overlay",
     id: "mat-rail-toggle",

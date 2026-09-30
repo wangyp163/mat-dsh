@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>mat-dsh 架构总览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #eef1f5; color: #1f2430;
+    width: 1720px; padding: 36px 40px 44px;
+  }
+  .mono { font-family: "JetBrains Mono", "Cascadia Code", Consolas, "Noto Sans Mono CJK SC", monospace; }
+
+  /* ── 页头 ── */
+  .header { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 14px; }
+  .header h1 { font-size: 27px; letter-spacing: .5px; }
+  .header h1 .dim { color: #6b7484; font-weight: 500; font-size: 20px; }
+  .header .sub { font-size: 13px; color: #5a6373; margin-top: 6px; }
+  .principles { display: flex; gap: 10px; }
+  .principle {
+    font-size: 12px; color: #3d4a5c; background: #fff; border: 1px solid #cfd6e0;
+    border-radius: 999px; padding: 7px 14px; font-weight: 500;
+  }
+  .principle b { color: #1a3a6b; }
+
+  /* ── 布局 ── */
+  .columns { display: grid; grid-template-columns: 1180px 428px; gap: 22px; align-items: start; }
+
+  /* ── 分层卡片 ── */
+  .layer { background: #fff; border: 1px solid #d4dae3; border-radius: 14px; overflow: hidden;
+           box-shadow: 0 1px 3px rgba(20,30,50,.07); }
+  .layer-head { display: flex; align-items: baseline; gap: 12px; padding: 13px 20px 11px; border-bottom: 1px solid #e4e8ee; }
+  .layer-head .tag { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: #8a93a3; }
+  .layer-head .name { font-size: 16.5px; font-weight: 700; }
+  .layer-head .note { font-size: 12px; color: #6b7484; }
+  .layer-body { padding: 16px 18px 18px; }
+
+  .l-user   .layer-head { background: linear-gradient(90deg,#f2f5f9,#fff); }
+  .l-user   .name { color: #3d4a5c; }
+  .l-host   .layer-head { background: linear-gradient(90deg,#f0edfa,#fff); }
+  .l-host   .name { color: #5b4bb7; }
+  .l-plugin .layer-head { background: linear-gradient(90deg,#e9f1fd,#fff); }
+  .l-plugin .name { color: #1d5dc0; }
+  .l-core   .layer-head { background: linear-gradient(90deg,#e8f5f1,#fff); }
+  .l-core   .name { color: #0d7a5f; }
+  .l-remote .layer-head { background: linear-gradient(90deg,#fdf0e5,#fff); }
+  .l-remote .name { color: #b35c0a; }
+
+  /* ── 模块盒子 ── */
+  .mods { display: flex; flex-wrap: wrap; gap: 10px; }
+  .mod {
+    flex: 1 1 250px; min-width: 235px; max-width: 100%;
+    background: #fafbfd; border: 1px solid #dde3ec; border-radius: 9px; padding: 10px 12px 9px;
+  }
+  .mod .t { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .mod .t .file { font-size: 10.5px; font-weight: 500; color: #8a93a3; margin-left: 6px; }
+  .mod .d { font-size: 11.5px; line-height: 1.5; color: #525c6b; }
+  .mod .d code { font-family: Consolas, "Noto Sans Mono CJK SC", monospace; font-size: 10.5px; background:#eef1f6; padding: 0 3px; border-radius: 3px; color:#31405c; }
+
+  .mod.hl   { background: #e9f1fd; border-color: #b9d2f2; }
+  .mod.warn { background: #fdf3e7; border-color: #efd3ad; }
+
+  /* core 分组网格 */
+  .groups { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .group { border: 1px solid #dbe6e1; background: #f7fbf9; border-radius: 10px; padding: 10px 12px 11px; }
+  .group > .gt { font-size: 12.5px; font-weight: 700; color: #0d7a5f; margin-bottom: 8px;
+                 padding-bottom: 6px; border-bottom: 1px dashed #d3e2db; }
+  .group .items { display: flex; flex-direction: column; gap: 7px; }
+  .group .it { font-size: 11.5px; line-height: 1.45; color: #525c6b; }
+  .group .it b { font-family: Consolas, "Noto Sans Mono CJK SC", monospace; font-size: 11px; color: #22314a; font-weight: 700; }
+  .group .it.w b { color: #b35c0a; }
+
+  /* ── 层间连接 ── */
+  .connector { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 7px 0; }
+  .connector .arrow { width: 0; height: 0; border-left: 9px solid transparent; border-right: 9px solid transparent;
+                      border-top: 12px solid #97a3b5; }
+  .connector .stem { width: 3px; height: 10px; background: #97a3b5; margin-bottom: -1px; }
+  .connector .chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .chip { font-size: 11px; color: #4a5568; background: #fff; border: 1px solid #ccd4df; border-radius: 999px; padding: 4px 11px; }
+  .chip b { color: #1f2430; }
+
+  /* ── 侧栏 ── */
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .side-card { background: #fff; border: 1px solid #d4dae3; border-radius: 14px; box-shadow: 0 1px 3px rgba(20,30,50,.07); overflow: hidden; }
+  .side-card .h { padding: 11px 16px 9px; border-bottom: 1px solid #e8ecf2; font-size: 14px; font-weight: 700; color: #38414e; }
+  .side-card .b { padding: 12px 16px 14px; }
+  .row { font-size: 11.5px; line-height: 1.5; color: #525c6b; padding: 5px 0; border-bottom: 1px dashed #e8ecf2; }
+  .row:last-child { border-bottom: none; }
+  .row b { color: #22314a; font-size: 12px; }
+  .row code { font-family: Consolas, "Noto Sans Mono CJK SC", monospace; font-size: 10.5px; background:#eef1f6; padding: 0 3px; border-radius: 3px; }
+  .cmd { font-family: Consolas, "Noto Sans Mono CJK SC", monospace; font-size: 11px; line-height: 1.8;
+         background: #20293a; color: #d7e3f4; border-radius: 9px; padding: 11px 14px; }
+  .cmd .c { color: #7ee1a4; }
+
+  /* ── 底部数据流 ── */
+  .flow-wrap { margin-top: 22px; background: #fff; border: 1px solid #d4dae3; border-radius: 14px;
+               box-shadow: 0 1px 3px rgba(20,30,50,.07); overflow: hidden; }
+  .flow-wrap .h { padding: 13px 20px 11px; border-bottom: 1px solid #e4e8ee; font-size: 16.5px; font-weight: 700; color: #1f2430; }
+  .flow-wrap .h span { font-size: 12px; font-weight: 500; color: #6b7484; margin-left: 10px; }
+  .flow { display: flex; align-items: stretch; gap: 0; padding: 18px 18px 8px; }
+  .step { flex: 1; background: #f6f9fd; border: 1px solid #d9e3f0; border-radius: 10px; padding: 10px 11px; position: relative; }
+  .step .n { display: inline-block; width: 19px; height: 19px; border-radius: 50%; background: #1d5dc0; color: #fff;
+             font-size: 11px; font-weight: 700; text-align: center; line-height: 19px; margin-bottom: 6px; }
+  .step .t { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
+  .step .d { font-size: 10.5px; line-height: 1.45; color: #525c6b; }
+  .fa { align-self: center; padding: 0 6px; color: #97a3b5; font-size: 17px; font-weight: 700; flex: 0 0 auto; }
+  .flow-note { display: flex; gap: 10px; padding: 8px 18px 16px; flex-wrap: wrap; }
+  .fnote { font-size: 11px; color: #8a5a00; background: #fdf6e8; border: 1px solid #eed9ae; border-radius: 7px; padding: 5px 11px; }
+  .fnote.blue { color: #1a4f8f; background: #eef4fc; border-color: #c4d8f0; }
+</style>
+</head>
+<body>
+
+<!-- ═══ 页头 ═══ -->
+<div class="header">
+  <div>
+    <h1>mat-dsh <span class="dim">· 科学计算 Harness 架构总览</span></h1>
+    <div class="sub">pnpm workspace monorepo · 基于宿主 <b>DeepSeek Harness 0.1.0-rc.8</b> 树外组合（--patch overlay，不改宿主源码） · M0→M3+ 迭代演进</div>
+  </div>
+  <div class="principles">
+    <div class="principle"><b>混合架构</b>：本地控制平面 × 远端计算平面</div>
+    <div class="principle"><b>控制数据流</b>：本地只发 pre/run/post.json，不上传 workflow 实现</div>
+    <div class="principle"><b>同步策略</b>：结构化结果默认同步，大文件 remote-only 按需拉取</div>
+  </div>
+</div>
+
+<div class="columns">
+  <div class="main">
+
+    <!-- ═══ L0 用户层 ═══ -->
+    <div class="layer l-user">
+      <div class="layer-head"><span class="tag">L0</span><span class="name">用户 / 浏览器</span>
+        <span class="note">dsh web 客户端（:3080）· ui 插件注入的状态卡片与文件浏览</span></div>
+      <div class="layer-body"><div class="mods">
+        <div class="mod"><div class="t">会话界面</div><div class="d">模型选择 / 多会话 / 工具调用折叠与 details 标签页（ui 插件两个 Harmony Source Patch 兼容）</div></div>
+        <div class="mod hl"><div class="t">状态卡片</div><div class="d">web 运行时注册状态路由，读取状态板快照，展示集群作业 / 文件同步视图</div></div>
+        <div class="mod"><div class="t">后台作业通知</div><div class="d">watch / slurm producer 终态后由宿主 dsh-jobs 自动向会话投递完成通知（含 R2 跃迁通知）</div></div>
+      </div></div>
+    </div>
+
+    <div class="connector"><div class="stem"></div><div class="arrow"></div>
+      <div class="chips"><span class="chip">HTTP <b>:3080</b> · 会话流 + 状态快照</span></div>
+    </div>
+
+    <!-- ═══ L1 宿主层 ═══ -->
+    <div class="layer l-host">
+      <div class="layer-head"><span class="tag">L1 宿主（兄弟仓，只引用不改）</span><span class="name">DeepSeek Harness · dsh web</span>
+        <span class="note">link: 依赖挂入 cordis / dsh-* 全家</span></div>
+      <div class="layer-body">
+        <div class="mods" style="margin-bottom:12px">
+          <div class="mod"><div class="t">cordis 插件框架</div><div class="d">Context 依赖注入（tools / systemPrompt / jobs / webServer），fiber 等待语义</div></div>
+          <div class="mod"><div class="t">dsh-tools · dsh-jobs</div><div class="d">工具注册面 + 后台作业系统（JobKindMap 扩展 watch / slurm 两种后台 JobKind）</div></div>
+          <div class="mod"><div class="t">dsh-llm · system-prompt</div><div class="d">LLM 请求与会话系统提示；owner.followup 通道复用为跃迁通知</div></div>
+          <div class="mod"><div class="t">client UI 组件族</div><div class="d">ui-conversation / theme / tool / layout / sidebar / primitives，被 ui 插件组合复用</div></div>
+        </div>
+        <div class="mods">
+          <div class="mod hl"><div class="t">LLM 路由（profile overlay）</div><div class="d"><b>主路由</b>：DeepSeek-V4-Pro / V4-Flash，1M ctx，thinkingFormat=deepseek（自建网关 baseURL）<br><b>bigmodel</b>：GLM-5.3-Flash，1M ctx，多模态图像输入，thinkingFormat=zai + reasoning_effort</div></div>
+          <div class="mod hl"><div class="t">tool-subagent 子 agent 面×4 角色</div><div class="d"><b>prep</b> 制备工（零集群）· <b>triage</b> 分诊工（只读取证）· <b>analyst</b> 分析师（科学判定）· <b>shepherd</b> 牧羊人（可续后台，全权一条计算链，maxDepth=1）</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="stem"></div><div class="arrow"></div>
+      <div class="chips"><span class="chip">cordis <b>Context</b> 注入 · defineTool 注册 · 软链进 profile node_modules</span></div>
+    </div>
+
+    <!-- ═══ L2 插件层（本仓） ═══ -->
+    <div class="layer l-plugin">
+      <div class="layer-head"><span class="tag">L2 本仓插件</span><span class="name">packages/tools + packages/ui</span>
+        <span class="note">dsh 服务端工具面（11 个工具） + web 客户端节点</span></div>
+      <div class="layer-body">
+        <div class="mods">
+          <div class="mod hl"><div class="t">exec</div><div class="d">远程 shell，会话单例；M3 后全量过 exec-gate/guard 双层防护</div></div>
+          <div class="mod"><div class="t">partitions</div><div class="d">sinfo 五列分区查询（对齐 Python 时代语义）</div></div>
+          <div class="mod"><div class="t">sbatch</div><div class="d">提交作业并解析 slurm job id</div></div>
+          <div class="mod"><div class="t">job_status</div><div class="d">单作业状态：squeue → sacct 兜底</div></div>
+          <div class="mod"><div class="t">cancel</div><div class="d">scancel 取消集群作业</div></div>
+          <div class="mod hl"><div class="t">job_watch</div><div class="d">批量异步监控：一次注册全部 job_id，挂宿主后台作业（kind <code>watch</code>）；自适应轮询 sacct 10/60/120/300s，每 tick 一条批量命令、零模型请求</div></div>
+          <div class="mod hl"><div class="t">gaussian</div><div class="d">一站式 Gaussian：prepare→pre→run→sbatch 秒回 slurm id + 后台作业（kind <code>slurm</code>）；COMPLETED 自动 post 解析物性；options 透传 pre/run json 与轮询参数</div></div>
+          <div class="mod"><div class="t">upload / download</div><div class="d">文件传输：OpenAPI+efile 首选，无权限时自动降级 remote-shell 分块通道</div></div>
+          <div class="mod"><div class="t">db_query / db_dead_letter</div><div class="d">结果记忆（sqlite）查询与死信处理</div></div>
+          <div class="mod"><div class="t">插件支撑模块</div><div class="d">file-service（文件服务面）· budget-hook（预算闸）· manifest-hook（工作目录/物性快照）· workdir-resolver · efile-env</div></div>
+          <div class="mod"><div class="t">ui 节点</div><div class="d">webServer + 状态板 + 文件服务三依赖就绪才激活；turn-fold / details-tab 两个兼容 Patch</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><div class="stem"></div><div class="arrow"></div>
+      <div class="chips"><span class="chip">workspace 依赖 <b>core</b> · 全依赖注入（timer/execCommand/runner）可测</span></div>
+    </div>
+
+    <!-- ═══ L3 核心库 ═══ -->
+    <div class="layer l-core">
+      <div class="layer-head"><span class="tag">L3 核心库</span><span class="name">packages/core</span>
+        <span class="note">纯逻辑 · 24 个模块 · 回放契约测试（真实录制 fixtures）</span></div>
+      <div class="layer-body"><div class="groups">
+        <div class="group"><div class="gt">传输与会话</div><div class="items">
+          <div class="it"><b>client.ts</b> — MCP 会话客户端封装（watch/gaussian 用独立实例隔离）</div>
+          <div class="it"><b>transport.ts / curl.ts / url.ts</b> — 默认 curl 传输链</div>
+          <div class="it"><b>fetch-transport.ts</b> — FetchMcpTransport：非 2xx 显式检查（406 会话失效重建），实弹约 2s vs curl 10s</div>
+        </div></div>
+        <div class="group"><div class="gt">并发串扰防护（M3+）</div><div class="items">
+          <div class="it w"><b>exec-gate.ts</b> — 防发生：所有 remote_shell_execute 按 (mcpKey, clusterId) 串行；进程内 FIFO + 跨进程文件锁（保活/抢占/fail-open）</div>
+          <div class="it w"><b>exec-guard.ts</b> — 防漏网：命令随机 token 标记包裹，响应缺标记即判串扰抛错 → 3 次重试换标记重发</div>
+        </div></div>
+        <div class="group"><div class="gt">作业监控 × Slurm</div><div class="items">
+          <div class="it"><b>job-state.ts</b> — sacct 批量行解析 / 终态判定 / 自适应间隔档位</div>
+          <div class="it"><b>watch-loop.ts</b> — createWatchLoop 返回宿主 JobHooks 同形句柄 {cancel,done,readOutput}；onAllSettled 结算钩子</div>
+          <div class="it"><b>slurm.ts</b> — sinfo/sbatch/scancel 命令构造与解析</div>
+        </div></div>
+        <div class="group"><div class="gt">Gaussian 链路</div><div class="items">
+          <div class="it"><b>gaussian.ts</b> — runGaussianSync 同步段 / parsePostOutput 物性解析 / createGaussianProducerHooks 后台 producer</div>
+          <div class="it"><b>workflow-contract.ts</b> — RemoteWorkflowAdapter 兼容执行后端；平台统一 workflow API 落地后可换后端不动 skill/工具面</div>
+        </div></div>
+        <div class="group"><div class="gt">文件传输与同步策略</div><div class="items">
+          <div class="it"><b>token.ts</b> — OpenAPI AK/SK HMAC-SHA256 换集群 token</div>
+          <div class="it"><b>efile.ts</b> — /ac/openapi/v2/center 发现 efile 地址，上传/下载</div>
+          <div class="it"><b>shell-file-transfer.ts</b> — remote-shell 分块兜底通道，字节校验后原子替换</div>
+          <div class="it"><b>remote-file-model / file-sync-manager</b> — remote-only 映射（checkpoint/波函数/轨迹），按 Job 上下文按需同步</div>
+        </div></div>
+        <div class="group"><div class="gt">批量编排 · 预算 · 记忆</div><div class="items">
+          <div class="it"><b>portfolio.ts + planning.ts</b> — 多体系批量组合 manifest 与规划</div>
+          <div class="it"><b>contracts.ts</b> — 层间契约校验（子 agent 回传 JSON，失败拒收重试一次）</div>
+          <div class="it"><b>budget.ts + confirmation.ts</b> — core-hours 预算闸与确认摘要</div>
+          <div class="it"><b>db.ts / status-board.ts</b> — node:sqlite 结果记忆（打开失败一律旁路）；状态板快照喂 UI</div>
+        </div></div>
+      </div></div>
+    </div>
+
+    <div class="connector"><div class="stem"></div><div class="arrow"></div>
+      <div class="chips">
+        <span class="chip">MCP 通道：remote-shell（<b>exec-gate/guard</b> 过闸）</span>
+        <span class="chip">OpenAPI：AK/SK → token → <b>efile</b></span>
+        <span class="chip">控制契约：<b>pre.json / run.json / post.json</b>（结构 + 控制数据，不含 workflow 实现）</span>
+      </div>
+    </div>
+
+    <!-- ═══ L4 计算平面 ═══ -->
+    <div class="layer l-remote">
+      <div class="layer-head"><span class="tag">L4 远端</span><span class="name">远端计算平面</span>
+        <span class="note">服务端按（密钥, 集群）复用 shell → 并发无输出路由隔离，隔离靠本地双层防护</span></div>
+      <div class="layer-body"><div class="mods">
+        <div class="mod warn"><div class="t">MCP remote-shell 网关</div><div class="d">密钥授权的命令通道；同 (mcpKey, clusterId) 并发命令会串扰（2026-09-04 压测实锤），由 L3 gate/guard 兜住</div></div>
+        <div class="mod"><div class="t">OpenAPI + efile</div><div class="d">AK/SK 换 token；efile 上传/下载；未开通权限的集群自动降级 shell 通道</div></div>
+        <div class="mod"><div class="t">Slurm 运行时</div><div class="d">sacct / squeue / sinfo / sbatch / scancel；分区资源（默认 32 核 / 64GB）</div></div>
+        <div class="mod"><div class="t">Gaussian 16 workflow 商品</div><div class="d">calcflow CLI：sp/opt/freq/tddft/ts/irc/aea…；pre/run/post 三段式 + external 模式（自带 gjf）</div></div>
+        <div class="mod"><div class="t">ABACUS workflow 商品</div><div class="d">calcflow：relax/jdos/shg/hseband/eos… 第一性原理链路</div></div>
+        <div class="mod"><div class="t">科学软件与许可证</div><div class="d">集群适配与许可证由平台侧维护（目标集群）</div></div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 侧栏 ═══ -->
+  <div class="side">
+    <div class="side-card"><div class="h">profiles/ — 宿主 overlay</div><div class="b">
+      <div class="row"><b>--patch</b> 骑在 web profile 之上：LLM 双路由（主路由 / bigmodel）按环境切换</div>
+      <div class="row">insert <b>tools / ui</b> 插件（裸包名 + 软链进 profile node_modules，Harmony 原生 ESM 加载 TS）</div>
+      <div class="row"><b>skill-filesystem</b>：includeDefaultRoots=false，只扫本仓 <code>skills/</code></div>
+      <div class="row">显式启用 <b>tool-subagent / control</b>（web-app 层默认禁用）并挂载 4 个角色实例</div>
+    </div></div>
+
+    <div class="side-card"><div class="h">skills/ — 模型技能（7）</div><div class="b">
+      <div class="row"><b>gaussian-calc</b> — Gaussian 16 主 skill：任务组合（opt+sp、ts+irc…）、分步链路</div>
+      <div class="row"><b>gaussian-external-input</b> — 自带 gjf 外部输入模式（语法检查 + 注册式 post）</div>
+      <div class="row"><b>压测编排 skill</b> — 发布/压测编排：case 矩阵、验收门禁、证据报告</div>
+      <div class="row"><b>abacus-calc</b> — ABACUS 第一性原理（INPUT/STRU/KPT + 伪势）</div>
+      <div class="row"><b>batch-orchestrator</b> — 批量组合管理者：manifest / 角色 fan-out / 预算纪律</div>
+      <div class="row"><b>batch-roles</b> — 角色工人契约：prep / triage / analyst 的 JSON 裁定格式</div>
+      <div class="row"><b>session-debug</b> — session.jsonl 轨迹取证与脱敏报告</div>
+    </div></div>
+
+    <div class="side-card"><div class="h">scripts/ — 运维与探针</div><div class="b">
+      <div class="row"><b>dsh-web.sh</b> — start/stop/restart/status；:3080，setsid+pid 管理，软链插件包</div>
+      <div class="row"><b>deploy-check.ts</b> — 部署前置门禁</div>
+      <div class="row"><b>portfolio-cli.ts</b> — 批量 manifest 操作</div>
+      <div class="row"><b>session-debug.ts</b> — 会话取证（L0 轻扫收口）</div>
+      <div class="row"><b>probe-*</b> — sinfo/sacct/fetch/m2/bigmodel/batch-gate 实弹探针</div>
+      <div class="row"><b>stress-rpc / stress-report-lint</b> — 压测投放与报告校验</div>
+      <div class="row"><b>build-ui / reconcile-ledger / kb-sync</b> — UI 构建 / 台账对账 / 知识库同步</div>
+    </div></div>
+
+    <div class="side-card"><div class="h">docs/ + evidence/ — 设计与实证</div><div class="b">
+      <div class="row">设计：d0-architecture、workflow-api 产品提案、TECH-HIGHLIGHTS</div>
+      <div class="row">evidence/：<b>m0 / m1 / m2 / m3 / post-m3</b> 里程碑实弹证据 + exec 串扰事故五例 + batch-subagent / shepherd-spike / scale-round / gw-merge-stress 压测轮档案</div>
+    </div></div>
+
+    <div class="side-card"><div class="h">启动（M0 流程）</div><div class="b">
+      <div class="cmd"><span class="c"># 凭证只放 gitignored env.local</span><br>cp env.example env.local<br>set -a; source env.local; set +a<br>pnpm install<br><span class="c"># 运维脚本拉起宿主 dsh web（--patch overlay）</span><br>scripts/dsh-web.sh start</div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ═══ 底部：运行时数据流 ═══ -->
+<div class="flow-wrap">
+  <div class="h">一次一站式 Gaussian 计算的运行时数据流 <span>gaussian 一站式工具 · 后台 producer 服务端自治，全程零模型轮询</span></div>
+  <div class="flow">
+    <div class="step"><span class="n">1</span><div class="t">模型调用</div><div class="d">gaussian 工具（结构 + 任务类型 + options 透传），或走分步链路处理多波组合</div></div>
+    <div class="fa">→</div>
+    <div class="step"><span class="n">2</span><div class="t">prepare</div><div class="d">单命令打包 mkdir / heredoc / 三 json 落盘校验（远端一次 exec 完成）</div></div>
+    <div class="fa">→</div>
+    <div class="step"><span class="n">3</span><div class="t">pre → run → sbatch</div><div class="d">秒级返回 slurm job id + 后台作业 id；producer（kind slurm）接管监控</div></div>
+    <div class="fa">→</div>
+    <div class="step"><span class="n">4</span><div class="t">自适应轮询</div><div class="d">服务端按 10/60/120/300s 档批量 sacct，经 exec-gate/guard 过闸，零模型请求</div></div>
+    <div class="fa">→</div>
+    <div class="step"><span class="n">5</span><div class="t">COMPLETED → 自动 post</div><div class="d">解析物性：energy / converged / frequencies / 虚频数 + files；写入 sqlite 结果记忆</div></div>
+    <div class="fa">→</div>
+    <div class="step"><span class="n">6</span><div class="t">结算回投</div><div class="d">job_output 逐作业终态表 + 宿主完成通知 + 状态板 / 状态卡片；结构化结果按同步策略落本地</div></div>
+  </div>
+  <div class="flow-note">
+    <div class="fnote">非 COMPLETED：跳过 post，带 log_tail 诊断返回</div>
+    <div class="fnote">post 失败 ≠ 作业失败：物性解析失败不判计算链失败</div>
+    <div class="fnote blue">job_kill 只取消本地监控，不动集群作业</div>
+    <div class="fnote blue">job_watch 并行通道：多作业批量注册，全终态/超时/连续 5 次传输异常/取消 四路结算</div>
+  </div>
+</div>
+
+</body>
+</html>

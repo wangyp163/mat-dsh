@@ -1,0 +1,21 @@
+{
+  "session": {
+    "type": "session",
+    "version": 0,
+    "id": "session-4a3fb0c4-2f76-4d91-b64b-312ba868a027",
+    "createdAt": 1789722434394,
+    "cwd": "~/mat-harness/deepseek-harness",
+    "delegationDepth": 0,
+    "agentPreset": "standard"
+  },
+  "diagnostics": [],
+  "errors": [],
+  "freshness": {
+    "readAt": 1789733747868,
+    "fileMtime": 1789723549042.2693,
+    "lastEventTime": 1789723549042,
+    "endSeedTime": null,
+    "settleMs": 10198825.73071289,
+    "durableFinal": false
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "aimater.goal.v1",
+  "title": "aimater goal（意图 → 结构化目标）",
+  "description": "agent(LLM) 产出的语义层输入：结构 + 任务意图（性质关键词而非 task 名）+ 精度/资源偏好。plan() 引擎据此展开 DAG。",
+  "type": "object",
+  "required": ["schema_version", "intent"],
+  "properties": {
+    "schema_version": { "const": "aimater.goal.v1" },
+    "structure": {
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "description": "体系标签（默认 workdir 基名；复用查询键）" },
+        "xyz": { "type": "string", "description": "xyz 内容（ts/qst2/qst3 为多帧单文件，帧序=分子节序）" },
+        "source": { "type": "string", "enum": ["user-upload", "drawn", "retrieved", "reuse"], "description": "结构来源（审计）" }
+      }
+    },
+    "intent": {
+      "type": "object",
+      "required": ["want"],
+      "properties": {
+        "want": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "optimize", "frequencies", "energy", "spectrum-ir", "dipole",
+              "polarizability", "td", "fluorescence", "resp-charges", "aea",
+              "ts", "irc", "reaction-path"
+            ]
+          },
+          "description": "意图动词（性质关键词）；引擎映射为 task DSL，不是用户直接给 task 名"
+        },
+        "reaction": {
+          "type": "object",
+          "description": "反应语境（过渡态/路径类意图的可选上下文）",
+          "properties": {
+            "reactants_xyz": { "type": "string" },
+            "products_xyz": { "type": "string" },
+            "description": { "type": "string", "description": "断哪些键/成哪些键——初猜构造依据" }
+          }
+        }
+      }
+    },
+    "method": {
+      "type": "object",
+      "properties": {
+        "method": { "type": "string", "description": "如 B3LYP；缺省=默认档（assumptions 记录）" },
+        "basis": { "type": "string", "description": "如 6-31G(d)" },
+        "route_kwargs": {
+          "type": "object",
+          "description": "参数模板的 calculator_kwargs 附加键（如 ioplist/opt 选项精调）。路由键（opt/freq/td/irc/polar/force/scan）仅在 task 自身路由集内允许，其余 task 携带路由键会被编译器拒绝（路由身份由 -t task 决定）",
+          "additionalProperties": true
+        }
+      }
+    },
+    "charge": { "type": "integer" },
+    "mult": { "type": "integer", "minimum": 1, "description": "缺省时引擎按电子数奇偶推断；奇电子必须偶数 mult（硬校验前移）" },
+    "accuracy": { "type": "string", "enum": ["fast", "medium", "slow"], "description": "精度偏好（影响资源档；方法级别需显式给 method/basis）。显式 resources.walltime 优先于本档位" },
+    "resources": {
+      "type": "object",
+      "properties": {
+        "partition": { "type": "string", "description": "计费相关——不自动选，缺省生成阻塞式澄清问题（O2）" },
+        "max_core_hours": { "type": "number", "description": "预算上限（与预算门同源）" },
+        "ncores": { "type": "integer", "minimum": 1, "description": "作业核数（pre.json resources 唯一来源；同步 slurm.ntasks_per_node）" },
+        "memory": { "type": "string", "description": "作业内存（如 64GB；写入 pre.json resources.memory 与 slurm.mem）" },
+        "walltime": { "type": "string", "description": "HH:MM:SS 墙钟时长；优先于 accuracy 档位" }
+      }
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "prior_result_ref": { "type": "string", "description": "引用历史结果（复用提示）" }
+      }
+    }
+  }
+}

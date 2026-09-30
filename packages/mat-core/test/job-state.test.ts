@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyState, isTerminal, nextPollDelayMs, parseSacctBatch } from '../src/job-state'
+import { classifyState, isTerminal, nextPollDelayMs, parseSacctBatch, parseTimelimitSeconds } from '../src/job-state'
 
 // 样例来自 docs/evidence/m1/2026-08-28-slurm-format-probe.md（11250 实测）：
 //   sacct -j <ids> -P -n -o JobID,State,ExitCode,ElapsedRaw
@@ -109,5 +109,29 @@ describe('nextPollDelayMs（自适应四档）', () => {
     expect(nextPollDelayMs(1_799_999)).toBe(120_000)
     expect(nextPollDelayMs(1_800_000)).toBe(300_000)
     expect(nextPollDelayMs(86_400_000)).toBe(300_000)
+  })
+})
+
+describe('parseTimelimitSeconds（sacct Timelimit 列 → 秒）', () => {
+  it('HH:MM:SS / D-HH:MM:SS / MM:SS / UNLIMITED / 畸形', () => {
+    expect(parseTimelimitSeconds('04:00:00')).toBe(14_400)
+    expect(parseTimelimitSeconds('30:00')).toBe(1_800)
+    expect(parseTimelimitSeconds('1-00:00:00')).toBe(86_400)
+    expect(parseTimelimitSeconds('2-12:30:00')).toBe(217_800)
+    expect(parseTimelimitSeconds('UNLIMITED')).toBeUndefined()
+    expect(parseTimelimitSeconds('')).toBeUndefined()
+    expect(parseTimelimitSeconds(undefined)).toBeUndefined()
+    expect(parseTimelimitSeconds('garbage')).toBeUndefined()
+  })
+
+  it('随批查第 6 列进 SlurmJobInfo.timelimitSeconds(缺列兼容旧 fixture)', () => {
+    const m = parseSacctBatch('100|RUNNING|0:0|13000|/w/A|04:00:00\n')
+    expect(m.get('100')).toEqual({
+      jobId: '100', state: 'RUNNING', exitCode: 0, elapsedSeconds: 13_000,
+      workdir: '/w/A', timelimitSeconds: 14_400,
+    })
+    // 旧四列/五列 fixture 无 Timelimit → 字段缺省,不报错
+    const legacy = parseSacctBatch('101|RUNNING|0:0|15|/w/B\n')
+    expect(legacy.get('101')?.timelimitSeconds).toBeUndefined()
   })
 })

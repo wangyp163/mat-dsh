@@ -50,8 +50,10 @@ export interface BudgetGateHandle {
  * 打开预算闸：拒绝即抛错（无副作用）；通过则返回记账句柄。
  * @param rawTaskRef 工具参数 task_ref（undefined = 不受闸，返回 undefined）。
  * @param preJson mat_gaussian 的 options.pre_json（核时估算读 resources.ncores）。
+ * @param override 核时估算直参（vasp 等无 pre_json 的引擎：按 walltime 推导后传入，
+ *   覆盖 ncores×3.75min 的分钟级小作业启发式——24h 链用该启发式会低估两个量级）。
  */
-export function openBudgetGate(rawTaskRef: unknown, preJson?: unknown): BudgetGateHandle | undefined {
+export function openBudgetGate(rawTaskRef: unknown, preJson?: unknown, override?: { estimatedCoreHours: number }): BudgetGateHandle | undefined {
   const ref = parseBudgetTaskRef(rawTaskRef)
   if (ref === undefined) return undefined
   let manifest
@@ -69,10 +71,13 @@ export function openBudgetGate(rawTaskRef: unknown, preJson?: unknown): BudgetGa
   }
   // 估算取数（scale-round E1）：manifest spec 钉死优先 → pre_json → 32 核缺省。
   const ncores = resolveEstimateNcores(task.spec, preJson)
+  const estimated = override !== undefined && Number.isFinite(override.estimatedCoreHours)
+    ? override.estimatedCoreHours
+    : estimateCoreHours(ncores)
   const decision = checkBudgetAgainstManifest(manifest, {
     taskId: ref.taskId,
     isRetry: task.attempts > 0,
-    estimatedCoreHours: estimateCoreHours(ncores),
+    estimatedCoreHours: estimated,
   })
   if (!decision.ok) {
     throw new Error(`BUDGET_REJECTED: ${decision.reason}`)
@@ -83,7 +88,7 @@ export function openBudgetGate(rawTaskRef: unknown, preJson?: unknown): BudgetGa
         taskId: ref.taskId,
         jobId,
         isRetry: task.attempts > 0,
-        estimatedCoreHours: estimateCoreHours(ncores),
+        estimatedCoreHours: estimated,
       })
       const temporary = `${ref.portfolioFile}.part`
       writeFileSync(temporary, portfolioToJson(manifest))

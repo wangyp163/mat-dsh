@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, writeFile, readdir, lstat, realpath, rm, stat, unlink } from 'node:fs/promises'
-import { dirname, join, resolve, posix } from 'node:path'
+import { dirname, join, resolve, relative, sep, posix } from 'node:path'
 import { FileSyncManager, mergeWorkspaceTree, projectDegradedPrimary, projectPrimaryFiles } from 'mat-core'
 import type { FileDownloadPort, FileSyncRecord, ListFilesOptions, RemoteFileEntry, RemoteFilePage } from 'mat-core'
 import { normalizeRemotePath, remoteRelativePath } from 'mat-core'
@@ -35,6 +35,107 @@ export interface DownloadArtifact {
   body: Uint8Array
   contentType?: string
   dispose?: () => Promise<void> | void
+}
+
+/** 会话文件归档台账（按会话分档）：记录"哪条相对路径最后由哪个会话写入"。 */
+export interface SessionFileLedgerEntry { cwd: string; path: string; sessionId: string; ts: number }
+
+const LEDGER_MAX_ENTRIES = 5000
+
+/**
+ * 归档台账：cwd → 相对路径 → {sessionId, ts}。同一路径后写者覆盖归属；
+ * 持久化沿用 jobs.json/preferences.json 模式（.part + rename 原子写），
+ * 加载时 GC（目标文件已不存在的条目剔除）+ 总量上限按 ts 淘汰。
+ * 读取端（projectFiles）逐条 stat 过滤——失败 write 的幽灵条目永不进面板。
+ */
+export class SessionFileLedger {
+  private readonly byCwd = new Map<string, Map<string, { sessionId: string; ts: number }>>()
+  private readonly ready: Promise<void>
+  private readonly storePath: string
+
+  // 注意：宿主经 node strip-only 直跑本包 TS 源码——构造器参数属性不被支持，
+  // 字段必须显式赋值。
+  constructor(storePath: string) {
+    this.storePath = storePath
+    this.ready = this.load()
+  }
+
+  private async load(): Promise<void> {
+    let entries: SessionFileLedgerEntry[]
+    try {
+      const data = JSON.parse(await readFile(this.storePath, 'utf8')) as { files?: unknown }
+      entries = Array.isArray(data.files)
+        ? data.files.filter((entry): entry is SessionFileLedgerEntry =>
+          entry !== null && typeof entry === 'object'
+          && typeof (entry as SessionFileLedgerEntry).cwd === 'string' && (entry as SessionFileLedgerEntry).cwd.startsWith('/')
+          && typeof (entry as SessionFileLedgerEntry).path === 'string'
+          && typeof (entry as SessionFileLedgerEntry).sessionId === 'string'
+          && typeof (entry as SessionFileLedgerEntry).ts === 'number')
+        : []
+    } catch { entries = [] } // ENOENT 或损坏都从空台账开始（归档是增益）
+    let changed = false
+    const kept: SessionFileLedgerEntry[] = []
+    for (const entry of entries) {
+      // GC：目标文件已不存在（被删/失败 write 的幽灵）——剔除。
+      if (!await stat(join(entry.cwd, entry.path)).then(() => true).catch(() => false)) { changed = true; continue }
+      kept.push(entry)
+    }
+    kept.sort((a, b) => b.ts - a.ts)
+    const capped = kept.slice(0, LEDGER_MAX_ENTRIES)
+    if (capped.length !== kept.length) changed = true
+    for (const entry of capped) {
+      const bucket = this.byCwd.get(entry.cwd) ?? new Map<string, { sessionId: string; ts: number }>()
+      const existing = bucket.get(entry.path)
+      if (existing === undefined || existing.ts < entry.ts) bucket.set(entry.path, { sessionId: entry.sessionId, ts: entry.ts })
+      this.byCwd.set(entry.cwd, bucket)
+    }
+    if (changed) await this.persist().catch(() => { /* 持久化失败静默：内存台账仍可用 */ })
+  }
+
+  private async persist(): Promise<void> {
+    const files: SessionFileLedgerEntry[] = [...this.byCwd.entries()].flatMap(([cwd, bucket]) =>
+      [...bucket.entries()].map(([path, record]) => ({ cwd, path, sessionId: record.sessionId, ts: record.ts })))
+    await mkdir(dirname(this.storePath), { recursive: true, mode: 0o700 })
+    const temporary = `${this.storePath}.part`
+    await writeFile(temporary, JSON.stringify({ files }), { mode: 0o600 })
+    await rename(temporary, this.storePath)
+  }
+
+  async record(sessionId: string, cwd: string, path: string): Promise<void> {
+    await this.ready
+    const bucket = this.byCwd.get(cwd) ?? new Map<string, { sessionId: string; ts: number }>()
+    bucket.set(path, { sessionId, ts: Date.now() })
+    this.byCwd.set(cwd, bucket)
+    // 超限淘汰：总量按最旧 ts 淘汰到上限内。
+    let total = [...this.byCwd.values()].reduce((sum, map) => sum + map.size, 0)
+    if (total > LEDGER_MAX_ENTRIES) {
+      const all = [...this.byCwd.entries()].flatMap(([c, map]) => [...map.entries()].map(([p, r]) => ({ cwd: c, path: p, ...r })))
+        .sort((a, b) => a.ts - b.ts)
+      const evicted = new Set(all.slice(0, total - LEDGER_MAX_ENTRIES).map(entry => `${entry.cwd}\0${entry.path}`))
+      for (const [c, map] of this.byCwd) {
+        for (const p of [...map.keys()]) if (evicted.has(`${c}\0${p}`)) map.delete(p)
+        if (map.size === 0) this.byCwd.delete(c)
+      }
+      total = LEDGER_MAX_ENTRIES
+    }
+    await this.persist().catch(() => { /* 持久化失败静默：重启丢一条归档可接受 */ })
+  }
+
+  /** cwd → 会话 → 相对路径清单（字典序；逐条 stat 过滤已消失文件并顺手清账）。 */
+  async projectFiles(cwd: string): Promise<Record<string, string[]>> {
+    await this.ready
+    const bucket = this.byCwd.get(cwd)
+    if (bucket === undefined) return {}
+    const result: Record<string, string[]> = {}
+    let stale = false
+    for (const [path, record] of [...bucket.entries()]) {
+      if (!await stat(join(cwd, path)).then(() => true).catch(() => false)) { bucket.delete(path); stale = true; continue }
+      ;(result[record.sessionId] ??= []).push(path)
+    }
+    if (stale) await this.persist().catch(() => { /* 清账写盘失败静默 */ })
+    for (const paths of Object.values(result)) paths.sort()
+    return result
+  }
 }
 
 const MAX_FILES = 100
@@ -86,12 +187,14 @@ export class MatFileServiceImpl {
   private readonly preferencesPath: string
   private preferences: Record<string, FilePreferences> = {}
   private readonly seenJobs = new Set<string>()
+  private readonly sessionLedger: SessionFileLedger
 
   private readonly options: MatFileServiceOptions
 
   constructor(options: MatFileServiceOptions) {
     this.options = options
     this.preferencesPath = join(options.localRoot, 'preferences.json')
+    this.sessionLedger = new SessionFileLedger(join(options.localRoot, 'session-files.json'))
   }
 
   async initialize(): Promise<void> {
@@ -193,8 +296,10 @@ export class MatFileServiceImpl {
    * 会话工作区（无作业回退）：纯本地浏览，不并远端、不进同步记录。
    * cwd 由路由层从宿主 session projcache 解析（身份真相源），本方法只做
    * 路径安全校验与目录投影——绝不接受客户端直接传来的绝对路径树请求。
+   * 根列表（path=''）附带归档投影 sessionFiles：会话 → 相对路径清单
+   * （台账 + 存在性过滤），供面板把文件挂到会话分组下。
    */
-  async listSessionWorkspace(request: { cwd: string; path: string }): Promise<{ root: string; path: string; entries: Array<Record<string, unknown>>; primary: [] }> {
+  async listSessionWorkspace(request: { cwd: string; path: string }): Promise<{ root: string; path: string; entries: Array<Record<string, unknown>>; primary: []; sessionFiles?: Record<string, string[]> }> {
     if (request.path.includes('\0') || request.path.startsWith('/') || request.path.split('/').some((part) => part === '..')) throw new Error('unsafe workspace path')
     const root = resolve(request.cwd)
     const target = resolve(root, request.path)
@@ -207,7 +312,22 @@ export class MatFileServiceImpl {
       const path = request.path ? `${request.path}/${item.name}` : item.name
       entries.push({ path, name: item.name, directory: info.isDirectory(), regularFile: info.isFile(), symbolicLink: info.isSymbolicLink(), readable: info.isFile() ? Boolean(info.mode & 0o444) : true, size: info.isFile() ? info.size : 0 })
     }
-    return { root, path: request.path, entries, primary: [] }
+    const sessionFiles = request.path === '' ? await this.sessionLedger.projectFiles(root) : undefined
+    return { root, path: request.path, entries, primary: [], ...(sessionFiles === undefined || Object.keys(sessionFiles).length === 0 ? {} : { sessionFiles }) }
+  }
+
+  /**
+   * 会话文件归档入口（事件订阅调用）：绝对路径必须落在该会话 cwd 之内，
+   * 越界忽略；归属按"最后一次写入者"。归档失败静默（增益，不影响工具执行）。
+   */
+  async recordSessionFile(sessionId: string, cwd: string, absolutePath: string): Promise<void> {
+    if (!/^session-[A-Za-z0-9-]+$/.test(sessionId)) return
+    if (!cwd.startsWith('/') || !absolutePath.startsWith('/')) return
+    const root = resolve(cwd)
+    const target = resolve(absolutePath)
+    const rel = relative(root, target).split(sep).join('/')
+    if (rel === '' || rel.startsWith('..')) return
+    await this.sessionLedger.record(sessionId, root, rel).catch(() => { /* 归档失败静默 */ })
   }
 
   /** 会话工作区下载：不经同步记录，直接按安全相对路径打包 cwd 下文件。 */

@@ -10,7 +10,7 @@
 
 /** sacct 可见状态的归一集；UNKNOWN 兜底未知串。 */
 export type SlurmJobState =
-  | 'PENDING' | 'RUNNING'
+  | 'PENDING' | 'RUNNING' | 'COMPLETING'
   | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'TIMEOUT' | 'NODE_FAIL' | 'OUT_OF_MEMORY'
   | 'UNKNOWN'
 
@@ -24,6 +24,22 @@ export interface SlurmJobInfo {
   elapsedSeconds?: number
   /** sacct WorkDir 列（提交目录，绝对路径）；列缺省或空值时缺省——文件面板据此浏览远端文件。 */
   workdir?: string
+  /** sacct Timelimit 列换算秒（[DD-]HH:MM[:SS] / UNLIMITED 缺省）；SCF 停滞预警用。 */
+  timelimitSeconds?: number
+}
+
+/** sacct Timelimit 串 → 秒:三段 `[DD-]HH:MM:SS`;两段 `[DD-]MM:SS`(slurm 对 <1h 时限的打印形态,如 30:00 = 30min);UNLIMITED/畸形 → undefined。 */
+export function parseTimelimitSeconds(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined
+  const s = raw.trim()
+  if (s === '' || /unlimit/i.test(s)) return undefined
+  const m = /^(?:(\d+)-)?(\d{1,3}):(\d{2})(?::(\d{2}))?$/.exec(s)
+  if (m === null) return undefined
+  const days = m[1] !== undefined ? Number(m[1]) : 0
+  if (m[4] !== undefined) {
+    return days * 86_400 + Number(m[2]) * 3_600 + Number(m[3]) * 60 + Number(m[4])
+  }
+  return days * 86_400 + Number(m[2]) * 60 + Number(m[3])
 }
 
 /**
@@ -42,12 +58,14 @@ export function parseSacctBatch(stdout: string): Map<string, SlurmJobInfo> {
     const exitNum = Number(rawExit?.split(':')[0])
     const elapsed = cols[3] !== undefined && cols[3] !== '' ? Number(cols[3]) : undefined
     const workdir = cols[4]?.trim()
+    const timelimit = parseTimelimitSeconds(cols[5])
     result.set(jobId, {
       jobId,
       state: classifyState(rawState ?? ''),
       exitCode: Number.isFinite(exitNum) ? exitNum : undefined,
       elapsedSeconds: elapsed !== undefined && Number.isFinite(elapsed) ? elapsed : undefined,
       ...(workdir === '' ? {} : { workdir }),
+      ...(timelimit !== undefined ? { timelimitSeconds: timelimit } : {}),
     })
   }
   return result
@@ -64,7 +82,7 @@ export function classifyState(raw: string): SlurmJobState {
   if (s === '') return 'UNKNOWN'
   if (s.startsWith('CANCELLED')) return 'CANCELLED'
   const known: readonly SlurmJobState[] = [
-    'PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'TIMEOUT', 'NODE_FAIL', 'OUT_OF_MEMORY',
+    'PENDING', 'RUNNING', 'COMPLETING', 'COMPLETED', 'FAILED', 'TIMEOUT', 'NODE_FAIL', 'OUT_OF_MEMORY',
   ]
   for (const k of known) {
     if (s === k) return k
@@ -82,14 +100,18 @@ export function isTerminal(state: SlurmJobState): boolean {
 }
 
 /**
- * 自适应轮询间隔（对齐 vasp-matstream 实践）：开局密、后期疏，
- * 兼顾短作业快速收敛与长作业低开销。
- * @param elapsedMs - watch 已经过时长。
+ * 自适应轮询间隔（事件感知版，A1 2026-09-30）：档位键是「距最近一次观测到
+ * 状态变化（或 watch 启动）的时长」，不是 watch 总时长——转移后回细档捕捉
+ * 后续事件（PENDING→RUNNING 后短作业的完成在 ≤10s 内可见），长时间无变化
+ * 则单调升档到 300s。首观测（UNKNOWN→X）计为一次变化：保持「已 RUNNING
+ * 的短作业开局 10s 档」的既有行为；全 PENDING 批次为此付 60s 细档（约 6 次
+ * 轮询，可忽略，还顺带快速捕获秒失败作业）。
+ * @param sinceChangeMs - 距最近一次观测到状态变化（或启动）的毫秒数。
  * @returns 下一次轮询的延迟毫秒：10s / 60s / 120s / 300s 四档。
  */
-export function nextPollDelayMs(elapsedMs: number): number {
-  if (elapsedMs < 60_000) return 10_000
-  if (elapsedMs < 600_000) return 60_000
-  if (elapsedMs < 1_800_000) return 120_000
+export function nextPollDelayMs(sinceChangeMs: number): number {
+  if (sinceChangeMs < 60_000) return 10_000
+  if (sinceChangeMs < 600_000) return 60_000
+  if (sinceChangeMs < 1_800_000) return 120_000
   return 300_000
 }

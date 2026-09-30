@@ -18,7 +18,7 @@ export type PortfolioPhase =
   | 'interpreted'
   | 'final'
 
-const PHASE_ORDER: readonly PortfolioPhase[] = [
+export const PHASE_ORDER: readonly PortfolioPhase[] = [
   'pending',
   'prepared',
   'submitted',

@@ -8,6 +8,8 @@
  *   portfolio-cli init --id <portfolioId> --tasks <tasks.json> --out <manifest.json>
  *   portfolio-cli show <manifest.json>                     # 紧凑任务表
  *   portfolio-cli update <manifest.json> <taskId> [--phase P] [--jobid J] [--note S] [--verdict-file F]
+ *     # --verdict-file 先过契约校验；负裁决（prep ok=false / interpret scientificallyUsable=false）
+ *     #   与 --phase 前进同给时拒绝（NEGATIVE_VERDICT，V9 教训：契约通过≠工作成功）
  *   portfolio-cli retry <manifest.json> <taskId>           # attempts+1、相位回 prepared
  *   portfolio-cli diff <before.json> <after.json>          # 增量行
  *   portfolio-cli validate prep|triage|interpret <payload.json|->   # 契约校验（exit 1 = 拒收）
@@ -25,7 +27,11 @@ import {
   parsePrepVerdict,
   parseTriageVerdict,
   parseInterpretVerdict,
+  parseVerdictBySchema,
+  negativeVerdictReason,
   verdictToLines,
+  PHASE_ORDER,
+  type PortfolioPhase,
 } from '../packages/mat-core/src/index.js'
 
 function fail(message: string): never {
@@ -108,9 +114,37 @@ function main(): void {
         },
       })
       const p = portfolioFromJson(readFileSync(path, 'utf8'))
-      const verdict = values['verdict-file'] !== undefined
-        ? (JSON.parse(readPayload(values['verdict-file'])) as Record<string, unknown>)
-        : undefined
+      if (values.phase !== undefined && !PHASE_ORDER.includes(values.phase as PortfolioPhase)) {
+        fail(`unknown phase '${values.phase}' (valid: ${PHASE_ORDER.join('|')})`)
+      }
+      let verdict: Record<string, unknown> | undefined
+      let parsedVerdict: ReturnType<typeof parseVerdictBySchema>['value'] | undefined
+      if (values['verdict-file'] !== undefined) {
+        let payload: unknown
+        try {
+          payload = JSON.parse(readPayload(values['verdict-file']))
+        } catch (e) {
+          fail(`verdict file is not valid JSON: ${String(e)}`)
+        }
+        // R1：--verdict-file 先过契约校验（此前裸 JSON.parse 可把任意形状写进 manifest）
+        const parsed = parseVerdictBySchema(payload)
+        if (!parsed.ok) fail(`verdict rejected: ${parsed.issues.join('; ')}`)
+        parsedVerdict = parsed.value
+        verdict = payload as Record<string, unknown>
+      }
+      // R1：负裁决不得推相位（契约通过≠工作成功——V9 教训）；幂等回写与不推相位时放行
+      if (values.phase !== undefined && parsedVerdict !== undefined) {
+        const cur = p.tasks.find((t) => t.taskId === taskId)
+        if (cur !== undefined) {
+          const from = PHASE_ORDER.indexOf(cur.phase)
+          const to = PHASE_ORDER.indexOf(values.phase as PortfolioPhase)
+          const reason = negativeVerdictReason(parsedVerdict)
+          if (to > from && reason !== null) {
+            fail(`NEGATIVE_VERDICT: phase advance to ${values.phase} blocked — ${reason}` +
+              '（契约通过≠工作成功；改用 --note 记录问题后停摆）')
+          }
+        }
+      }
       const properties = values['properties-file'] !== undefined
         ? (JSON.parse(readPayload(values['properties-file'])) as Record<string, unknown>)
         : undefined

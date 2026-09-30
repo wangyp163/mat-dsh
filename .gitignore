@@ -5,3 +5,8 @@ dist/
 env.local
 run/
 *.zip
+env.local.bak*
+mat.db
+mat-files/
+*.log
+watchdog.pid

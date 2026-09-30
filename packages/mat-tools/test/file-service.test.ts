@@ -408,3 +408,62 @@ describe('MatFileServiceImpl.listLocalPeers（同后缀本地清单）', () => {
     await expect(service.listLocalPeers(workspace, '../escape')).rejects.toThrow('unsafe')
   })
 })
+
+describe('会话文件归档台账（按会话分档）', () => {
+  const dirs: string[] = []
+  afterEach(async () => { await Promise.all(dirs.map((dir) => rm(dir, { recursive: true, force: true }))); dirs.length = 0 })
+
+  async function makeWorkspace(): Promise<{ workspace: string; root: string; service: MatFileServiceImpl }> {
+    const workspace = await mkdtemp(join(tmpdir(), 'mat-ledger-ws-')); dirs.push(workspace)
+    const root = await mkdtemp(join(tmpdir(), 'mat-ledger-')); dirs.push(root)
+    await mkdir(join(workspace, 'work'), { recursive: true })
+    await writeFile(join(workspace, 'work', 'POSCAR'), 'cell')
+    await writeFile(join(workspace, 'notes.md'), 'n')
+    return { workspace, root, service: new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') }) }
+  }
+
+  it('recordSessionFile：cwd 内记账（相对/绝对入口一致），越界与非法身份忽略', async () => {
+    const { workspace, root, service } = await makeWorkspace()
+    await service.recordSessionFile('session-abc123', workspace, `${workspace}/work/POSCAR`)
+    await service.recordSessionFile('session-abc123', workspace, `${workspace}/notes.md`)
+    // 相对路径入口（../ 规范化后在 cwd 内）与绝对路径同键。
+    await service.recordSessionFile('session-def456', workspace, `${workspace}/../${workspace.split('/').pop()}/notes.md`)
+    // cwd 外（/tmp 逃逸）与非法会话 id 一律忽略。
+    await service.recordSessionFile('session-abc123', workspace, '/etc/passwd')
+    await service.recordSessionFile('bad-id', workspace, `${workspace}/notes.md`)
+    const tree = await service.listSessionWorkspace({ cwd: workspace, path: '' })
+    expect(tree.sessionFiles).toEqual({
+      'session-abc123': ['work/POSCAR'],
+      'session-def456': ['notes.md'],
+    })
+    expect(JSON.parse(await readFile(join(root, 'session-files.json'), 'utf8')).files).toHaveLength(2)
+  })
+
+  it('同路径后写者覆盖归属；文件删除后从投影中消失', async () => {
+    const { workspace, service } = await makeWorkspace()
+    await service.recordSessionFile('session-a1', workspace, `${workspace}/notes.md`)
+    await service.recordSessionFile('session-b2', workspace, `${workspace}/notes.md`)
+    let tree = await service.listSessionWorkspace({ cwd: workspace, path: '' })
+    expect(tree.sessionFiles).toEqual({ 'session-b2': ['notes.md'] })
+    await rm(join(workspace, 'notes.md'))
+    tree = await service.listSessionWorkspace({ cwd: workspace, path: '' })
+    expect(tree.sessionFiles).toBeUndefined()
+  })
+
+  it('子目录列表不带 sessionFiles；重启后台账从磁盘恢复且 GC 幽灵条目', async () => {
+    const { workspace, root, service } = await makeWorkspace()
+    await service.recordSessionFile('session-a1', workspace, `${workspace}/work/POSCAR`)
+    const sub = await service.listSessionWorkspace({ cwd: workspace, path: 'work' })
+    expect('sessionFiles' in sub).toBe(false)
+    // 新实例（同 root）恢复归档。
+    const reborn = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    const tree = await reborn.listSessionWorkspace({ cwd: workspace, path: '' })
+    expect(tree.sessionFiles).toEqual({ 'session-a1': ['work/POSCAR'] })
+    // 文件消失后新实例加载即 GC（磁盘台账同步缩容）。
+    await rm(join(workspace, 'work', 'POSCAR'))
+    const third = new MatFileServiceImpl({ localRoot: root, transferFor: () => transfer('x') })
+    const afterGc = await third.listSessionWorkspace({ cwd: workspace, path: '' })
+    expect(afterGc.sessionFiles).toBeUndefined()
+    expect(JSON.parse(await readFile(join(root, 'session-files.json'), 'utf8')).files).toHaveLength(0)
+  })
+})

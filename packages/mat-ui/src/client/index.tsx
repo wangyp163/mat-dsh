@@ -40,12 +40,12 @@ export function apply(ctx: ClientContext): void {
     id: 'mat-task',
     order: 0,
     label: '任务',
-  }, (props) => <TaskDetailsPanel {...props} />))
+  }, (props) => <TaskDetailsPanel {...props} layout={ctx.layout} />))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
     name: 'conversation.input.dock',
     id: 'mat-status',
     order: 15,
-  }, (props) => <StatusDock {...props} />))
+  }, (props) => <StatusDock {...props} layout={ctx.layout} />))
   // 右缘中部悬浮钮：收起态没有入口可重开详情面板，这里补一个常驻开关。
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',

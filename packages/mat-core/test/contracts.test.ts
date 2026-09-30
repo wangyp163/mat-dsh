@@ -3,6 +3,8 @@ import {
   parsePrepVerdict,
   parseTriageVerdict,
   parseInterpretVerdict,
+  parseVerdictBySchema,
+  negativeVerdictReason,
   verdictToLines,
   extractJson,
 } from '../src/contracts'
@@ -106,6 +108,78 @@ describe('parseInterpretVerdict', () => {
     expect(
       parseInterpretVerdict({ ...good, converged: false, concerns: ['freq 未收敛但几何可用'] }).ok,
     ).toBe(true)
+  })
+})
+
+describe('parseVerdictBySchema + negativeVerdictReason（R1：负裁决不推相位）', () => {
+  const prepOk = {
+    schema: 'mat.prep-verdict.v1',
+    taskId: 'V1',
+    ok: true,
+  }
+  const prepBad = {
+    schema: 'mat.prep-verdict.v1',
+    taskId: 'V1',
+    ok: false,
+    problem: 'xyz 缺 Cl 原子',
+  }
+  const interpUnusable = {
+    schema: 'mat.interpret-verdict.v1',
+    taskId: 'V1',
+    converged: true,
+    imaginaryFrequencies: 0,
+    scientificallyUsable: false,
+    headline: '0 虚频=极小点，不是过渡态',
+  }
+
+  it('按 schema 字串路由到对应 parse', () => {
+    expect(parseVerdictBySchema(prepOk).ok).toBe(true)
+    expect(parseVerdictBySchema({
+      schema: 'mat.triage-verdict.v1',
+      taskId: 'F1',
+      failureClass: 'input',
+      evidence: ['a'],
+      retryable: false,
+    }).ok).toBe(true)
+    expect(parseVerdictBySchema(interpUnusable).ok).toBe(true)
+    expect(parseVerdictBySchema({ schema: 'mat.prep-verdict.v0' }).ok).toBe(false)
+    expect(parseVerdictBySchema({ no: 'schema' }).ok).toBe(false)
+    expect(parseVerdictBySchema('x').ok).toBe(false)
+  })
+
+  it('prep ok=false 阻塞并带 problem 原文（V9 教训的契约面）', () => {
+    const r = parseVerdictBySchema(prepBad)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(negativeVerdictReason(r.value)).toMatch(/缺 Cl/)
+  })
+
+  it('interpret scientificallyUsable=false 阻塞；converged=false 但 usable=true 不拦', () => {
+    const bad = parseVerdictBySchema(interpUnusable)
+    expect(bad.ok).toBe(true)
+    if (bad.ok) expect(negativeVerdictReason(bad.value)).toMatch(/scientificallyUsable=false/)
+    const recovered = parseVerdictBySchema({
+      ...interpUnusable,
+      converged: false,
+      scientificallyUsable: true,
+      concerns: ['freq 未收敛但几何可用'],
+    })
+    expect(recovered.ok).toBe(true)
+    if (recovered.ok) expect(negativeVerdictReason(recovered.value)).toBeNull()
+  })
+
+  it('triage 无成败语义不拦；prep ok=true 放行', () => {
+    const triage = parseVerdictBySchema({
+      schema: 'mat.triage-verdict.v1',
+      taskId: 'F1',
+      failureClass: 'unknown',
+      evidence: ['a'],
+      retryable: false,
+    })
+    expect(triage.ok).toBe(true)
+    if (triage.ok) expect(negativeVerdictReason(triage.value)).toBeNull()
+    const good = parseVerdictBySchema(prepOk)
+    expect(good.ok).toBe(true)
+    if (good.ok) expect(negativeVerdictReason(good.value)).toBeNull()
   })
 })
 

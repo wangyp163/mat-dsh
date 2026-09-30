@@ -4,6 +4,7 @@ signature: "Optimization stopped\\.|Number of steps exceeded|Error termination r
 task: [tsxtb, ts, opt, irc]
 versions: [">=1.5.0"]
 source: 压测 r9（集群 121236068 NStep=57 / tsxtb-quad NStep=54 / H3 smoke NStep=20）/ sobereva.com/164
+prescription: [{"match":"受力/几何周期性往复（震荡，最常见）","route":"稳 Hessian 族：recalc=N / calcall（TS 最敏感）或 gdiis maxstep=N notrust；加步数无效"},{"match":"单调下降但 force/displacement 不达阈值（临界收敛）","route":"MaxCycle 加预算 / loose 放宽 / 取受力最低帧续算——加步数唯一有效的场景"},{"match":"能量不降反升、位移发散（初猜在错误势面）","route":"换初猜（或 tsxtb 预优化），不是调参问题"},{"match":"log 无步数块、l103 起步即摔（内坐标崩塌）","route":"转条目 kb:ts-l103-formbx"}]
 ---
 
 ## 症状

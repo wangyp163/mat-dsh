@@ -9,7 +9,9 @@
     "@deepseek-ai/dsh-tools": "link:../../../deepseek-harness/packages/core/tools",
     "@deepseek-ai/dsh-system-prompt": "link:../../../deepseek-harness/packages/core/system-prompt",
     "@deepseek-ai/dsh-jobs": "link:../../../deepseek-harness/packages/jobs/jobs",
-    "mat-core": "workspace:*"
+    "mat-core": "workspace:*",
+    "@deepseek-ai/dsh-llm": "link:../../../deepseek-harness/packages/llm/llm",
+    "@deepseek-ai/dsh-session": "link:../../../deepseek-harness/packages/core/session"
   },
   "devDependencies": {
     "@types/node": "^22"

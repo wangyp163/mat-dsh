@@ -39,6 +39,9 @@ importers:
       '@deepseek-ai/dsh-jobs':
         specifier: link:../../../deepseek-harness/packages/jobs/jobs
         version: link:../../../deepseek-harness/packages/jobs/jobs
+      '@deepseek-ai/dsh-llm':
+        specifier: link:../../../deepseek-harness/packages/llm/llm
+        version: link:../../../deepseek-harness/packages/llm/llm
       '@deepseek-ai/dsh-system-prompt':
         specifier: link:../../../deepseek-harness/packages/core/system-prompt
         version: link:../../../deepseek-harness/packages/core/system-prompt

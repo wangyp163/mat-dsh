@@ -42,6 +42,7 @@ scripts/dsh-web.sh start                       # 4 起服务 → http://127.0.0.
 | `LLM_API_KEY`/`LLM_BASE_URL`/`LLM_MODEL_ID`（+`LLM_PROVIDER_ID`） | 会话模型必需 | dsh 会话的 LLM 路由 | 无则 web 会话无模型 |
 | `MAT_ACCESS_KEY`/`MAT_SECRET_KEY`/`MAT_USER` | 可选 | efile 文件传输 | 自动回落 remote-shell 分块通道 |
 | `BIGMODEL_API_KEY` | 可选 | glm-5.3-flash 多模态（图像自检） | 不配则 read_image 不可用 |
+| `OPTIMADE_MCP_URL` | 可选 | vasp-calc 的结构检索 MCP 端点 | 默认 ksai 部署实例（profiles/mat.yml） |
 
 ## 远端侧：新 AK/SK 的关键变量——是不是同一个集群账号
 
@@ -53,14 +54,28 @@ scripts/dsh-web.sh start                       # 4 起服务 → http://127.0.0.
      幂等拷贝到 `$HOME/workspace/g16-hy`；
   2. **demo gaussian-workflow**：**非 skill 自动化**——按 gaussian-release-stress
      的部署 SOP（Phase A 双 wheel force-reinstall）把 workflow 部到
-     `$HOME/workspace/demo`，版本须对上 skill 的锚（当前 1.6.2，权威源
+     `$HOME/workspace/demo`，版本须对上 skill 的锚（当前 1.7.4，权威源
      `skills/gaussian-calc/scripts/env_profile.sh`，改版本三处同步）。
-  另需该账号有计算分区权限（Agent0 等，计费相关）。
+  另需该账号有计算分区权限（kshcnormal 等，计费相关）。
 
   自检第 6 项会明确指出缺哪个：workflow 缺 → 跑 Phase A；g16 缺 → bootstrap 自动。
+
+  **VASP（matstream）家目录双件套**（2026-09-24 起，对齐 gaussian 模型）：
+  3. **workflow 件** `$HOME/workspace/matstream`——基座拷贝
+     `cp -a /public/software/apps/sag-tool/qcsoft/gaussian-workflow/v1.0.0` →
+     删陈旧 `.conda-unpack-done` → bin/ shebang 家目录化（sed）→ 上传安装 wheel
+     （matstream + spglib + xmltodict，**--no-deps** 防 numpy2 砸基座 ABI）→
+     写 env.sh + VERSION（SOP 详见 vasp-calc skill「部署」节）；
+  4. **VASP 件** `$HOME/workspace/vasp-hy`——`bash skills/vasp-calc/scripts/bootstrap_vasp.sh`
+     （幂等：公共区 109M 拷贝 + env.sh 改写 + VERSION + 自检）。
+  门禁脚本播种 `$HOME/workspace/.vasp-calc/scripts/`（vasp-calc skill 的 heredoc 步骤）；
+  复核探针 `tsx scripts/probe-vasp-matstream.ts <cluster>`（--smoke 附作业内环境链验证）。
 
 ## 验收（部署后冒烟）
 
 1. web 会话里 `mat_exec` 跑 `hostname`（deploy-check 已含等价项）；
 2. 让模型加载 gaussian-calc skill，走一次 `mat_gaussian` 一站式 opt（乙醇小分子，
-   默认档 Agent0/32 核/30 分钟内），`job_output` 读到 energy/converged/plots 即通。
+   默认档 kshcnormal/32 核/30 分钟内），`job_output` 读到 energy/converged/plots 即通；
+3. VASP：`mat_env_gate(engine='vasp')` 过闸后走一次 `mat_vasp` 一站式小体系
+   `scf`（veryfast 档、短 time），`job_output` 读到 `energy_per_task_eV` 即通
+   （首次会话需按 skill 播种门禁脚本）。

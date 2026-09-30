@@ -62,19 +62,25 @@ describe('viewer wiring（09-07 重设计：侧栏不再保留查看 tab）', ()
     expect(loader).toContain('src')
   })
 
-  it('drives NGL with unit cell, toolbar controls, and full disposal', async () => {
+  it('draws structures via the OPTIMADE-viewer NGL.Shape pipeline with styles and full disposal', async () => {
     const panel = await source('ViewerPanel.tsx')
     expect(panel).toContain('NGL.Stage')
-    expect(panel).toContain("addRepresentation('unitcell')")
     expect(panel).toContain('ball+stick')
     expect(panel).toContain('setSpin')
     expect(panel).toContain('autoView')
     expect(panel).toContain('dispose')
-    // vendored NGL 未注册 xyz 解析器：一切结构统一 structureBody 转 CIF 喂入。
-    expect(panel).toContain("structureBody(target.path, source)")
-    expect(panel).toContain("{ ext: 'cif', defaultRepresentation: false }")
-    // 分子（xyz）没有真实晶胞：不画假盒子。
-    expect(panel).toContain('unitcellRef.current = !isXyz(target.path)')
+    // sag-visual 契约（OPTIMADE viewer 移植）：三 shape（原子 CPK 球 / 键圆柱 / 晶胞棱）
+    // 独立透明度，buffer 表示；自解析 + 共价 MIC 成键，不喂 NGL 的 CIF 解析器。
+    expect(panel).toContain("addRepresentation('buffer'")
+    expect(panel).toContain('addComponentFromObject')
+    expect(panel).toContain('drawStructure(stage, NGL.Shape, parsed, bonds')
+    expect(panel).toContain('parseStructure(target.path, source)')
+    expect(panel).toContain('computeBonds(parsed.atoms, parsed.lattice)')
+    // 晶胞棱只画真实晶胞（POSCAR/cif）；xyz 的承载盒是假的，不画。
+    expect(panel).toContain('parsed.hasCell')
+    // 信息行（OPTIMADE viewer 同款）：化学式 + 晶胞 + 位点/键数。
+    expect(panel).toContain('mat-view__structinfo')
+    expect(panel).toContain('位点 · ${bonds.length} 键')
   })
 
   it('previews text with truncation and copy, images and pdf via content URLs', async () => {

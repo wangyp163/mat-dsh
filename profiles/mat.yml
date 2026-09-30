@@ -99,6 +99,34 @@
       # 使用 bare package 名让 Harmony 同时发现 mat-ui 的 Source Patches；
       # dsh-web.sh 将 profile 的 node_modules/mat-ui 链到本地开发包。
       name: 'mat-ui'
+    # OPTIMADE 结构检索（vasp-calc skill 的结构来源之一）：本地
+    # ~/dev/optimade_mcp 的 ksai 部署实例，matstream-agent 同款端点。
+    # 工具以 mcp__optimade__<name> 注册（query_structures / download_structure /
+    # list_providers）；断线指数退避重连（mcp-client 内建）。端点可经
+    # env.local 的 OPTIMADE_MCP_URL 覆盖。
+    - id: optimade-mcp-reference
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: optimade
+        transport: streamable-http
+        url: !!js process.env.OPTIMADE_MCP_URL || 'https://c-2076488383597109249.ksai.example.internal:58043/mcp/'
+    # matgen 材料筛选/生成（~/aiagent/matgen 的 matgen-mcp 常驻服务，HPC 容器
+    # pod matgen-mcp-pod:50046 上的 0.3.x）。pod 的 8080 无直连通路（k8s
+    # Service/Pod IP 实测均超时），走 scripts/matgen-tunnel.sh 维护的本地隧道
+    # 127.0.0.1:18080——dsh 起服务前先 matgen-tunnel.sh start。工具以
+    # mcp__matgen__<name> 注册（material_search_plan / material_search /
+    # structure_generate / conditioning_loop / ml_screen / ml_screen_status /
+    # server_info / vasp_plan，共 8 个）；toolCallTimeoutMs 放宽到 10 分钟——
+    # ml_screen 的 MACE 弛豫常态数分钟，默认 60s 会掐死。断线指数退避重连
+    # （mcp-client 内建）与隧道重连循环互补。端点可经 env.local 的
+    # MATGEN_MCP_URL 覆写。探针：scripts/probe-matgen.ts。
+    - id: matgen-mcp-reference
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: matgen
+        transport: streamable-http
+        url: !!js process.env.MATGEN_MCP_URL || 'http://127.0.0.1:18080/mcp'
+        toolCallTimeoutMs: 600000
 
 # 本仓库 skills/ 目录进模型技能目录（gaussian-calc 等；dsh-skill-filesystem 只扫
 # 项目 .dsh/skills、$DSH_HOME/skills 等固定根，本目录不在其默认扫描范围）。
@@ -184,4 +212,4 @@
           provider: mat
           model: deepseek-v4-flash
           maxTokens: 16384
-        persona: 计算链牧羊人（batch-roles skill 角色 shepherd）——全权一条 opt→freq 分步链：先读 skill batch-roles 与 gaussian-calc，长回合内提交-等待-门检-推进，波内绝不结束回合，用 report 工具中途汇报，预算纪律全程生效。
+        persona: 计算链牧羊人（batch-roles skill 角色 shepherd）——全权一条计算链：先读 skill batch-roles 与对应引擎 skill（gaussian-calc 或 vasp-calc），长回合内提交-等待-门检-推进，波内绝不结束回合，用 report 工具中途汇报，预算纪律全程生效。

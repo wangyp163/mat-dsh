@@ -145,6 +145,39 @@ export function parseInterpretVerdict(input: unknown): ParseResult<InterpretVerd
   return { ok: true, value: input as unknown as InterpretVerdict }
 }
 
+/** 按 payload 自带的 schema 字串路由到对应 parse（update 落库前的统一校验口）。 */
+export function parseVerdictBySchema(
+  input: unknown,
+): ParseResult<PrepVerdict | TriageVerdict | InterpretVerdict> {
+  if (typeof input !== 'object' || input === null || !('schema' in input)) {
+    return { ok: false, issues: ['payload must be an object with a schema field'] }
+  }
+  const schema = (input as Record<string, unknown>).schema
+  if (schema === 'mat.prep-verdict.v1') return parsePrepVerdict(input)
+  if (schema === 'mat.triage-verdict.v1') return parseTriageVerdict(input)
+  if (schema === 'mat.interpret-verdict.v1') return parseInterpretVerdict(input)
+  return { ok: false, issues: [`unknown verdict schema '${String(schema)}'`] }
+}
+
+/**
+ * 负裁决阻塞相位推进（R1：契约通过≠工作成功——V9 教训，契约合法但 ok:false
+ * 的裁决曾把缺陷任务误推进 prepared）。返回 null=放行；string=阻塞原因。
+ * prep ok=false 阻塞；interpret scientificallyUsable=false 阻塞
+ * （converged=false 但 usable=true 且带 concerns 是合法形态，不拦）；
+ * triage 无成败语义（分类即产出），不拦。
+ */
+export function negativeVerdictReason(
+  v: PrepVerdict | TriageVerdict | InterpretVerdict,
+): string | null {
+  if (v.schema === 'mat.prep-verdict.v1' && v.ok === false) {
+    return `prep ok=false: ${v.problem ?? 'unspecified problem'}`
+  }
+  if (v.schema === 'mat.interpret-verdict.v1' && v.scientificallyUsable === false) {
+    return `interpret scientificallyUsable=false: ${v.headline}`
+  }
+  return null
+}
+
 /** ≤10 行紧凑渲染（主会话消费形态；每类裁决远低于上限）。 */
 export function verdictToLines(v: PrepVerdict | TriageVerdict | InterpretVerdict): string[] {
   const lines: string[] = [`${v.schema} ${v.taskId}`]

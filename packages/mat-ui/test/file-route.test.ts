@@ -226,7 +226,7 @@ describe('mat file routes — session workspace mode（无作业回退）', () =
     const ctx = {
       webServer: { register: (route: any) => { routes.set(route.path, route); return () => {} } },
       get: (key: string) => key === 'mat.status' ? board() : key === 'mat.files' ? {
-        listSessionWorkspace: async (...args: unknown[]) => { calls.push(args); return { root: workspace, path: '', entries: [{ path: 'pre.json', name: 'pre.json', directory: false, regularFile: true, symbolicLink: false, readable: true, size: 2 }], primary: [] } },
+        listSessionWorkspace: async (...args: unknown[]) => { calls.push(args); return { root: workspace, path: '', entries: [{ path: 'pre.json', name: 'pre.json', directory: false, regularFile: true, symbolicLink: false, readable: true, size: 2 }], primary: [], sessionFiles: { 'session-s1': ['pre.json'] } } },
       } : undefined,
     } as unknown as Context
     apply(ctx)
@@ -237,6 +237,8 @@ describe('mat file routes — session workspace mode（无作业回退）', () =
       await routes.get('/mat-files/tree').handler({ url: '/mat-files/tree?session=session-s1&path=' }, response)
       expect(response.statusCode).toBe(200)
       expect(JSON.parse(response.body)).toMatchObject({ root: workspace, preferences: { autoSync: false } })
+      // 会话文件归档（按会话分档）：根列表透传 sessionFiles 供面板挂会话分组。
+      expect(JSON.parse(response.body).sessionFiles).toEqual({ 'session-s1': ['pre.json'] })
       expect(calls[0]![0]).toMatchObject({ cwd: workspace, path: '' })
 
       response.statusCode = 200; response.body = ''

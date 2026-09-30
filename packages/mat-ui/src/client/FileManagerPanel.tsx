@@ -39,6 +39,8 @@ interface WorkspaceTree {
   warning?: string
   /** 工作区 scope：本地工作目录绝对路径（多会话共享，位置行展示 + openWorkspace）。 */
   root?: string
+  /** 会话文件归档（仅根列表）：会话 → 相对路径清单（服务端台账 + 存在性过滤）。 */
+  sessionFiles?: Record<string, string[]>
 }
 
 async function getJobs(): Promise<FileManagerJob[]> {
@@ -53,7 +55,9 @@ async function getTree(scope: string, path = ''): Promise<WorkspaceTree> {
   const query = scope.startsWith('session:')
     ? `session=${encodeURIComponent(scope.slice('session:'.length))}`
     : `jobId=${encodeURIComponent(scope)}`
-  const response = await fetch(`/mat-files/tree?${query}&path=${encodeURIComponent(path)}`, { cache: 'no-store' })
+  // 15s 超时：服务重启撞断的连接会让 fetch 永久 pending（无 reject），面板停在
+  // 「正在定位会话工作目录…」且无报错——超时把它变成可见错误，轮询/手动刷新兜底。
+  const response = await fetch(`/mat-files/tree?${query}&path=${encodeURIComponent(path)}`, { cache: 'no-store', signal: AbortSignal.timeout(15_000) })
   const payload = await response.json() as WorkspaceTree & { error?: { message?: string } }
   if (!response.ok) throw new Error(payload.error?.message ?? `tree HTTP ${response.status}`)
   return {
@@ -62,6 +66,7 @@ async function getTree(scope: string, path = ''): Promise<WorkspaceTree> {
     preferences: payload.preferences,
     warning: payload.warning,
     ...(payload.root === undefined ? {} : { root: payload.root }),
+    ...(payload.sessionFiles === undefined ? {} : { sessionFiles: payload.sessionFiles }),
   }
 }
 
@@ -166,6 +171,8 @@ export function FileManagerPanel({ sessionId, openTab, openWorkspace }: FileMana
   const [trees, setTrees] = useState<Record<string, WorkspaceEntry[]>>({})
   const [roots, setRoots] = useState<Record<string, string | undefined>>({})
   const [primaries, setPrimaries] = useState<Record<string, string[]>>({})
+  /** 会话文件归档（按会话分档）：scope → 会话 → 相对路径清单（仅根列表携带）。 */
+  const [sessionFilesByScope, setSessionFilesByScope] = useState<Record<string, Record<string, string[]>>>({})
   const [warning, setWarning] = useState<string>()
   const [error, setError] = useState<string>()
 
@@ -181,7 +188,7 @@ export function FileManagerPanel({ sessionId, openTab, openWorkspace }: FileMana
   const openScopes = snapshot.openScopes.filter(scope => scopeOrder.includes(scope))
 
   useEffect(() => fileManagerState.subscribe(() => { setSnapshot(fileManagerState.snapshot()) }), [])
-  // 作业清单 5s 轮询（对齐 TaskDetailsPanel）：一次性拉取会把「无跟踪作业」钉死在
+  // 作业清单 5s 轮询（对齐 TaskDetailsPanel）：一次性拉取会把空会话态钉死在
   // 提交前挂载的面板上——新作业只能靠轮询进入 sessionGroups/seenRef 自动展开链。
   useEffect(() => {
     let live = true
@@ -280,6 +287,7 @@ export function FileManagerPanel({ sessionId, openTab, openWorkspace }: FileMana
       treeCache.set(cacheKey(scope), tree)
       setTrees(current => ({ ...current, [scope]: tree.entries }))
       setRoots(current => ({ ...current, [scope]: tree.root }))
+      if (tree.sessionFiles !== undefined) setSessionFilesByScope(current => ({ ...current, [scope]: tree.sessionFiles! }))
       if (!isSessionScope(scope)) {
         setPrimaries(current => ({ ...current, [scope]: tree.primary }))
         fileManagerState.setPins(tree.preferences?.pins ?? [], scope)
@@ -300,6 +308,40 @@ export function FileManagerPanel({ sessionId, openTab, openWorkspace }: FileMana
       }
     }
   }, [openScopes.join('\0')])
+
+  // 工作区树自动保鲜（5s 轮询，与作业清单同频）：会话 cwd 是纯本地 readdir，
+  // agent 中途写入/下载的文件（如 POSCAR）无需手动刷新即出现在右侧树。只轮询
+  // 工作区 scope——作业树含远端 listing，开销大，维持手动刷新语义。清单签名
+  // 未变化时跳过 setTrees，静止时零重渲染。
+  const pollSignatures = useRef(new Map<string, string>())
+  useEffect(() => {
+    if (sessionKey === undefined) return
+    const timer = window.setInterval(() => {
+      void (async () => {
+        const live = fileManagerState.snapshot()
+        if (!live.openScopes.includes(sessionKey)) return
+        // 根 + 当前展开的目录，浅到深合并（浅层 merge 会清掉其下深层条目，随后补回）。
+        const paths = ['', ...new Set(live.scopes[sessionKey]?.expanded ?? [])]
+          .sort((a, b) => a.split('/').length - b.split('/').length)
+        for (const path of paths) {
+          try {
+            const tree = await getTree(sessionKey, path)
+            setError(undefined) // 自愈即清错：超时/失败提示不残留
+            if (path === '' && tree.sessionFiles !== undefined) {
+              setSessionFilesByScope(current => ({ ...current, [sessionKey]: tree.sessionFiles! }))
+            }
+            const key = cacheKey(sessionKey, path)
+            const signature = tree.entries.map(entry => `${entry.path}:${entry.directory ? 'd' : 'f'}:${entry.size}`).join('\n')
+            if (pollSignatures.current.get(key) === signature) continue
+            pollSignatures.current.set(key, signature)
+            treeCache.set(key, tree)
+            setTrees(current => ({ ...current, [sessionKey]: mergeTreeEntries(current[sessionKey] ?? [], path, tree.entries) as WorkspaceEntry[] }))
+          } catch { /* 轮询失败静默：手动刷新兜底 */ }
+        }
+      })()
+    }, 5_000)
+    return () => { window.clearInterval(timer) }
+  }, [sessionKey])
 
   const loadDirectory = async (path: string, scope: string): Promise<void> => {
     const cached = treeCache.get(cacheKey(scope, path))
@@ -530,19 +572,30 @@ export function FileManagerPanel({ sessionId, openTab, openWorkspace }: FileMana
               <span className="mat-files__origin mat-files__origin--local">本地</span>
             </div>
             {expanded && sessionGroups.map(({ session, jobs: sessionJobs }) => {
-              // 第二层：会话（虚拟行）；第三层：该会话按 jobId 跟踪的作业目录。
+              // 第二层：会话（虚拟行）；第三层：该会话归档的文件 + 按 jobId 跟踪的作业目录。
               const sidOpen = openSessions.includes(session.sessionId)
               const sessionTitle = session.title ?? (session.sessionId === '' ? '' : session.sessionId.replace(/^session-/, '').slice(0, 8))
+              const archived = session.sessionId === '' ? [] : sessionFilesByScope[scope]?.[session.sessionId] ?? []
               return <Fragment key={session.sessionId || 'unowned'}>
                 <div role="treeitem" tabIndex={0} data-scope={sessionKey} aria-expanded={sidOpen} aria-selected={false} className="mat-files__row mat-files__row--session" style={{ paddingInlineStart: `${5 + 16}px` }} onClick={() => { toggleSessionRow(session.sessionId) }}>
                   <span className="mat-files__kind">{sidOpen ? <IconFolderOpenOutline16 /> : <IconFolderClose16 />}</span>
                   <span className={`mat-files__tag mat-files__tag--session${session.sessionId === sessionId ? ' mat-files__tag--current' : ''}`}>{session.sessionId === sessionId ? '本会话' : '会话'}</span>
                   <button type="button" className="mat-files__name" onClick={(event) => { event.stopPropagation(); toggleSessionRow(session.sessionId) }}>{sessionTitle}</button>
-                  <span className="mat-files__count">{sessionJobs.length}</span>
+                  <span className="mat-files__count">{sessionJobs.length + archived.length}</span>
                 </div>
-                {sidOpen && (sessionJobs.length === 0
-                  ? <div className="mat-files__row mat-files__row--loading" style={{ paddingInlineStart: `${5 + 2 * 16}px` }}>无跟踪作业</div>
-                  : sessionJobs.map(job => {
+                {sidOpen && (sessionJobs.length === 0 && archived.length === 0
+                  ? <div className="mat-files__row mat-files__row--loading" style={{ paddingInlineStart: `${5 + 2 * 16}px` }}>无文件与作业</div>
+                  : <>
+                    {archived.map(path => {
+                      const selected = snapshot.scopes[scope]?.selectedPaths.includes(path) ?? false
+                      return <div key={`${session.sessionId}\0${path}`} role="treeitem" tabIndex={0} data-path={path} data-scope={scope} aria-selected={selected} className="mat-files__row" style={{ paddingInlineStart: `${5 + 2 * 16}px` }}>
+                        <input type="checkbox" aria-label={`选择 ${path}`} checked={selected} onChange={() => { fileManagerState.selectPath(path, scope) }} onClick={(event) => { event.stopPropagation() }} />
+                        <span className="mat-files__kind"><StateDot state="done" /></span>
+                        <button type="button" className="mat-files__name" title={path} onClick={() => { openFile(path, scope) }}>{path}</button>
+                        <span className="mat-files__origin mat-files__origin--local">本地</span>
+                      </div>
+                    })}
+                    {sessionJobs.map(job => {
                     const jobOpen = openScopes.includes(job.jobId)
                     const jobEntries = trees[job.jobId] ?? []
                     const jobRows = jobOpen ? visibleTreeEntries(jobEntries, snapshot.scopes[job.jobId]?.expanded ?? []) : []
@@ -570,7 +623,9 @@ export function FileManagerPanel({ sessionId, openTab, openWorkspace }: FileMana
                       })}
                       {jobOpen && jobEntries.length === 0 && <div className="mat-files__row mat-files__row--loading" style={{ paddingInlineStart: `${5 + 3 * 16}px` }}>暂无文件</div>}
                     </Fragment>
-                  }))}
+                    })}
+                  </>
+                )}
               </Fragment>
             })}
             {rows.map(entry => {

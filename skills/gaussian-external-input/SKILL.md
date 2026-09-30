@@ -1,11 +1,11 @@
 ---
 name: gaussian-external-input
 description: Use this skill when the user provides a working directory that already contains self-prepared Gaussian 16 input files (.gjf/.com) and wants them run as-is — trigger phrases include 自带输入, 现成 gjf, 已准备好的输入文件, 用户输入文件, external input, 不重新生成输入. Routes the agent into the gaussian-workflow external mode (-t external; syntax check + task registration at pre, slurm rendering at run, registry-gated post). Do NOT load for regular calculations from a structure file (use gaussian-calc), or for release/stress testing.
-version: 0.1.1-demo
+version: 0.1.2-demo
 metadata:
   adapted-for: mat-dsh
   source: ~/dev/mat-aitool/skills/gaussian-external-input@0.1.0
-  adaptation: 2026-09-11 M29 首版入 dsh 血脉（配套远端 workflow 1.7.0 external 模式）——工具链适配 mat_exec（JSON 参数工具，cluster_id 11250）+ mat_job_watch 异步监控；门禁协议沿用 gaussian-calc 同款（新会话第一条业务命令 = 远端 check_environment.sh，跨轮产物不得诱发 pre-gate 取证）；提交/下载/删除类纪律与 gaussian-calc 一致。
+  adaptation: 2026-09-11 M29 首版入 dsh 血脉（配套远端 workflow 1.7.0 external 模式）——工具链适配 mat_exec（JSON 参数工具，cluster_id 11250）+ mat_job_watch 异步监控；门禁协议沿用 gaussian-calc 同款（第一条业务命令 = mat_env_gate 工具闸，跨轮产物不得诱发 pre-gate 取证；2026-09-23 M33 起由工具层强制）；提交/下载/删除类纪律与 gaussian-calc 一致。；2026-09-23 M33 环境门禁机制化配套：门禁改 `mat_env_gate` 工具闸措辞（四入口 ENV_GATE_REJECTED 硬前置、一次通过按 (宿主进程,集群,引擎)+12h TTL 缓存，子 agent 自动继承不再重跑）
 ---
 
 # Gaussian 自带输入（external 模式）
@@ -23,13 +23,13 @@ metadata:
 
 ## 环境门禁（第一条业务命令）
 
-与 `gaussian-calc` 同款门禁铁律：开始任何队列查询、文件检查、pre/run/post 前，先执行一次门禁——**即使对话/prompt 携带现成 gjf 文件引用，门禁仍是第一条**，不得先做任何 pre-gate 取证：
+与 `gaussian-calc` 同款门禁铁律，且已机制化为工具闸：开始任何队列查询、文件检查、pre/run/post 前先调 `mat_env_gate`——**即使对话/prompt 携带现成 gjf 文件引用，门禁仍是第一条**，不得先做任何 pre-gate 取证。四个提交工具在门禁未过时一律 `ENV_GATE_REJECTED`（零集群副作用）：
 
 ```
-mat_exec({"cluster_id": "11250", "command": "bash $HOME/workspace/.gaussian-calc/scripts/check_environment.sh", "timeout_seconds": 180})
+mat_env_gate({"cluster_id": "11250"})
 ```
 
-要求 `ok=true`、`protocol=new`、`deployed_version == expected_version`、`missing_tasks=[]`。`REQUIRED_TASKS` 不含 `external`（它是模式标识非注册 task，属预期）。门禁失败立即停止本轮。
+判据（`ok=true`、`protocol=new`、版本锚一致、`missing_tasks=[]`）已在工具层强制，不必自行比对字段。`REQUIRED_TASKS` 不含 `external`（它是模式标识非注册 task，属预期）。门禁未过立即停止本轮。
 
 ## 场景判定树（按序执行）
 

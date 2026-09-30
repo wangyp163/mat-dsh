@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, StateDot, IconFolderOpen16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ILayout } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { jobOptionLabel, jobsForSession, monitorMetadata } from './status-model'
 import type { MonitorJob } from './status-model'
 
 import { fileManagerState } from './file-manager-state'
+import { openDetailsWithRoom } from './layout-room'
 
 type Job = MonitorJob & {
   label?: string
@@ -20,6 +22,7 @@ interface TaskDetailsPanelProps extends PropsRuntime<'conversation.details.tab'>
   open?: () => void
   openTab?: (id: string) => void
   openDetailsTab?: (id: string) => void
+  layout?: ILayout
 }
 
 function stateOf(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
@@ -47,10 +50,11 @@ function metadataStateOf(label: string, value: string): 'done' | 'warning' | 'on
   return undefined
 }
 
-export function TaskDetailsPanel({ sessionId, openTab, openDetailsTab }: TaskDetailsPanelProps): JSX.Element {
+export function TaskDetailsPanel({ sessionId, openTab, openDetailsTab, layout }: TaskDetailsPanelProps): JSX.Element {
   const [selectedJobId, setSelectedJobId] = useState<string>()
   const selectFiles = () => {
     if (selectedJobId !== undefined) fileManagerState.selectJob(selectedJobId)
+    if (layout !== undefined) openDetailsWithRoom(layout)
     openDetailsTab?.('mat-files')
     openTab?.('mat-files')
   }

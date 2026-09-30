@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createWatchLoop } from '../src/watch-loop'
 import type { ExecResult } from '../src/client'
+import { parseScfSamples } from '../src/scf-trend'
+import type { ScfTrendReport } from '../src/scf-trend'
 
 /** 脚本化 execCommand：每次调用弹出一条；{throw:} 表示传输级异常，{rcFail:true} 表示远端 rc≠0（code 10020）。 */
 function fakeExec(script: Array<{ out?: string; rcFail?: boolean; throw?: string }>) {
@@ -56,7 +58,7 @@ describe('createWatchLoop', () => {
     const { loop, fake } = makeLoop([{ out: row('100', 'RUNNING') }], ['100'])
     await advance(0)
     expect(fake.commands).toHaveLength(1)
-    expect(fake.commands[0]).toBe("sacct -j 100 -P -n -o JobID,State,ExitCode,ElapsedRaw,WorkDir")
+    expect(fake.commands[0]).toBe('sacct -j 100 -P -n -o JobID,State,ExitCode,ElapsedRaw,WorkDir,Timelimit')
     expect(loop.readOutput()).toContain('100 RUNNING')
   })
 
@@ -216,6 +218,50 @@ describe('createWatchLoop', () => {
     await Promise.resolve()
     expect(settled).toBe(false)
   })
+
+  it('A1 事件感知回档:长期 PENDING 后 PENDING→RUNNING 转移把档位拨回 10s', async () => {
+    // 旧逻辑按总时长单调升档:转移后仍处 60s 档,下一跳 t=180。事件感知把
+    // 档位键换成「距最近变化」,转移后 10s 内必有一跳(t=130)。
+    const { fake } = makeLoop([
+      { out: row('100', 'PENDING') }, // t=0 首观测(计为变化)
+      { out: row('100', 'PENDING') }, // t=10..50:无变化,10s 档
+      { out: row('100', 'PENDING') },
+      { out: row('100', 'PENDING') },
+      { out: row('100', 'PENDING') },
+      { out: row('100', 'PENDING') },
+      { out: row('100', 'PENDING') }, // t=60:距变化 60s → 升 60s 档 → 下一跳 t=120
+      { out: row('100', 'RUNNING') }, // t=120:转移 → 回拨 10s 档
+      { out: row('100', 'RUNNING') }, // t=130:10s 内的下一跳(旧逻辑要等 t=180)
+    ], ['100'])
+    await advance(0)
+    for (let t = 10_000; t <= 60_000; t += 10_000) await advance(10_000) // t=10..60,共 7 跳
+    expect(fake.commands.length).toBe(7)
+    await advance(60_000) // t=120:第 8 跳,观测到转移
+    expect(fake.commands.length).toBe(8)
+    await advance(10_000) // t=130:回档生效
+    expect(fake.commands.length).toBe(9)
+  })
+
+  it('A2 maxWait 对齐:最后一跳 clamp 到剩余时限,到期即结算(不越界多睡一档)', async () => {
+    // 旧逻辑 t=120 跳后按 60s 档排下一跳 → t=180 才结算,越界 50s。
+    // clamp 后按剩余 10s 排 → t=130 恰好到期。
+    const { loop, fake } = makeLoop([{ out: row('100', 'PENDING') }], ['100'], { maxWaitMs: 130_000 })
+    await advance(0) // t=0 首观测
+    for (let i = 0; i < 5; i += 1) await advance(10_000) // t=10..50
+    await advance(10_000) // t=60:距变化 60s → 60s 档
+    await advance(60_000) // t=120:elapsed<130 → 轮询第 8 跳;remaining=10s → clamp
+    expect(fake.commands.length).toBe(8) // t=0,10,20,30,40,50,60,120
+    let settled = false
+    void loop.done.then(() => { settled = true })
+    await Promise.resolve()
+    expect(settled).toBe(false) // t=120 未到期
+    await advance(9_000) // t=129:clamp 后 10s 跳未到
+    expect(settled).toBe(false)
+    await advance(1_000) // t=130:恰好到期
+    const outcome = await loop.done
+    expect(outcome.status).toBe('completed')
+    expect(outcome.detail).toContain('max-wait exceeded')
+  })
 })
 
 describe('onAllSettled 钩子（producer 注入点）', () => {
@@ -367,5 +413,246 @@ describe('onTick 钩子（状态板喂料点）', () => {
     await advance(0)
     expect((await loop.done).status).toBe('completed')
     expect(calls).toBe(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCF 收敛采样(高级作业监控):采样窗门控 / 两窗确认 / 同类去抖 / 趋势行
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('scfSampling(收敛曲线监控)', () => {
+  /** 命令路由型 exec:sacct 与采样 for-loop 分开应答。 */
+  function routingExec(handlers: {
+    sacct: () => string
+    sample?: (workdirs: string[]) => string
+  }) {
+    const commands: string[] = []
+    return {
+      commands,
+      async execCommand(_clusterId: string, command: string): Promise<ExecResult> {
+        commands.push(command)
+        if (command.startsWith('sacct')) return { code: 0, data: handlers.sacct(), message: '' }
+        if (command.startsWith('for d in')) {
+          if (handlers.sample === undefined) throw new Error('unexpected sampling command')
+          const dirs = [...command.matchAll(/'([^']+)'/g)].map((m) => m[1]!)
+          return { code: 0, data: handlers.sample(dirs), message: '' }
+        }
+        throw new Error(`unexpected command: ${command.slice(0, 80)}`)
+      },
+    }
+  }
+
+  /** 带 workdir/timelimit 的 sacct 行。 */
+  const rowFull = (id: string, state: string, elapsed: string, workdir: string, timelimit: string) =>
+    `${id}|${state}|0:0|${elapsed}|${workdir}|${timelimit}\n`
+
+  const OSC_DONES = [-76.300, -76.299, -76.301, -76.299, -76.301, -76.299, -76.301, -76.299]
+    .map((e, i) => ` SCF Done:  E(RB3LYP) =  ${e}  A.U. after  ${i + 2} cycles`).join('\n')
+
+  function makeScfLoop(
+    handlers: { sacct: () => string; sample?: (workdirs: string[]) => string },
+    opts: { intervalMs?: number; maxWaitMs?: number; onTrend?: (reports: ScfTrendReport[]) => void } = {},
+  ) {
+    const fake = routingExec(handlers)
+    const reports: ScfTrendReport[][] = []
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: opts.maxWaitMs ?? 86_400_000,
+      scfSampling: {
+        ...(opts.intervalMs !== undefined ? { intervalMs: opts.intervalMs } : {}),
+        buildCommand: (workdirs) => `for d in ${workdirs.map((w) => `'${w}'`).join(' ')}; do echo "=== $d"; tail -n 200 x; done`,
+        parse: (output) => parseScfSamples(output),
+        ...(opts.onTrend !== undefined
+          ? { onTrend: (rs) => { reports.push(rs); opts.onTrend?.(rs) } }
+          : { onTrend: (rs) => { reports.push(rs) } }),
+      },
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    return { loop, fake, reports }
+  }
+
+  it('两窗确认:首个采样窗的振荡不下报,第二窗确认才 onTrend + 趋势行;同类去抖', async () => {
+    const { loop, fake, reports } = makeScfLoop(
+      { sacct: () => rowFull('100', 'RUNNING', '30', '/w/A', '04:00:00'), sample: () => `=== /w/A\n${OSC_DONES}` },
+      { intervalMs: 10_000 },
+    )
+    await advance(0)
+    loop.readOutput() // 排空首读
+    await advance(10_000) // 采样窗 1:分类 oscillating,但无前科 → 不确认
+    expect(reports).toHaveLength(0)
+    await advance(10_000) // 采样窗 2:连续同类 → 确认 → 上报
+    expect(reports).toHaveLength(1)
+    expect(reports[0]![0]!.trend.kind).toBe('oscillating')
+    expect(reports[0]![0]!.jobId).toBe('100')
+    expect(loop.readOutput()).toContain('scf_trend: job 100 oscillating')
+    await advance(10_000) // 采样窗 3:同类去抖,不再上报
+    expect(reports).toHaveLength(1)
+    loop.cancel('done')
+    // 采样命令与状态轮询分离,且只对 RUNNING 作业的 workdir 采样
+    expect(fake.commands.some((c) => c.startsWith('for d in'))).toBe(true)
+  })
+
+  it('恢复复位去抖:转 converging 后再次振荡可再报', async () => {
+    let sampleIdx = 0
+    const convDones = [-76.300, -76.3010, -76.3012, -76.30121, -76.301211, -76.3012111, -76.30121111]
+      .map((e, i) => ` SCF Done:  E(RB3LYP) =  ${e}  A.U. after  ${i + 2} cycles`).join('\n')
+    const { reports } = makeScfLoop({
+      sacct: () => rowFull('100', 'RUNNING', '30', '/w/A', '04:00:00'),
+      // 窗序:osc osc(确认上报#1) → conv(去抖复位) → osc osc(重新确认上报#2)
+      sample: () => {
+        sampleIdx += 1
+        return sampleIdx === 3 ? `=== /w/A\n${convDones}` : `=== /w/A\n${OSC_DONES}`
+      },
+    }, { intervalMs: 10_000 })
+    await advance(0)
+    await advance(10_000)
+    await advance(10_000) // 窗 1+2:振荡确认上报 #1
+    expect(reports).toHaveLength(1)
+    await advance(10_000) // 窗 3:converging → 去抖复位
+    await advance(10_000) // 窗 4:振荡重现,首窗不确认
+    await advance(10_000) // 窗 5:重新确认 → 上报 #2
+    expect(reports).toHaveLength(2)
+  })
+
+  it('停滞:逼近 TimeLimit(≤20% 余量)才上报;余量充足不报', async () => {
+    // 同号等步长平台(|ΔE| 恒 5e-4:不阻尼、不发散)——停滞的标准形态
+    const stalledEnergies = Array.from({ length: 8 }, (_, i) => -76.3 + i * 5e-4)
+    const stalledDones = stalledEnergies.map((e, i) => ` SCF Done:  E(RB3LYP) =  ${e}  A.U. after  ${i + 2} cycles`).join('\n')
+    const a = makeScfLoop(
+      { sacct: () => rowFull('100', 'RUNNING', '13000', '/w/A', '04:00:00'), sample: () => `=== /w/A\n${stalledDones}` },
+      { intervalMs: 10_000 },
+    )
+    await advance(0)
+    await advance(10_000)
+    await advance(10_000)
+    expect(a.reports).toHaveLength(1) // elapsed 13000 ≥ 0.8×14400
+    expect(a.reports[0]![0]!.trend.kind).toBe('stalled')
+    a.loop.cancel('done')
+
+    const b = makeScfLoop(
+      { sacct: () => rowFull('100', 'RUNNING', '3000', '/w/A', '04:00:00'), sample: () => `=== /w/A\n${stalledDones}` },
+      { intervalMs: 10_000 },
+    )
+    await advance(0)
+    await advance(10_000)
+    await advance(10_000)
+    await advance(10_000)
+    expect(b.reports).toHaveLength(0) // 确认了 stalled 但余量 80%,不惊动
+    b.loop.cancel('done')
+  })
+
+  it('采样窗门控:intervalMs 60s 时 10s 档的 tick 只在到窗才采样', async () => {
+    const { fake } = makeScfLoop(
+      { sacct: () => rowFull('100', 'RUNNING', '30', '/w/A', '04:00:00'), sample: () => '=== /w/A\n(no scf lines)' },
+      { intervalMs: 60_000 },
+    )
+    await advance(0)
+    for (let i = 0; i < 5; i += 1) await advance(10_000) // t=10..50:未到窗
+    expect(fake.commands.filter((c) => c.startsWith('for d in'))).toHaveLength(0)
+    await advance(10_000) // t=60:到窗采样
+    expect(fake.commands.filter((c) => c.startsWith('for d in'))).toHaveLength(1)
+  })
+
+  it('r4 回归:采样 rc≠0(10020)宽限——stdout 里的样本照常解析告警', async () => {
+    // 真机定位:glob 兜底路径无匹配使 for 循环退出码非零,但已命中的 tail 输出
+    // 完好;旧代码 if (r.code !== 0) return 把 100 条能量样本整个丢弃 → 零告警
+    const fake = {
+      commands: [] as string[],
+      async execCommand(_c: string, command: string): Promise<ExecResult> {
+        if (command.startsWith('sacct')) return { code: 0, data: rowFull('100', 'RUNNING', '30', '/w/A', '04:00:00'), message: '' }
+        if (command.startsWith('for d in')) {
+          return { code: 10020, data: { stdout: `=== /w/A\n${OSC_DONES}`, stderr: 'tail: no match', exitCode: 1 }, message: 'remote shell command failed' }
+        }
+        throw new Error(`unexpected: ${command.slice(0, 60)}`)
+      },
+    }
+    const loop = createWatchLoop({
+      clusterId: '11250', jobIds: ['100'], maxWaitMs: 86_400_000,
+      scfSampling: {
+        intervalMs: 10_000,
+        buildCommand: (ws) => `for d in ${ws.map((w) => `'${w}'`).join(' ')}; do echo "=== $d"; tail x; done`,
+        parse: (o) => parseScfSamples(o),
+        onTrend: () => {},
+      },
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0)
+    loop.readOutput()
+    await advance(10_000)
+    await advance(10_000) // 两窗确认
+    const out = loop.readOutput()
+    expect(out).toContain('scf_trend: job 100 oscillating')
+    loop.cancel('done')
+  })
+
+  it('采样失败(exec 抛错)不连坐:状态轮询与结算照常', async () => {
+    const fake = routingExec({ sacct: () => rowFull('100', 'RUNNING', '30', '/w/A', '04:00:00') }) // sample 未注册 → 抛错
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: 25_000,
+      scfSampling: {
+        intervalMs: 10_000,
+        buildCommand: (workdirs) => `for d in ${workdirs.map((w) => `'${w}'`).join(' ')}; do echo "=== $d"; tail -n 200 x; done`,
+        parse: (o) => parseScfSamples(o),
+      },
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0)
+    await advance(10_000) // 采样窗 1:exec 抛错被吞
+    await advance(10_000)
+    await advance(10_000)
+    const outcome = await loop.done
+    expect(outcome.status).toBe('completed') // max-wait 正常结算
+    expect(outcome.detail).toContain('max-wait exceeded')
+  })
+})
+
+describe('jitterRatio(批量去同步)', () => {
+  it('抖动比 0.4:延迟落在 [d×0.6, d×1.4];缺省不抖动', async () => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0) // 恒取下界
+    const fake = fakeExec([{ out: row('100', 'RUNNING') }])
+    const loop = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: 86_400_000,
+      jitterRatio: 0.4,
+      execCommand: fake.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0) // 首跳 delay 0,不抖
+    await advance(5_999) // 10s×0.6=6s:未到
+    expect(fake.commands.length).toBe(1)
+    await advance(1_000) // t=6s:抖动下界恰好到
+    expect(fake.commands.length).toBe(2)
+    loop.cancel('done')
+    randomSpy.mockRestore()
+
+    const randomSpy2 = vi.spyOn(Math, 'random').mockReturnValue(1) // 恒取上界
+    const fake2 = fakeExec([{ out: row('100', 'RUNNING') }])
+    const loop2 = createWatchLoop({
+      clusterId: '11250',
+      jobIds: ['100'],
+      maxWaitMs: 86_400_000,
+      jitterRatio: 0.4,
+      execCommand: fake2.execCommand,
+      scheduleTimeout: (cb, ms) => setTimeout(cb, ms),
+      clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+    })
+    await advance(0)
+    await advance(13_999) // 10s×1.4=14s:未到
+    expect(fake2.commands.length).toBe(1)
+    await advance(1_000) // t=14s:抖动上界到
+    expect(fake2.commands.length).toBe(2)
+    loop2.cancel('done')
+    randomSpy2.mockRestore()
   })
 })

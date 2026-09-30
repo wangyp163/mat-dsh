@@ -4,6 +4,7 @@ signature: "FormBX had a problem|Tors failed for dihedral|Error termination via 
 task: [ts, tsxtb, qst2, qst3]
 versions: [">=1.6.0"]
 source: 压测 r13（集群 121466872/121467926：粗初猜默认参数 194s 稳定复现，同参重提原样再撞）
+prescription: [{"match":"初猜是平衡几何手摆直改","route":"换初猜：把反应坐标上应断/应成的键拉到过渡值（参考同反应族 TS 或文献键长）"},{"match":"有粗猜但质量存疑","route":"tsxtb 预优化（GFN2 秒级）拉成合理 TS 几何再走 DFT——标准 tsxtb+ts+irc 路径"},{"match":"qst2/qst3 报此错","route":"检查各帧几何合理性（键长极端、原子重叠、断键过头）"},{"match":"初猜看似合理仍崩","route":"微调涉及二面角的键长 ±0.1-0.2 Å 换一套内坐标基；仍失败换初猜"}]
 ---
 
 ## 症状

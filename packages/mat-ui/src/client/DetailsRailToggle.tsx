@@ -4,6 +4,7 @@ import type { JSX } from 'react'
 import { IconChevronLeftOutline14, IconChevronRightOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ILayout } from '@deepseek-ai/dsh-client-ui-layout/client'
+import { openDetailsWithRoom } from './layout-room'
 
 type DetailsRailToggleProps = PropsRuntime<'shell.overlay'> & { layout: ILayout }
 
@@ -49,7 +50,7 @@ export function DetailsRailToggle(props: DetailsRailToggleProps): JSX.Element | 
     title={open ? '收起任务面板' : '展开任务面板'}
     // 11px = 钮宽的一半：骑在详情列分隔线上；收起时贴视口右缘。
     style={{ right: `${Math.max(0, Math.round(detailsWidth) - 11)}px` }}
-    onClick={() => { if (open) layout.closeDetails(); else layout.openDetails() }}
+    onClick={() => { if (open) layout.closeDetails(); else openDetailsWithRoom(layout) }}
   >
     {open ? <IconChevronRightOutline14 /> : <IconChevronLeftOutline14 />}
   </button>

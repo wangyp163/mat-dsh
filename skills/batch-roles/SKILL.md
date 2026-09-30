@@ -2,8 +2,9 @@
 name: batch-roles
 # description 禁半角冒号（frontmatter 纪律，同 gaussian-calc 2026-08-28 教训）
 description: Use this skill when running as a batch-subagent role worker (prep / triage / analyst) for the mat batch portfolio spike. Defines each role's input, discipline boundaries, and the exact JSON verdict contract the parent validates — returns that fail the contract are rejected and retried once.
-version: 0.1.0
+version: 0.1.1
 metadata:
+  adaptation: 2026-09-23 M33 环境门禁机制化配套：门禁改 `mat_env_gate` 工具闸措辞（四入口 ENV_GATE_REJECTED 硬前置、一次通过按 (宿主进程,集群,引擎)+12h TTL 缓存，子 agent 自动继承不再重跑）
   adapted-for: mat-dsh batch-subagent spike
   plan: docs/superpowers/plans/2026-09-15-mat-batch-subagent-spike.md
 ---
@@ -16,8 +17,8 @@ metadata:
 
 ## 通用纪律（三个角色都继承）
 
-- **门禁第一条继承**：任何涉及集群的操作前，会话已完成环境门禁（主 agent 负责）；
-  你不重复探测环境、不读 workflow 源码、不猜 fallback。
+- **门禁继承是机制事实**：环境门禁按 (宿主进程, 集群, 引擎) 缓存 12 小时，主 agent 跑过一次后
+  你自动继承——**不要重跑 `mat_env_gate`**，也不重复探测环境、不读 workflow 源码、不猜 fallback。
 - **破坏性命令确认继承**：`rm`/`rm -rf`/`mv` 一律禁止——你没有权限执行，报告即可。
 - **不提交作业**：任何角色都不得 sbatch；提交权只在主 agent（预算闸管辖）。
 - **不读大文件原文**：日志/结果只取 tail/摘要/结构化字段；evidence 行每条 ≤200 字符。
@@ -76,6 +77,11 @@ frequencies 等——不给你 log 原文）。
 你全权负责**一条计算链的端到端生命周期**（如 opt→freq 分步两波）。与一次性工人
 不同：你是可续（continuable）后台子 agent，生命周期跨多个回合，有 `report` 工具
 可随时向委派你的经理汇报。
+
+> 适用性（M31 起）：链的逐波循环已可由代码 pipeline 承担（`mat_pipeline_start`
+> /`mat_pipeline_resume`，门检/记账/处方梯/死信全自动）——有 task-package
+> 编译产物的链优先走 pipeline，本角色退居无编译产物的存量链与 pipeline needs_llm
+> 后的诊断处置。
 
 **硬纪律（违反即链断）：**
 - **波内绝不结束回合**：提交作业后到该波终态结算前，你的回合必须保持打开——

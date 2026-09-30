@@ -1,4 +1,10 @@
-/** 查看器类型分派与结构格式转换（纯函数，无 DOM 依赖）。 */
+/** 查看器类型分派与结构格式转换（纯函数，无 DOM 依赖）。
+ * 解析/成键/配色管线已移至 structure-model.ts（OPTIMADE viewer 移植）；
+ * 本模块保留分类分派与 CIF 发射（emitCif）——poscarToCif/xyzToCif 是
+ * structure-model 解析结果的 CIF 序列化薄封装，输出与旧内联实现逐字节一致。 */
+
+import { parsePoscar, parseXyz } from './structure-model'
+import type { ParsedStructure } from './structure-model'
 
 export type ViewKind = 'structure' | 'image' | 'pdf' | 'text' | 'unsupported'
 
@@ -60,42 +66,23 @@ function emitCif(lengths: [number, number, number], angles: [number, number, num
   ].join('\n')
 }
 
-/**
- * xyz → CIF：分子没有晶胞，用坐标包围盒加两侧 8Å 余量的正交 P1 盒承载
- * （ vendored NGL 未注册 xyz 解析器，统一走 cif；分子源由面板跳过晶胞框）。
- */
-export function xyzToCif(text: string): string {
-  const raw = text.split(/\r?\n/)
-  let head = 0
-  while (head < raw.length && raw[head]!.trim() === '') head++
-  if (raw.length - head < 3) throw new Error('malformed XYZ: too few lines')
-  const declared = Number(raw[head]!.trim())
-  if (!Number.isInteger(declared) || declared < 1) throw new Error('malformed XYZ: bad atom count')
-  // 第 2 行是注释（可为空行），原子行从第 3 行起；原子行内再容忍空白。
-  const siteLines = raw.slice(head + 2).filter(line => line.trim() !== '')
-  if (siteLines.length < declared) throw new Error('malformed XYZ: fewer sites than declared')
-  const sites: Array<{ symbol: string; cartesian: [number, number, number] }> = []
-  for (const line of siteLines.slice(0, declared)) {
-    const tokens = line.trim().split(/\s+/)
-    const symbol = tokens[0]?.match(/^[A-Za-z]+/)?.[0]
-    const coordinates = tokens.slice(1, 4).map(Number)
-    if (symbol === undefined || coordinates.length < 3 || coordinates.some(value => !Number.isFinite(value))) {
-      throw new Error('malformed XYZ: bad site line')
-    }
-    sites.push({ symbol, cartesian: coordinates as [number, number, number] })
-  }
-
-  const MARGIN = 8
-  const extent = [0, 1, 2].map(axis => Math.max(...sites.map(site => site.cartesian[axis])) - Math.min(...sites.map(site => site.cartesian[axis])))
-  const origin = [0, 1, 2].map(axis => Math.min(...sites.map(site => site.cartesian[axis])) - MARGIN)
-  const box = extent.map(value => value + 2 * MARGIN) as [number, number, number]
-  return emitCif(box, [90, 90, 90], sites.map(site => ({
-    symbol: site.symbol,
-    fraction: [0, 1, 2].map(axis => (site.cartesian[axis] - origin[axis]!) / box[axis]!) as [number, number, number],
-  })))
+function toCif(parsed: ParsedStructure): string {
+  return emitCif(
+    [parsed.a, parsed.b, parsed.c],
+    [parsed.alpha, parsed.beta, parsed.gamma],
+    parsed.atoms.map(at => ({ symbol: at.elem, fraction: at.f })),
+  )
 }
 
-/** 结构文件统一转成 NGL 可加载的 CIF 文本：POSCAR 系与 xyz 转换，cif 原样。 */
+/**
+ * xyz → CIF：分子没有晶胞，用坐标包围盒加两侧 8Å 余量的正交 P1 盒承载
+ * （盒几何由 structure-model.parseXyz 决定）。
+ */
+export function xyzToCif(text: string): string {
+  return toCif(parseXyz(text))
+}
+
+/** 结构文件统一转成 CIF 文本（旧管线兼容出口）：POSCAR 系与 xyz 转换，cif 原样。 */
 export function structureBody(name: string, text: string): string {
   if (isPoscarFamily(name)) return poscarToCif(text)
   if (isXyz(name)) return xyzToCif(text)
@@ -107,102 +94,10 @@ export function isXyz(name: string): boolean {
   return extensionOf(name) === 'xyz'
 }
 
-type Mat3 = ReadonlyArray<ReadonlyArray<number>>
-
-function multiplyMatrixVector(matrix: Mat3, vector: ReadonlyArray<number>): number[] {
-  return [
-    vector[0]! * matrix[0]![0]! + vector[1]! * matrix[1]![0]! + vector[2]! * matrix[2]![0]!,
-    vector[0]! * matrix[0]![1]! + vector[1]! * matrix[1]![1]! + vector[2]! * matrix[2]![1]!,
-    vector[0]! * matrix[0]![2]! + vector[1]! * matrix[1]![2]! + vector[2]! * matrix[2]![2]!,
-  ]
-}
-
-function invertMatrix3(matrix: Mat3): number[][] {
-  const [[a, b, c], [d, e, f], [g, h, i]] = matrix as [number[], number[], number[]]
-  const cofactor = [
-    [e * i - f * h, f * g - d * i, d * h - e * g],
-    [c * h - b * i, a * i - c * g, b * g - a * h],
-    [b * f - c * e, c * d - a * f, a * e - b * d],
-  ]
-  const determinant = a * cofactor[0]![0]! + b * cofactor[0]![1]! + c * cofactor[0]![2]!
-  if (Math.abs(determinant) < 1e-12) throw new Error('malformed POSCAR: singular lattice')
-  // 逆 = 伴随阵 / 行列式，伴随阵 = 余子式阵的转置。
-  const transpose = (matrix: number[][]): number[][] => matrix[0]!.map((_, column) => matrix.map(row => row[column]!))
-  return transpose(cofactor).map(row => row.map(value => value / determinant))
-}
-
-function latticeMetrics(lattice: Mat3): { lengths: [number, number, number]; angles: [number, number, number] } {
-  const norm = (v: ReadonlyArray<number>) => Math.hypot(v[0]!, v[1]!, v[2]!)
-  const angle = (u: ReadonlyArray<number>, v: ReadonlyArray<number>) =>
-    Math.acos((u[0]! * v[0]! + u[1]! * v[1]! + u[2]! * v[2]!) / (norm(u) * norm(v))) * 180 / Math.PI
-  return {
-    lengths: [norm(lattice[0]!), norm(lattice[1]!), norm(lattice[2]!)],
-    angles: [angle(lattice[1]!, lattice[2]!), angle(lattice[0]!, lattice[2]!), angle(lattice[0]!, lattice[1]!)],
-  }
-}
-
 /**
  * POSCAR（VASP v5）→ 最小 CIF（P 1 + 分数坐标）。
- * 坐标约定与参考实现（optimade_mcp structure_viewer/cif.py）一致：cart = fract @ L。
+ * 坐标约定与参考实现（optimade_mcp structure_viewer）一致：cart = fract · L。
  */
 export function poscarToCif(text: string): string {
-  // 空白行无害（真实文件与导出器常在晶格后留空行），按 token 流解析前剔除。
-  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(line => line !== '')
-  const numbers = (line: string) => line.split(/\s+/).filter(Boolean)
-  if (lines.length < 9) throw new Error('malformed POSCAR: too few lines')
-  const scale = Number(numbers(lines[1]!)[0])
-  if (!Number.isFinite(scale) || scale <= 0) throw new Error('malformed POSCAR: bad scaling factor')
-  const lattice = lines.slice(2, 5).map(row => numbers(row).map(Number).slice(0, 3))
-  if (lattice.some(row => row.length < 3 || row.some(value => !Number.isFinite(value)))) {
-    throw new Error('malformed POSCAR: bad lattice vectors')
-  }
-  const scaled = lattice.map(row => row.map(value => value * scale)) as number[][]
-
-  let cursor = 5
-  const tokenIsCount = (token: string) => /^\d+$/.test(token)
-  const elementsRow = numbers(lines[cursor]!)
-  if (elementsRow.length === 0) throw new Error('malformed POSCAR: missing element symbols (v4 layouts unsupported)')
-  if (elementsRow.some(token => !tokenIsCount(token))) {
-    cursor += 1
-  } else {
-    throw new Error('malformed POSCAR: missing element symbols (v4 layouts unsupported)')
-  }
-  const elements = elementsRow
-  const counts = numbers(lines[cursor] ?? '').map(Number)
-  if (counts.length !== elements.length || counts.some(value => !Number.isInteger(value) || value <= 0)) {
-    throw new Error('malformed POSCAR: element counts do not match symbols')
-  }
-  cursor += 1
-
-  let mode: 'direct' | 'cartesian' | undefined
-  while (cursor < lines.length) {
-    const head = numbers(lines[cursor]!)[0]
-    if (head === undefined) { cursor += 1; continue }
-    if (/^s/i.test(head)) { cursor += 1; continue }
-    if (/^d/i.test(head)) mode = 'direct'
-    else if (/^c/i.test(head)) mode = 'cartesian'
-    break
-  }
-  if (mode === undefined) throw new Error('malformed POSCAR: missing Direct/Cartesian marker')
-  cursor += 1
-
-  const inverse = mode === 'cartesian' ? invertMatrix3(scaled) : undefined
-  const sites: Array<{ symbol: string; fraction: [number, number, number] }> = []
-  for (const [index, symbol] of elements.entries()) {
-    for (let nth = 0; nth < counts[index]!; nth++) {
-      const raw = numbers(lines[cursor] ?? '').map(Number).slice(0, 3)
-      if (raw.length < 3 || raw.some(value => !Number.isFinite(value))) {
-        throw new Error(`malformed POSCAR: bad coordinates for ${symbol} site ${nth + 1}`)
-      }
-      const fraction = inverse === undefined
-        ? raw as [number, number, number]
-        : multiplyMatrixVector(inverse, raw) as [number, number, number]
-      sites.push({ symbol, fraction })
-      cursor += 1
-    }
-  }
-  if (sites.length === 0) throw new Error('malformed POSCAR: no sites')
-
-  const { lengths, angles } = latticeMetrics(scaled)
-  return emitCif(lengths, angles, sites)
+  return toCif(parsePoscar(text))
 }

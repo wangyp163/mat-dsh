@@ -48,7 +48,7 @@ describe('三层树：工作区 → 会话 → 作业（09-07）', () => {
     const panel = await source('FileManagerPanel.tsx')
     expect(panel).toContain('mat-files__row--session')
     expect(panel).toMatch(/entry\.depth \+ 3/)
-    expect(panel).toContain('无跟踪作业')
+    expect(panel).toContain('无文件与作业')
   })
 })
 

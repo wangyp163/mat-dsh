@@ -101,3 +101,59 @@ stdout/stderr 双双混线。服务端按 (密钥, 集群) 复用 shell，与本
 `docs/evidence/post-m3/2026-09-04-exec-channel-crosstalk-fix.md`。
 
 
+
+## D0 P3：mat_task_build task 构建器（LLM + workflow adaptor）
+
+用户给**参数模板 + 计算流程最小描述**，快速构建可在 HPC 上运行的 Gaussian task。
+LLM 只站在两端（意图 → goal.json；结果 → 报告），中间全是确定性代码（D0 架构）：
+
+```
+用户(最小描述+参数模板) → agent(skills/task-builder) → goal.json(aimater.goal.v1)
+  → mat_task_build【纯本地编译，零集群副作用】
+      ├─ NEEDS_CLARIFICATION → questions[]（O2 阻塞式转述 → 修 goal → 重建）
+      └─ TASK_PACKAGE_READY → 波次 DAG + 每波 pre/run/post.json
+                              + 计算参数摘要 + digest + 执行 runbook
+  → 用户确认（摘要逐字转述）→ 执行：单波 mat_gaussian(confirmed_digest 直提)；
+                              多波按 runbook 逐波 run→sbatch→watch→post→波间门
+```
+
+- **`packages/mat-core/src/task-package.ts`**：确定性编译器（aimater.taskpackage.v1）。
+  one-stop/stepwise 模式判定（`opt+sp`/`aea`/多波组合走分步）；**one-stop digest 与
+  mat_gaussian 确认闸同源**（同一对 preJson/runJson 经 summarizePre→confirmationDigest），
+  批准后首次调用即可带 confirmed_digest 直提；stepwise 为全链规范摘要。
+- **goal 契约参数模板承载面**：`method.route_kwargs`（calculator_kwargs 附加键；路由键
+  仅 task 自身路由集放行——opt/freq/opt+freq/tddft/irc/polar，其余编译期拒绝）+
+  `resources.ncores/memory/walltime`（O1：pre.resources 唯一来源；ncores 同步 slurm 槽位；
+  walltime 优先于 accuracy 档位）。
+- **`mat_task_build` 工具**（mat-tools）+ `tool:mat-task-build` 引导段（order 103）：
+  输入 goal_json，输出三态（INVALID_GOAL / NEEDS_CLARIFICATION / TASK_PACKAGE_READY）；
+  自动接 mat-db 复用飞轮（同 label+task converged 历史标记复用、核时扣减）。
+- **`skills/task-builder/`**（v0.1.0）：LLM 侧 SOP——意图动词映射表、参数优先级
+  （用户显式 > 模板 > 默认档，全进 assumptions）、澄清环、确认闸、runbook 执行、结果消费。
+- 测试：`test/task-package.test.ts`（golden 8 例）+ `test/task-build-hook.test.ts`（接线 5 例）。
+  真实集群 e2e 待部署窗口（与 P1/P2 待办合并）。
+
+## matgen MCP 接入（树外 mcp-client 插件）
+
+材料筛选/生成能力（仓外 `~/aiagent/matgen` 的 matgen-mcp，HPC 容器 pod
+`matgen-mcp-pod:50046` 常驻 0.3.x）经宿主 `@deepseek-ai/dsh-mcp-client`
+以 streamable-http 接入，同 OPTIMADE 模式（`profiles/mat.yml` 的
+`matgen-mcp-reference`）。8 工具以 `mcp__matgen__<name>` 注册：
+`material_search_plan` / `material_search` / `structure_generate` /
+`conditioning_loop` / `ml_screen` / `ml_screen_status` / `server_info` /
+`vasp_plan`（筛选→生成→ML 弛豫→VASP 方案链）。
+
+- **通路**：pod 的 8080 无直连路由（k8s Service/Pod IP 实测超时），走
+  `scripts/matgen-tunnel.sh start|stop|status` 维护的 ssh 常驻隧道
+  （127.0.0.1:18080，断线 5s 自动重连；凭证 `MATGEN_POD_SSHPASS` 在
+  env.local）。dsh 起服务前先起隧道；mcp-client 自带指数退避重连与之互补。
+- **`toolCallTimeoutMs: 600000`**：ml_screen 的 MACE 弛豫常态数分钟，默认
+  60s 会掐死。
+- **探针**：`tsx scripts/probe-matgen.ts`（P1 /metrics → P2 握手 → P3 8 工具
+  清单 → P4 server_info 实调，全部只读）。
+- 2026-09-24 e2e：headless 会话经 glm-5.3-flash 实调
+  `mcp__matgen__server_info`（86ms 往返），version 0.3.0 / cuda true /
+  queue 空——工具面黑盒验收通过。
+- **协议 skill**：`skills/matgen/`（v0.1.0-demo）——候选发现与前筛的 SOP
+  （双路编排、selection 语法、异步 job 语义、A–E 证据分级与诚实口径、
+  术语表）。定位「闭环止于 vasp_plan」，执行段接 vasp-calc。

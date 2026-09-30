@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, StateDot } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ILayout } from '@deepseek-ai/dsh-client-ui-layout/client'
 import { fileManagerState } from './file-manager-state'
+import { openDetailsWithRoom } from './layout-room'
 import { jobOptionLabel, jobsForSession } from './status-model'
 import type { MonitorJob } from './status-model'
 
@@ -15,6 +17,7 @@ type Job = MonitorJob & {
 
 type StatusDockProps = PropsRuntime<'conversation.input.dock'> & {
   onOpenTask?: () => void
+  layout?: ILayout
 }
 
 function statusState(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
@@ -25,6 +28,7 @@ function statusState(job: Job): 'done' | 'warning' | 'ongoing' | 'error' {
 export function StatusDock({
   sessionId,
   openDetailsTab,
+  layout,
   onOpenTask = () => { openDetailsTab?.('mat-task') },
 }: StatusDockProps): JSX.Element | null {
   const [jobs, setJobs] = useState<Job[]>([])
@@ -54,7 +58,11 @@ export function StatusDock({
     <div className="mat-status-strip" role="status">
       <StateDot state={statusState(selected)} />
       <span className="mat-status-strip__label">
-        {selected.phase === 'settled' ? 'Computation finished' : 'Computation running'}
+        {selected.phase === 'settled'
+          ? 'Computation finished'
+          : selected.phase === 'queued'
+            ? 'Queued — waiting for partition'
+            : 'Computation running'}
       </span>
       <select
         aria-label="Current conversation task"
@@ -65,7 +73,7 @@ export function StatusDock({
       </select>
       <span className="mat-status-strip__count">{visible.length} tasks</span>
       <Button size="sm" variant="outline" aria-label={`打开任务面板 ${selected.jobId}`} onClick={onOpenTask}>任务</Button>
-      <Button size="sm" variant="outline" aria-label="打开文件面板" onClick={() => { openDetailsTab?.('mat-files') }}>文件</Button>
+      <Button size="sm" variant="outline" aria-label="打开文件面板" onClick={() => { if (layout !== undefined) openDetailsWithRoom(layout); openDetailsTab?.('mat-files') }}>文件</Button>
     </div>
   )
 }

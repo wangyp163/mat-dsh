@@ -44,6 +44,7 @@ function makeCtx() {
     },
   }
   const ctx = {
+    on: () => () => {},
     systemPrompt: { section: (_s: unknown) => {} },
     tools: {
       register: (t: RegisteredTool) => { tools.set(t.name, t) },
@@ -75,6 +76,8 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
   beforeEach(async () => {
     testRoot = await mkdtemp('/tmp/mat-status-wiring-')
     vi.stubEnv('MAT_FILE_ROOT', testRoot)
+    // 环境门禁与本用例正交（本文件测的是别的闸）——整闸关闭，免得每例先跑一遍门禁
+    vi.stubEnv('MAT_ENV_GATE', 'off')
     vi.useFakeTimers()
     apply(makeCtx().ctx) // 先注册一遍拿 provide 语义？——不：每用例自建 ctx，见下
   })
@@ -216,11 +219,11 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       expect.objectContaining({
         jobId: '11250:100', kind: 'mat-watch', label: '100', clusterId: '11250',
         ownerSession: 'sess-a', localWorkspace: `${testRoot}/11250/100`,
-        phase: 'monitoring',
+        phase: 'running', // R2：首 tick 见 RUNNING（原 monitoring）
         slurm: [{ id: '100', state: 'RUNNING', exitCode: 0, elapsedSeconds: 15 }],
       }),
       expect.objectContaining({
-        jobId: '11250:101', label: '101',
+        jobId: '11250:101', label: '101', phase: 'queued', // R2：全 PENDING → queued
         slurm: [{ id: '101', state: 'PENDING', exitCode: 0, elapsedSeconds: 0 }],
       }),
     ]))
@@ -312,7 +315,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     const entries = (provided.get('mat.status') as StatusBoard).list()
       .filter(entry => entry.clusterId === '11250')
     expect(entries).toHaveLength(1)
-    expect(entries[0]).toMatchObject({ jobId: '11250:100', ownerSession: 'sess-b', phase: 'monitoring' })
+    expect(entries[0]).toMatchObject({ jobId: '11250:100', ownerSession: 'sess-b', phase: 'running' }) // R2：RUNNING → running
   })
 
   it('mat_gaussian：自定义 run_json partition 投影到状态板', async () => {
@@ -328,7 +331,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     ])
     await tools.get('mat_gaussian')!.execute({
       cluster_id: '11250', task: 'opt', structure: XYZ, workdir: '/home/u/custom', partition: 'IgnoredArgument',
-      options: { run_json: { slurm: { partition: 'CustomQueue' } } },
+      options: { run_json: { slurm: { partition: 'CustomQueue' } }, confirmation_gate: 'off' },
     }, {})
     await advance(0)
     expect(board.list()[0].partition).toBe('CustomQueue')
@@ -349,7 +352,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
     ])
     const gaussian = tools.get('mat_gaussian')!
     const submit = await gaussian.execute(
-      { cluster_id: '11250', task: 'opt+freq', structure: XYZ, workdir: '/home/u/w' },
+      { cluster_id: '11250', task: 'opt+freq', structure: XYZ, workdir: '/home/u/w', options: { confirmation_gate: 'off' } },
       { agent: { id: 'sess-a' } },
     )
     expect(submit).toContain('slurm job 700')
@@ -362,10 +365,10 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       clusterId: '11250',
       ownerSession: 'sess-a',
       localWorkspace: `${testRoot}/11250/700`,
-      phase: 'monitoring',
+      phase: 'running', // R2：首 tick 见 RUNNING（原 monitoring）
       task: 'opt+freq',
       workdir: '/home/u/w',
-      partition: 'Agent0',
+      partition: 'kshcnormal',
       slurm: [{ id: '700', state: 'RUNNING', exitCode: 0, elapsedSeconds: 15 }],
     })
     await advance(10_000)
@@ -379,6 +382,68 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       { kind: 'ir_spectrum', image: '/home/u/w/freq/ir_spectrum.png', data: '/home/u/w/freq/ir_spectrum.csv' },
       { kind: 'scf_convergence', image: null, data: '/home/u/w/freq/scf_convergence.csv' },
     ])
+  })
+
+  it('R2 跃迁通知：长排队（PENDING≥60s）后观察到 RUNNING → owner.followup 一次性"已开始运行"', async () => {
+    const { ctx, tools } = makeCtx()
+    apply(ctx)
+    const followup = vi.fn()
+    const T0 = Date.now()
+    let sacctCalls = 0
+    vi.spyOn(MatClient.prototype, 'execCommand').mockImplementation(async (_c, command) => {
+      if (command.includes('sacct')) {
+        sacctCalls += 1
+        const t = Date.now() - T0
+        // 时钟驱动状态机（轮询节律无关）：前 60s 排队，60-130s 运行，之后完成。
+        // 跃迁通知是 best-effort：RUNNING 窗口必须宽于轮询间隔才会被拍到（窗口被
+        // 跳过时直接 PENDING→COMPLETED，不通知不算缺陷——语义见 SKILL M30）。
+        const out = t < 60_000 ? '710|PENDING|0:0|0\n' : t < 130_000 ? '710|RUNNING|0:0|60\n' : '710|COMPLETED|0:0|120\n'
+        return { code: 0, data: out, message: '' }
+      }
+      if (command.includes('PREP_READY') || command.includes('mkdir -p')) return { code: 0, data: 'PREP_READY\n', message: '' }
+      if (command.includes('-p pre') || command.includes('-p run')) return { code: 0, data: '{"status": "ok"}\n', message: '' }
+      if (command.includes('sbatch slurm.sh')) return { code: 0, data: 'Submitted batch job 710\n', message: '' }
+      if (command.includes('-p post')) return { code: 0, data: POST_OK_OUTPUT, message: '' }
+      throw new Error(`unexpected command: ${command.slice(0, 90)}`)
+    })
+    await tools.get('mat_gaussian')!.execute(
+      { cluster_id: '11250', task: 'opt', structure: XYZ, workdir: '/home/u/q1', options: { confirmation_gate: 'off' } },
+      { agent: { id: 'sess-q', followup } as never },
+    )
+    await advance(70_000)   // 跨过 60s 排队 + 首个 RUNNING 观察拍
+    expect(followup).toHaveBeenCalledTimes(1)
+    const text = JSON.stringify(followup.mock.calls[0])
+    expect(text).toContain('started running')
+    expect(text).toMatch(/\d+s in queue/)
+    await advance(70_000)   // COMPLETED 结算
+    expect(followup).toHaveBeenCalledTimes(1) // 只推一次
+    expect(sacctCalls).toBeGreaterThan(3)
+  })
+
+  it('R2 跃迁通知：短排队（<60s）不打扰；RUNNING 窗口被跳过时静默（best-effort）', async () => {
+    const { ctx, tools } = makeCtx()
+    apply(ctx)
+    const followup = vi.fn()
+    const T0 = Date.now()
+    vi.spyOn(MatClient.prototype, 'execCommand').mockImplementation(async (_c, command) => {
+      if (command.includes('sacct')) {
+        const t = Date.now() - T0
+        // PENDING 仅 20s：RUNNING 观察拍落在 ~30s，排队计时 <60 阈值 → 不通知
+        const out = t < 20_000 ? '711|PENDING|0:0|0\n' : t < 90_000 ? '711|RUNNING|0:0|20\n' : '711|COMPLETED|0:0|60\n'
+        return { code: 0, data: out, message: '' }
+      }
+      if (command.includes('PREP_READY') || command.includes('mkdir -p')) return { code: 0, data: 'PREP_READY\n', message: '' }
+      if (command.includes('-p pre') || command.includes('-p run')) return { code: 0, data: '{"status": "ok"}\n', message: '' }
+      if (command.includes('sbatch slurm.sh')) return { code: 0, data: 'Submitted batch job 711\n', message: '' }
+      if (command.includes('-p post')) return { code: 0, data: POST_OK_OUTPUT, message: '' }
+      throw new Error(`unexpected command: ${command.slice(0, 90)}`)
+    })
+    await tools.get('mat_gaussian')!.execute(
+      { cluster_id: '11250', task: 'opt', structure: XYZ, workdir: '/home/u/q2', options: { confirmation_gate: 'off' } },
+      { agent: { id: 'sess-q2', followup } as never },
+    )
+    await advance(120_000)
+    expect(followup).not.toHaveBeenCalled()
   })
 
   it('mat_gaussian：producer 轮询默认封顶 30s（DEFAULT_PRODUCER_POLL_SECONDS 接线）', async () => {
@@ -397,7 +462,7 @@ describe('mat.status 板接线（watch/gaussian producer 喂料）', () => {
       throw new Error(`unexpected command: ${command.slice(0, 90)}`)
     })
     await tools.get('mat_gaussian')!.execute(
-      { cluster_id: '11250', task: 'opt', structure: XYZ, workdir: '/home/u/pollcap' },
+      { cluster_id: '11250', task: 'opt', structure: XYZ, workdir: '/home/u/pollcap', options: { confirmation_gate: 'off' } },
       {},
     )
     // 时间线（cap 30s）：t=0 首 + 首 60s 内 10s×6 跳（10..60），elapsed≥60s 后 60s 自适应档被 30s 封顶
