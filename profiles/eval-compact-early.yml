@@ -1,0 +1,8 @@
+# P2 泳道 EARLY：早触发摘要压缩（窗口保持健康值 40960，输出预算不受损）。
+# thresholdRatio 0.8→0.35：阈值从 32.8k 降到 14.3k——长任务的 surface 中段
+# 即触发 compaction/summary；retainRatio 保持默认 0.16（与 FAT 泳道对照用）。
+
+- id: compaction-basic
+  config:
+    thresholdRatio: 0.15
+    retainRatio: 0.08

@@ -8,7 +8,7 @@
  * 探针项（全部只读，零副作用）：
  *   P1 /metrics 可达（隧道 + 常驻服务存活，prometheus 文本）
  *   P2 initialize 握手（serverInfo name/version）
- *   P3 tools/list（期望 9 工具：server_info/search_plan/structure_screen/
+ *   P3 tools/list（期望 10 工具：server_info/search_plan/landscape_check/
  *      structure_generate/…/structure_export——2026-09-28 新增导出工具）
  *   P4 tools/call server_info（version / device / queue / upstream providers）
  *
@@ -87,9 +87,9 @@ async function main(): Promise<void> {
     if (!session) throw new Error('无会话（P2 未通过）')
     const { result } = await rpc('tools/list', {}, session)
     const tools = ((result as { tools?: Array<{ name: string; description?: string }> }).tools ?? []).map((t) => t.name)
-    tools.length === 9
-      ? ok('P3', `9 工具：${tools.join(', ')}`)
-      : fail('P3', `工具数 ${tools.length}（期望 9）：${tools.join(', ') || '(空)'}`)
+    tools.length === 10
+      ? ok('P3', `10 工具：${tools.join(', ')}`)
+      : fail('P3', `工具数 ${tools.length}（期望 10）：${tools.join(', ') || '(空)'}`)
   } catch (err) {
     fail('P3', err instanceof Error ? err.message : String(err))
   }

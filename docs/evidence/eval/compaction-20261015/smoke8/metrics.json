@@ -1,0 +1,82 @@
+{
+  "ranAt": "2026-10-15T07:43:02.514Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 1,
+  "totalInputTokens": 53822,
+  "totalOutputTokens": 2223,
+  "tasks": [
+    {
+      "id": "long-gaussian-pair",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "mat_gaussian": 4,
+        "job_output": 2
+      },
+      "inputTokens": 53822,
+      "outputTokens": 2223,
+      "wallSec": 203,
+      "sessionFound": true,
+      "compactionCount": 5,
+      "pruneCount": 1,
+      "summaryCount": 4,
+      "shadowedTokens": 21678,
+      "stepInputTokens": [
+        null,
+        25181,
+        9808,
+        1790,
+        8046,
+        8997
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 7737,
+          "shadowedMessages": 1,
+          "rangeStart": 112,
+          "rangeEnd": 112,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4318,
+          "shadowedMessages": 3,
+          "rangeStart": 7,
+          "rangeEnd": 9,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 641,
+          "shadowedMessages": 1,
+          "rangeStart": 120,
+          "rangeEnd": 120,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4232,
+          "shadowedMessages": 5,
+          "rangeStart": 124,
+          "rangeEnd": 114,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4750,
+          "shadowedMessages": 2,
+          "rangeStart": 635,
+          "rangeEnd": 127,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    }
+  ]
+}

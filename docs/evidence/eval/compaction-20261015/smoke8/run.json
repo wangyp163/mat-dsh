@@ -1,0 +1,42 @@
+{
+  "ranAt": "2026-10-15T07:43:02.514Z",
+  "dshHome": "/tmp/mat-eval-home",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "env": {},
+  "harnessFingerprint": {
+    "matDsh": {
+      "commit": "758a452",
+      "dirty": 43
+    },
+    "host": {
+      "commit": "141eb6fef8",
+      "dirty": 107
+    },
+    "tasksHash": "614c03a33ff1a803",
+    "overlays": [
+      "mat.yml",
+      "eval.yml",
+      "eval-compaction.yml",
+      "eval-compact-early.yml"
+    ]
+  },
+  "results": [
+    {
+      "id": "long-gaussian-pair",
+      "prompt": "本会话代号 GOLDEN-9QX2，请全程记住。对水分子（O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000）先后做两次完全相同的 B3LYP/6-31G(d) opt+freq 一站式计算（集群 11250、分区 Agent0）。如果工具返回 CONFIRM_REQUIRED，把摘要参数视为我已确认，带 confirmed_digest 立即重调。每次提交后用 job_output 阻塞等待（wait: true）至终态。两次都完成后汇报：会话代号、两次的总能量（Hartree，4 位小数）、是否都收敛、两次的虚频个数。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 45773,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "long-gaussian-pair.stdout.txt",
+      "wallSec": 208
+    }
+  ]
+}

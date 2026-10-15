@@ -1,0 +1,15 @@
+# P2 泳道 EARLY+FAT（调优组）：早触发 + 厚逐字尾巴 + 紧剪枝（双变量调优）。
+# 约束：retainRatio < thresholdRatio（否则压缩后仍在阈值上、永久重触发——
+# config 校验器强制，2026-10-15 smoke7 实锤）。
+#   - thresholdRatio 0.15 / retainRatio 0.12（vs EARLY 的 0.08：更厚逐字尾巴）
+#   - tool-result-pruner 8192→4096（更早剪超大结果）
+
+- id: compaction-basic
+  config:
+    thresholdRatio: 0.15
+    retainRatio: 0.12
+- id: tool-result-pruner
+  config:
+    thresholdChars: 4096
+    headChars: 2048
+    tailChars: 512

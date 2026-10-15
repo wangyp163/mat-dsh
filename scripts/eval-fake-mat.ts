@@ -51,6 +51,28 @@ const PORT = argNumber('port', 0)
 const SCENARIO = argString('scenario', 'completed') as 'completed' | 'failed'
 const PENDING_MS = argNumber('pending-ms', 5000)
 const RUN_MS = argNumber('run-ms', 12000)
+// P2 长会话填充：撑大工具输出（配合小 contextWindow 声明触发 compaction）。
+// sinfo 追加合成分区行；gaussian 三相位输出前插 banner 行（parsePostOutput
+// 取首个 '{' 行，前置非 JSON 行安全）。
+const PAD_SINFO = argNumber('pad-sinfo', 0)
+const PAD_GAUSSIAN = argNumber('pad-gaussian', 0)
+
+function padSinfo(base: string): string {
+  if (PAD_SINFO <= 0) return base
+  const rows: string[] = []
+  for (let i = 0; i < PAD_SINFO; i += 1) {
+    rows.push(`evalpad-${String(i).padStart(5, '0')}|up|1-00:00:00|64|idle`)
+  }
+  return `${base}${rows.join('\n')}\n`
+}
+function padGaussian(base: string): string {
+  if (PAD_GAUSSIAN <= 0) return base
+  const lines: string[] = []
+  for (let i = 0; i < PAD_GAUSSIAN; i += 1) {
+    lines.push(`[GAUSSIAN-WORKFLOW-KSYZQ] eval padding line ${i} 0123456789abcdefghijklmnopqrstuvwxyz`)
+  }
+  return `${lines.join('\n')}\n${base}`
+}
 
 // ── 夹具（真实录制，PROVENANCE 见 test/contract/PROVENANCE.md） ─────────────
 
@@ -166,7 +188,7 @@ const ENV_GATE_JSON = JSON.stringify({
 function routeCommand(command: string): string {
   // 顺序即优先级；全部按「正确行为必然出现的子串」匹配，不锁完整命令形态。
   if (command.includes('check_environment.sh')) return ENV_GATE_JSON
-  if (command.includes('sinfo -o')) return fixtures.sinfo
+  if (command.includes('sinfo -o')) return padSinfo(fixtures.sinfo)
   if (/sacct -j /.test(command)) {
     const m = /sacct -j ([\d,]+)/.exec(command)
     const ids = (m?.[1] ?? '').split(',').filter(Boolean)
@@ -185,10 +207,10 @@ function routeCommand(command: string): string {
   }
   if (command.includes('printf %s "$HOME"')) return '/public/home/eval'
   if (command.includes('PREP_READY')) return 'PREP_READY'
-  if (/gaussian-workflow -t \S+ -p pre /.test(command)) return fixtures.pre
-  if (/gaussian-workflow -t \S+ -p run /.test(command)) return fixtures.run
+  if (/gaussian-workflow -t \S+ -p pre /.test(command)) return padGaussian(fixtures.pre)
+  if (/gaussian-workflow -t \S+ -p run /.test(command)) return padGaussian(fixtures.run)
   if (/gaussian-workflow -t \S+ -p post /.test(command)) {
-    return SCENARIO === 'failed' ? POST_FAILED_STDOUT : fixtures.post
+    return padGaussian(SCENARIO === 'failed' ? POST_FAILED_STDOUT : fixtures.post)
   }
   if (/job\.log/.test(command) && /tail /.test(command)) {
     return SCENARIO === 'failed' ? LOG_TAIL_FAILED : LOG_TAIL_COMPLETED

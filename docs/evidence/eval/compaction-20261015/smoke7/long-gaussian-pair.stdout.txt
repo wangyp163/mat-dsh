@@ -1,0 +1,43 @@
+[ELIFECYCLE] Command failed with exit code 1.
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compaction.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compact-early.yml '本会话代号 GOLDEN-9QX2，请全程记住。对水分子（O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000）先后做两次完全相同的 B3LYP/6-31G(d) opt+freq 一站式计算（集群 11250、分区 Agent0）。如果工具返回 CONFIRM_REQUIRED，把摘要参数视为我已确认，带 confirmed_digest 立即重调。每次提交后用 job_output 阻塞等待（wait: true）至终态。两次都完成后汇报：会话代号、两次的总能量（Hartree，4 位小数）、是否都收敛、两次的虚频个数。'
+(node:167545) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+dsh: failed to apply loader entry compaction-basic (@deepseek-ai/dsh-compaction-basic): BasicCompactionConfig: retainRatio (0.16) must be less than the resolved thresholdRatio (0.15)
+~/mat-harness/deepseek-harness/packages/boot/app-boot/src/index.ts:800
+    throw new Error(`${binName}: ${stage}: ${detail}${stack}`, { cause })
+          ^
+
+Error: dsh: plugin tree failed to load: failed to apply loader entry compaction-basic (@deepseek-ai/dsh-compaction-basic): BasicCompactionConfig: retainRatio (0.16) must be less than the resolved thresholdRatio (0.15)
+Error: BasicCompactionConfig: retainRatio (0.16) must be less than the resolved thresholdRatio (0.15)
+    at validateRatioRetention (~/mat-harness/deepseek-harness/packages/compaction/compaction-basic/src/config.ts:186:11)
+    at resolveConfig (~/mat-harness/deepseek-harness/packages/compaction/compaction-basic/src/config.ts:76:3)
+    at new BasicCompactionEngine (~/mat-harness/deepseek-harness/packages/compaction/compaction-basic/src/index.ts:128:19)
+    at Fiber.execute (~/mat-harness/deepseek-harness/vendor/cordis/src/fiber.ts:253:30)
+    at <anonymous> (~/mat-harness/deepseek-harness/vendor/cordis/src/fiber.ts:366:45)
+    at file:///tmp/mat-eval-home/profiles/headless/#compaction-basic
+    at file:///tmp/mat-eval-home/profiles/headless/#include
+    at boot (~/mat-harness/deepseek-harness/packages/boot/app-boot/src/index.ts:800:11)
+    at async runProfile (~/mat-harness/deepseek-harness/apps/cli/src/profile-boot.ts:248:15)
+    at async <anonymous> (~/mat-harness/deepseek-harness/apps/cli/src/bin.ts:32:5) {
+  [cause]: Error: failed to apply loader entry compaction-basic (@deepseek-ai/dsh-compaction-basic): BasicCompactionConfig: retainRatio (0.16) must be less than the resolved thresholdRatio (0.15)
+      at updateError (~/mat-harness/deepseek-harness/vendor/loader/src/config/entry.ts:26:10)
+      at Entry._await (~/mat-harness/deepseek-harness/vendor/loader/src/config/entry.ts:273:13)
+      at async Promise.allSettled (index 49)
+      at async Proxy.await (~/mat-harness/deepseek-harness/vendor/loader/src/config/tree.ts:53:24)
+      at async boot (~/mat-harness/deepseek-harness/packages/boot/app-boot/src/index.ts:782:5)
+      at async runProfile (~/mat-harness/deepseek-harness/apps/cli/src/profile-boot.ts:248:15)
+      at async <anonymous> (~/mat-harness/deepseek-harness/apps/cli/src/bin.ts:32:5) {
+    [cause]: Error: BasicCompactionConfig: retainRatio (0.16) must be less than the resolved thresholdRatio (0.15)
+        at validateRatioRetention (~/mat-harness/deepseek-harness/packages/compaction/compaction-basic/src/config.ts:186:11)
+        at resolveConfig (~/mat-harness/deepseek-harness/packages/compaction/compaction-basic/src/config.ts:76:3)
+        at new BasicCompactionEngine (~/mat-harness/deepseek-harness/packages/compaction/compaction-basic/src/index.ts:128:19)
+        at Fiber.execute (~/mat-harness/deepseek-harness/vendor/cordis/src/fiber.ts:253:30)
+        at <anonymous> (~/mat-harness/deepseek-harness/vendor/cordis/src/fiber.ts:366:45)
+        at file:///tmp/mat-eval-home/profiles/headless/#compaction-basic
+        at file:///tmp/mat-eval-home/profiles/headless/#include
+  }
+}
+
+Node.js v22.22.0

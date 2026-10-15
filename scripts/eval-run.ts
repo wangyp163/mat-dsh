@@ -21,10 +21,11 @@
  * 选项：--dsh-home <dir>（缺省 /tmp/mat-eval-home，跨轮复用省引导）；
  *       --keep-failed-dsh-home 调试时保留。
  */
-import { spawn } from 'node:child_process'
+import { spawn, execSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync, writeFileSync, cpSync, type Dirent } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { createServer } from 'node:net'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { GOLDEN_TASKS, type GoldenTask } from './eval-golden-tasks.ts'
 
@@ -61,6 +62,16 @@ for (let i = 0; i < process.argv.length; i += 1) {
     if (eq > 0) extraEnv[kv.slice(0, eq)] = kv.slice(eq + 1)
   }
 }
+// --overlay <path>（可重复）：追加 dsh --patch 栈（实验泳道用，如
+// profiles/eval-compaction.yml 小窗口 / eval-compact-tuned.yml 调参）
+const extraOverlays: string[] = []
+for (let i = 0; i < process.argv.length; i += 1) {
+  if (process.argv[i] === '--overlay') {
+    const p = process.argv[i + 1]
+    if (p && !p.startsWith('-')) extraOverlays.push(resolve(MAT_ROOT, p))
+  }
+}
+const overlays = [OVERLAY_MAT, OVERLAY_EVAL, ...extraOverlays]
 
 const tasks: GoldenTask[] = tasksArg === 'all'
   ? GOLDEN_TASKS
@@ -233,7 +244,9 @@ for (const task of tasks) {
   //    只杀直接子进程会漏孙进程，2026-10-15 基线轮实锤泄漏后修正）
   const fake = spawn('pnpm', ['exec', 'tsx', join('scripts', 'eval-fake-mat.ts'),
     '--port', String(port), '--scenario', task.fake.scenario,
-    '--pending-ms', String(task.fake.pendingMs), '--run-ms', String(task.fake.runMs)], {
+    '--pending-ms', String(task.fake.pendingMs), '--run-ms', String(task.fake.runMs),
+    ...(task.fake.padSinfo ? ['--pad-sinfo', String(task.fake.padSinfo)] : []),
+    ...(task.fake.padGaussian ? ['--pad-gaussian', String(task.fake.padGaussian)] : [])], {
     cwd: MAT_ROOT, env: { ...process.env } as Record<string, string>, stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   })
@@ -258,7 +271,7 @@ for (const task of tasks) {
   const startedAt = Date.now()
   const limit = Math.min(task.timeoutSec, timeoutCap)
   const r = await runGroup('pnpm', ['dsh', '--profile', 'headless',
-    '--patch', OVERLAY_MAT, '--patch', OVERLAY_EVAL, task.prompt], {
+    ...overlays.flatMap((o) => ['--patch', o]), task.prompt], {
     cwd: HOST_REPO, env: dshEnv(task.id, port), timeoutSec: limit,
   })
   const wallSec = Math.round((Date.now() - startedAt) / 1000)
@@ -279,12 +292,33 @@ for (const task of tasks) {
   console.log(`[eval-run] ${task.id}：exit=${r.code}${r.timedOut ? '(TIMEOUT)' : ''} wall=${wallSec}s sessions=${newFiles.length}`)
 }
 
+/** 实验指纹：git 状态 + 任务集哈希（P2 纪律——实验数据必须对得上代码版本）。 */
+function gitInfo(dir: string): { commit: string; dirty: number } {
+  try {
+    const commit = execSync('git rev-parse --short HEAD', { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    const dirty = execSync('git status --porcelain', { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .trim().split('\n').filter(Boolean).length
+    return { commit, dirty }
+  } catch {
+    return { commit: 'unknown', dirty: -1 }
+  }
+}
+const harnessFingerprint = {
+  matDsh: gitInfo(MAT_ROOT),
+  host: gitInfo(resolve(MAT_ROOT, '..', 'deepseek-harness')),
+  tasksHash: createHash('sha256')
+    .update(readFileSync(join(MAT_ROOT, 'scripts', 'eval-golden-tasks.ts')))
+    .digest('hex').slice(0, 16),
+  overlays: overlays.map((o) => basename(o)),
+}
+
 const manifest = {
   ranAt: new Date().toISOString(),
   dshHome,
   provider, model,
   lane: 'replay',
   env: extraEnv,
+  harnessFingerprint,
   results,
 }
 writeFileSync(join(outDir, 'run.json'), JSON.stringify(manifest, null, 2) + '\n')

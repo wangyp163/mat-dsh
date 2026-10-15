@@ -1,0 +1,7 @@
+# P2 compaction 实验泳道 B2（关闭对照）overlay：整行禁用自动压缩。
+# 预期形态：小窗口（eval-compaction.yml）+ 无压缩 → 请求跨过声明窗口即
+# CONTEXT_WINDOW_EXCEEDED 且无自动恢复——任务失败是**本泳道的预期产物**
+# （演示"没有 compaction 的 harness 在长会话下的死法"）。
+
+- id: compaction-basic
+  disabled: true

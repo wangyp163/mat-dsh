@@ -1,0 +1,48 @@
+# P2 compaction 实验 overlay：小 contextWindow 声明（叠加在 mat.yml 之上）。
+#
+# 目的：把 deepseek-v4-pro 的声明窗口从生产 1M 收到 40960——compaction-basic
+# 的自动触发阈值是 thresholdRatio(0.8) × 声明窗口 ≈ 13.1k token，长会话任务
+# （padSinfo/padGaussian 填充输出）在数步内即可触压。这是**实验泳道专用**
+# 声明：测的是压缩机制行为，不是生产窗口语义。
+#
+# 注意：config patch 是整行替换——本文件完整重写 llm-pi-ai 行（只保留 mat
+# provider；bigmodel 路由的 key 在本机 env.local 为空、实验泳道不用，略去）。
+# 40960 的选择：请求 1（system+skill+schema ≈25k）在阈值下不触发；请求 2-3
+# 跨过 32.8k 触发首轮压缩；retainRatio 0.16 + 摘要后回到 ~15-20k，任务余量
+# 内可能二次触压——多轮压缩正是取证想要的。
+
+- id: llm-pi-ai
+  config:
+    providers:
+      mat:
+        displayName: HPC LLM
+        apiKeyEnv: LLM_API_KEY
+        api: openai-completions
+        baseURL: !!js process.env.LLM_BASE_URL
+        compat:
+          thinkingFormat: deepseek
+        reasoning: high
+        models:
+          - id: deepseek-v4-pro
+            name: DeepSeek-V4-Pro
+            # 实验声明窗口（生产为 1000000）
+            contextWindow: 40960
+            # 输出预算防饿死：pi-ai 的 maxTokens = min(显式cap, 窗口−prompt估算−4096)，
+            # 无显式 cap 时小窗口会把输出挤到个位数（2026-10-15 smoke2/3 实锤 out=2）
+            maxTokens: 4096
+            reasoningEfforts:
+              off:
+              low: low
+              high: high
+              max: max
+          - id: deepseek-v4-flash
+            name: DeepSeek-V4-Flash
+            contextWindow: 40960
+            # 输出预算防饿死：pi-ai 的 maxTokens = min(显式cap, 窗口−prompt估算−4096)，
+            # 无显式 cap 时小窗口会把输出挤到个位数（2026-10-15 smoke2/3 实锤 out=2）
+            maxTokens: 4096
+            reasoningEfforts:
+              off:
+              low: low
+              high: high
+              max: max

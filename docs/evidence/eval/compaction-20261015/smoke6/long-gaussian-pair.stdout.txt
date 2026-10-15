@@ -1,0 +1,20 @@
+两次计算全部完成。以下是汇总报告：
+
+---
+
+## GOLDEN-9QX2 水分子 B3LYP/6-31G(d) opt+freq 双次验证
+
+| | Run 1 (#900001) | Run 2 (#900002) |
+|---|---|---|
+| **总能量 / Hartree** | **−76.4090** | **−76.4090** |
+| **收敛** | ✅ 是 | ✅ 是 |
+| **虚频个数** | 0 | 0 |
+
+**会话代号**：GOLDEN-9QX2
+
+两次计算的能量完全一致（`−76.4089539792` Hartree → 4 位小数 `−76.4090`），均收敛、均无虚频，结果可复现。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compaction.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compact-early.yml '本会话代号 GOLDEN-9QX2，请全程记住。对水分子（O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000）先后做两次完全相同的 B3LYP/6-31G(d) opt+freq 一站式计算（集群 11250、分区 Agent0）。如果工具返回 CONFIRM_REQUIRED，把摘要参数视为我已确认，带 confirmed_digest 立即重调。每次提交后用 job_output 阻塞等待（wait: true）至终态。两次都完成后汇报：会话代号、两次的总能量（Hartree，4 位小数）、是否都收敛、两次的虚频个数。'
+(node:156048) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

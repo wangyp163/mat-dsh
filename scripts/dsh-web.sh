@@ -7,29 +7,55 @@
 #   - pid 文件 /tmp/mat-dsh-web.pid 记录进程组 id（setsid 启动，stop 杀整组）
 #   - 旧实例无 pid 文件时（脚本启用前手启的），按端口 3080 反查并连同 pnpm 父进程一起终止
 #   - env.local 含凭据：只 source，绝不 cat/echo；日志只重定向 stdout/stderr
+#
+# 组合拓扑（2026-10-08 可移植化改造）：环境无关插件行收编在
+# packages/mat-bundle/cordis.patch.yml，dev 与目标机同构装载——本脚本把
+# mat-bundle（及其包族软链）注入 $DSH_HOME_DIR/profiles/web：
+#   - node_modules 软链：mat-tools / mat-ui / mat-skills / mat-bundle
+#   - package.json 幂等追加 dsh.profile.bundles += "mat-bundle"
+# profiles/mat.yml 只剩环境相关行（LLM 路由 + dev 技能隔离），经 --patch 叠加。
 set -euo pipefail
 
 # 位置无关部署：路径从脚本自身位置推导（scripts/ 的上级即本仓根）。
 # 兄弟布局约定：本仓与 deepseek-harness 宿主仓同父目录；不同布局用
-# DEEPSEEK_HARNESS_REPO 覆盖。MAT_DSH_ROOT 供 profile 的 !!js 表达式
-# 解析插件/skill 路径（mat.yml 不再含绝对路径）。
+# DEEPSEEK_HARNESS_REPO 覆盖。
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export MAT_DSH_ROOT="${MAT_DSH_ROOT:-$REPO_ROOT}"
 HOST_REPO="${DEEPSEEK_HARNESS_REPO:-$REPO_ROOT/../deepseek-harness}"
 OVERLAY="$REPO_ROOT/profiles/mat.yml"
 ENV_LOCAL="$REPO_ROOT/env.local"
 DSH_HOME_DIR="${DSH_HOME_DIR:-$HOME/.local/share/mat-dsh}"
 HARMONY_BIN="$DSH_HOME_DIR/profiles/web/node_modules/dsh-harmony/lib/bin.js"
 DEV_DSH_ENTRY="$DSH_HOME_DIR/profiles/web/node_modules/@deepseek-ai/dsh/lib/bin.js"
+PROFILE_PKG="$DSH_HOME_DIR/profiles/web/package.json"
 MAT_UI_PACKAGE="$REPO_ROOT/packages/mat-ui"
 MAT_UI_LINK="$DSH_HOME_DIR/profiles/web/node_modules/mat-ui"
 MAT_TOOLS_PACKAGE="$REPO_ROOT/packages/mat-tools"
 MAT_TOOLS_LINK="$DSH_HOME_DIR/profiles/web/node_modules/mat-tools"
+MAT_SKILLS_PACKAGE="$REPO_ROOT/packages/mat-skills"
+MAT_SKILLS_LINK="$DSH_HOME_DIR/profiles/web/node_modules/mat-skills"
+MAT_BUNDLE_PACKAGE="$REPO_ROOT/packages/mat-bundle"
+MAT_BUNDLE_LINK="$DSH_HOME_DIR/profiles/web/node_modules/mat-bundle"
 MAT_UI_BUILD="$REPO_ROOT/scripts/build-mat-ui.mjs"
 PORT=3080
 PID_FILE=/tmp/mat-dsh-web.pid
 LOG=/tmp/mat-dsh-web.log
 OLD_LOG=/tmp/mat-dsh-web.log.old
+
+# 幂等注入：package.json 的 dsh.profile.bundles 追加 "mat-bundle"（已在则不动）。
+inject_bundle_into_profile() {
+  node -e '
+    const fs = require("node:fs")
+    const path = process.argv[1]
+    const pkg = JSON.parse(fs.readFileSync(path, "utf8"))
+    pkg.dsh ??= {}
+    pkg.dsh.profile ??= {}
+    pkg.dsh.profile.bundles ??= []
+    if (!pkg.dsh.profile.bundles.includes("mat-bundle")) {
+      pkg.dsh.profile.bundles.push("mat-bundle")
+      fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n")
+    }
+  ' "$PROFILE_PKG"
+}
 
 port_pid() {  # 端口监听进程 pid（无则空）
   ss -ltnp 2>/dev/null | grep -oP ":${PORT}.*pid=\\K\\d+" | head -1 || true
@@ -65,6 +91,9 @@ do_start() {
   [ -f "$LOG" ] && mv -f "$LOG" "$OLD_LOG"
   ln -sfn "$MAT_UI_PACKAGE" "$MAT_UI_LINK"
   ln -sfn "$MAT_TOOLS_PACKAGE" "$MAT_TOOLS_LINK"
+  ln -sfn "$MAT_SKILLS_PACKAGE" "$MAT_SKILLS_LINK"
+  ln -sfn "$MAT_BUNDLE_PACKAGE" "$MAT_BUNDLE_LINK"
+  inject_bundle_into_profile
   node "$MAT_UI_BUILD"
   (
     cd "$HOST_REPO"

@@ -37,6 +37,18 @@ interface SessionMetrics {
   errored: boolean
   errorMessages: string[]
   finalAssistantText: string
+  /** P2 compaction 取证：prune=确定性剪枝单条超大结果；summary=摘要式全量压缩。 */
+  compactions: Array<{
+    kind: 'prune' | 'summary'
+    time: number
+    shadowedTokenCount: number
+    shadowedMessages: number
+    rangeStart: number
+    rangeEnd: number
+    model: string
+  }>
+  /** 步级请求输入 token 轨迹（压缩前后请求尺寸对比的数据面）。 */
+  stepInputTokens: number[]
 }
 
 function contentToText(content: unknown): string {
@@ -59,9 +71,11 @@ export function parseSessionMetrics(lineStream: string): SessionMetrics {
   const m: SessionMetrics = {
     turns: 0, steps: 0, toolCalls: {}, inputTokens: 0, outputTokens: 0,
     wallMs: 0, errored: false, errorMessages: [], finalAssistantText: '',
+    compactions: [], stepInputTokens: [],
   }
   let firstTime: number | undefined
   let lastTime: number | undefined
+  let currentStep = 0
   for (const line of lineStream.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) continue
@@ -78,7 +92,21 @@ export function parseSessionMetrics(lineStream: string): SessionMetrics {
     const d = (e.data ?? {}) as Record<string, unknown>
     switch (e.type) {
       case 'turn/start': m.turns += 1; break
-      case 'step/start': m.steps += 1; break
+      case 'step/start': m.steps += 1; currentStep = m.steps; break
+      case 'compaction/prune':
+      case 'compaction/summary': {
+        const range = d.shadowedRange as { start?: number; end?: number } | undefined
+        m.compactions.push({
+          kind: e.type === 'compaction/summary' ? 'summary' : 'prune',
+          time: typeof e.time === 'number' ? e.time : 0,
+          shadowedTokenCount: Number(d.shadowedTokenCount ?? 0),
+          shadowedMessages: Array.isArray(d.shadowedSeqs) ? d.shadowedSeqs.length : 0,
+          rangeStart: Number(range?.start ?? -1),
+          rangeEnd: Number(range?.end ?? -1),
+          model: String(d.model ?? ''),
+        })
+        break
+      }
       case 'tool/call': {
         const name = toolCallName(d)
         m.toolCalls[name] = (m.toolCalls[name] ?? 0) + 1
@@ -90,6 +118,7 @@ export function parseSessionMetrics(lineStream: string): SessionMetrics {
         if (usage) {
           m.inputTokens += usage.inputTokens ?? 0
           m.outputTokens += usage.outputTokens ?? 0
+          m.stepInputTokens[currentStep] = usage.inputTokens ?? 0
         }
         const reason = chunk.reason as { kind?: string; failure?: { message?: string }; error?: { message?: string } } | undefined
         if (reason?.kind === 'error') {
@@ -171,6 +200,13 @@ interface TaskReport {
   outputTokens: number
   wallSec: number
   sessionFound: boolean
+  /** P2：压缩次数（分 prune/summary）/ 遮蔽 token 合计 / 步级请求输入轨迹 / 单次明细。 */
+  compactionCount: number
+  pruneCount: number
+  summaryCount: number
+  shadowedTokens: number
+  stepInputTokens: number[]
+  compactionDetail: Array<{ kind: 'prune' | 'summary'; shadowedTokenCount: number; shadowedMessages: number; rangeStart: number; rangeEnd: number; model: string }>
 }
 
 const reports: TaskReport[] = []
@@ -193,7 +229,7 @@ for (const r of manifest.results) {
     metrics = best
   }
   if (!metrics) {
-    metrics = { turns: 0, steps: 0, toolCalls: {}, inputTokens: 0, outputTokens: 0, wallMs: r.wallSec * 1000, errored: true, errorMessages: ['未找到会话日志'], finalAssistantText: '' }
+    metrics = { turns: 0, steps: 0, toolCalls: {}, inputTokens: 0, outputTokens: 0, wallMs: r.wallSec * 1000, errored: true, errorMessages: ['未找到会话日志'], finalAssistantText: '', compactions: [], stepInputTokens: [] }
   }
   const outcome = runExpect(task, metrics, r.timedOut, r.exitCode)
   reports.push({
@@ -202,6 +238,14 @@ for (const r of manifest.results) {
     inputTokens: metrics.inputTokens, outputTokens: metrics.outputTokens,
     wallSec: metrics.wallMs ? Math.round(metrics.wallMs / 1000) : r.wallSec,
     sessionFound: files.length > 0,
+    compactionCount: metrics.compactions.length,
+    pruneCount: metrics.compactions.filter((c) => c.kind === 'prune').length,
+    summaryCount: metrics.compactions.filter((c) => c.kind === 'summary').length,
+    shadowedTokens: metrics.compactions.reduce((s, c) => s + c.shadowedTokenCount, 0),
+    stepInputTokens: metrics.stepInputTokens,
+    compactionDetail: metrics.compactions.map(({ kind, shadowedTokenCount, shadowedMessages, rangeStart, rangeEnd, model }) => ({
+      kind, shadowedTokenCount, shadowedMessages, rangeStart, rangeEnd, model,
+    })),
   })
 }
 
@@ -228,11 +272,25 @@ if (baselinePath) {
   lines.push(`- 基线对比（${baselinePath}）：通过 ${base.passRate === undefined ? '?' : `${Math.round(base.passRate * 100)}%`} → ${Math.round(metricsJson.passRate * 100)}%｜token in ${base.totalInputTokens} → ${totalIn}（${totalIn - base.totalInputTokens >= 0 ? '+' : ''}${totalIn - base.totalInputTokens}）`)
 }
 lines.push('')
-lines.push('| task | pass | steps | turns | tok in/out | wall(s) | 工具面 |')
-lines.push('|---|---|---|---|---|---|---|')
+lines.push('| task | pass | steps | turns | tok in/out | comp | wall(s) | 工具面 |')
+lines.push('|---|---|---|---|---|---|---|---|')
 for (const t of reports) {
   const tools = Object.entries(t.toolCalls).map(([n, c]) => `${n}×${c}`).join(', ') || '—'
-  lines.push(`| ${t.id} | ${t.pass ? '✅' : '❌'} | ${t.steps} | ${t.turns} | ${t.inputTokens}/${t.outputTokens} | ${t.wallSec} | ${tools} |`)
+  const comp = t.compactionCount > 0 ? `${t.summaryCount}sum+${t.pruneCount}prune/${Math.round(t.shadowedTokens / 100) / 10}k` : '—'
+  lines.push(`| ${t.id} | ${t.pass ? '✅' : '❌'} | ${t.steps} | ${t.turns} | ${t.inputTokens}/${t.outputTokens} | ${comp} | ${t.wallSec} | ${tools} |`)
+}
+const compactedTasks = reports.filter((t) => t.compactionCount > 0)
+if (compactedTasks.length > 0) {
+  lines.push('')
+  lines.push('## Compaction 取证明细')
+  for (const t of compactedTasks) {
+    lines.push('')
+    lines.push(`### ${t.id}（${t.summaryCount} 次摘要压缩 + ${t.pruneCount} 次剪枝，合计遮蔽 ${t.shadowedTokens} token）`)
+    for (const [i, c] of t.compactionDetail.entries()) {
+      lines.push(`- #${i + 1} [${c.kind}]：遮蔽 ${c.shadowedMessages} 条 surface（seq ${c.rangeStart}-${c.rangeEnd}，~${c.shadowedTokenCount} tok）${c.kind === 'summary' ? `｜摘要模型 ${c.model || '(会话路由)'}` : ''}`)
+    }
+    lines.push(`- 步级请求输入轨迹：${t.stepInputTokens.filter((x) => x > 0).map((x) => (x / 1000).toFixed(1) + 'k').join(' → ')}`)
+  }
 }
 const failed = reports.filter((t) => !t.pass)
 if (failed.length > 0) {

@@ -1,0 +1,42 @@
+{
+  "ranAt": "2026-10-15T07:03:20.312Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 0,
+  "totalInputTokens": 1592,
+  "totalOutputTokens": 2,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": false,
+      "failures": [
+        "进程 exit=1",
+        "finalMustMatch 未命中: /GOLDEN-7F3K/",
+        "finalMustMatch 未命中: /20/",
+        "finalMustMatch 未命中: /COMPLETED/",
+        "finalMustMatch 未命中: /900001/",
+        "finalMustMatch 未命中: /900002/",
+        "finalMustMatch 未命中: /(?:退出码|exit\\s*code)[^\\n]{0,30}?\\b0\\b|0:0/i",
+        "toolsAnyOf 全组未出现: [mat_partitions]（实调: 无）",
+        "toolsAnyOf 全组未出现: [mat_job_watch]（实调: 无）"
+      ],
+      "steps": 1,
+      "turns": 1,
+      "toolCalls": {},
+      "inputTokens": 1592,
+      "outputTokens": 2,
+      "wallSec": 4,
+      "sessionFound": true,
+      "compactionCount": 0,
+      "pruneCount": 0,
+      "summaryCount": 0,
+      "shadowedTokens": 0,
+      "stepInputTokens": [
+        null,
+        1592
+      ],
+      "compactionDetail": []
+    }
+  ]
+}

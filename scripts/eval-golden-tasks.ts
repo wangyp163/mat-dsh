@@ -22,6 +22,10 @@ export interface GoldenTask {
     pendingMs: number
     /** RUNNING 时长（ms）。 */
     runMs: number
+    /** sinfo 追加合成分区行数（P2 长会话上下文填充）。 */
+    padSinfo?: number
+    /** gaussian 三相位输出前置 banner 行数（P2）。 */
+    padGaussian?: number
   }
   expect: {
     /** 全部须命中最终 assistant 答复（AND）。 */
@@ -131,6 +135,47 @@ export const GOLDEN_TASKS: GoldenTask[] = [
       toolsMustNotAppear: ['mat_sbatch', 'mat_gaussian'],
     },
     timeoutSec: 240,
+  },
+  {
+    id: 'long-composite',
+    // P2 长会话任务：多计算 + 中途查询 + 末尾汇总。断言是**信息存活性测试**——
+    // 开头喂入的会话代号与早期作业号必须出现在最终答复（compaction 丢信息即红）。
+    // 配合 profiles/eval-compaction.yml（小 contextWindow 声明）触发压缩。
+    prompt:
+      '本会话代号 GOLDEN-7F3K，请全程记住。依次完成：' +
+      '① 用 mat_partitions 查分区表，记下 Agent0 分区的空闲节点数；' +
+      '② 提交 2 个运行 sleep 20 的作业（脚本自拟），用 mat_job_watch 一次性注册监控后，' +
+      '用 job_output 阻塞等待（wait: true）直到全部终态；' +
+      '③ 再用 mat_partitions 查一次分区表；' +
+      '④ 最后统一汇报四项：会话代号、Agent0 空闲节点数（两次查询的值）、' +
+      '两个作业的 Slurm 作业号与最终状态和退出码。',
+    fake: { scenario: 'completed', pendingMs: 6000, runMs: 15000, padSinfo: 220 },
+    expect: {
+      finalMustMatch: [/GOLDEN-7F3K/, /20/, /COMPLETED/, /900001/, /900002/, /(?:退出码|exit\s*code)[^\n]{0,30}?\b0\b|0:0/i],
+      toolsAnyOf: [['mat_partitions'], ['mat_job_watch']],
+      toolsMustNotAppear: ['mat_gaussian'],
+    },
+    timeoutSec: 480,
+  },
+  {
+    id: 'long-gaussian-pair',
+    // P2 长会话任务：同会话两次一站式计算 + 汇总（能量/收敛/虚频来自早期
+    // surface，压缩丢失即红）。padGaussian 撑大三相位输出。
+    prompt:
+      '本会话代号 GOLDEN-9QX2，请全程记住。对水分子（O 0.000000 0.000000 0.000000；' +
+      'H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000）先后做两次完全相同的 ' +
+      'B3LYP/6-31G(d) opt+freq 一站式计算（集群 11250、分区 Agent0）。' +
+      '如果工具返回 CONFIRM_REQUIRED，把摘要参数视为我已确认，带 confirmed_digest 立即重调。' +
+      '每次提交后用 job_output 阻塞等待（wait: true）至终态。两次都完成后汇报：' +
+      '会话代号、两次的总能量（Hartree，4 位小数）、是否都收敛、两次的虚频个数。',
+    fake: { scenario: 'completed', pendingMs: 5000, runMs: 12000, padGaussian: 100 },
+    expect: {
+      finalMustMatch: [/GOLDEN-9QX2/, /[-−]76\.40/, /收敛|converged/i, /虚频|imaginary/i],
+      finalMustNotMatch: [/FAILED|计算失败/],
+      toolsAnyOf: [['mat_gaussian']],
+      toolsMustNotAppear: ['mat_sbatch'],
+    },
+    timeoutSec: 480,
   },
 ]
 

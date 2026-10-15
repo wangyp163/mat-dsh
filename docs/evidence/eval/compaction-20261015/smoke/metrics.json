@@ -1,0 +1,49 @@
+{
+  "ranAt": "2026-10-15T07:01:06.149Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 1,
+  "totalInputTokens": 19763,
+  "totalOutputTokens": 2725,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": true,
+      "failures": [],
+      "steps": 11,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_partitions": 2,
+        "write": 2,
+        "mat_exec": 3,
+        "mat_upload": 2,
+        "mat_sbatch": 2,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 19763,
+      "outputTokens": 2725,
+      "wallSec": 116,
+      "sessionFound": true,
+      "compactionCount": 0,
+      "shadowedTokens": 0,
+      "stepInputTokens": [
+        null,
+        6801,
+        1121,
+        3136,
+        666,
+        812,
+        1119,
+        553,
+        833,
+        1055,
+        286,
+        3381
+      ],
+      "compactionDetail": []
+    }
+  ]
+}
