@@ -1,0 +1,176 @@
+{
+  "ranAt": "2026-10-15T08:01:21.406Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 1,
+  "totalInputTokens": 72472,
+  "totalOutputTokens": 4563,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": true,
+      "failures": [],
+      "steps": 10,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 2,
+        "mat_exec": 2,
+        "mat_sbatch": 4,
+        "mat_env_gate": 1,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 38302,
+      "outputTokens": 1918,
+      "wallSec": 307,
+      "sessionFound": true,
+      "compactionCount": 7,
+      "pruneCount": 2,
+      "summaryCount": 5,
+      "shadowedTokens": 18582,
+      "stepInputTokens": [
+        null,
+        1592,
+        3777,
+        10548,
+        7590,
+        711,
+        837,
+        1081,
+        235,
+        470,
+        11461
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 103,
+          "rangeEnd": 103,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4301,
+          "shadowedMessages": 3,
+          "rangeStart": 7,
+          "rangeEnd": 9,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4164,
+          "shadowedMessages": 6,
+          "rangeStart": 253,
+          "rangeEnd": 249,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 445,
+          "shadowedMessages": 1,
+          "rangeStart": 413,
+          "rangeEnd": 413,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 642,
+          "rangeEnd": 642,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4892,
+          "shadowedMessages": 5,
+          "rangeStart": 417,
+          "rangeEnd": 420,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 538,
+          "shadowedMessages": 1,
+          "rangeStart": 648,
+          "rangeEnd": 648,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    },
+    {
+      "id": "long-gaussian-pair",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "mat_gaussian": 4,
+        "job_output": 2
+      },
+      "inputTokens": 34170,
+      "outputTokens": 2645,
+      "wallSec": 258,
+      "sessionFound": true,
+      "compactionCount": 5,
+      "pruneCount": 1,
+      "summaryCount": 4,
+      "shadowedTokens": 25952,
+      "stepInputTokens": [
+        null,
+        1629,
+        9165,
+        7475,
+        8428,
+        7473
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 7737,
+          "shadowedMessages": 1,
+          "rangeStart": 167,
+          "rangeEnd": 167,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4318,
+          "shadowedMessages": 3,
+          "rangeStart": 7,
+          "rangeEnd": 9,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4608,
+          "shadowedMessages": 5,
+          "rangeStart": 175,
+          "rangeEnd": 169,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4944,
+          "shadowedMessages": 2,
+          "rangeStart": 451,
+          "rangeEnd": 180,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4345,
+          "shadowedMessages": 9,
+          "rangeStart": 772,
+          "rangeEnd": 766,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    }
+  ]
+}

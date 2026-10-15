@@ -1,0 +1,244 @@
+{
+  "ranAt": "2026-10-15T08:16:02.008Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 0,
+  "totalInputTokens": 120973,
+  "totalOutputTokens": 7197,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": false,
+      "failures": [
+        "finalMustMatch 未命中: /GOLDEN-7F3K/",
+        "finalMustMatch 未命中: /(?:退出码|exit\\s*code)[^\\n]{0,30}?\\b0\\b|0:0/i"
+      ],
+      "steps": 10,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 2,
+        "todo_write": 1,
+        "write": 2,
+        "mat_env_gate": 1,
+        "mat_exec": 3,
+        "mat_upload": 2,
+        "mat_sbatch": 2,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 61369,
+      "outputTokens": 2766,
+      "wallSec": 394,
+      "sessionFound": true,
+      "compactionCount": 9,
+      "pruneCount": 2,
+      "summaryCount": 7,
+      "shadowedTokens": 30809,
+      "stepInputTokens": [
+        null,
+        6712,
+        3840,
+        9773,
+        6800,
+        913,
+        1211,
+        7924,
+        7604,
+        9729,
+        6863
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 138,
+          "rangeEnd": 138,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4301,
+          "shadowedMessages": 3,
+          "rangeStart": 7,
+          "rangeEnd": 9,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4347,
+          "shadowedMessages": 6,
+          "rangeStart": 320,
+          "rangeEnd": 316,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4561,
+          "shadowedMessages": 2,
+          "rangeStart": 533,
+          "rangeEnd": 325,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 3803,
+          "shadowedMessages": 15,
+          "rangeStart": 913,
+          "rangeEnd": 909,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 596,
+          "shadowedMessages": 1,
+          "rangeStart": 977,
+          "rangeEnd": 977,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 1043,
+          "rangeEnd": 1043,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4813,
+          "shadowedMessages": 5,
+          "rangeStart": 981,
+          "rangeEnd": 973,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4146,
+          "shadowedMessages": 6,
+          "rangeStart": 1050,
+          "rangeEnd": 1055,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    },
+    {
+      "id": "long-gaussian-pair",
+      "pass": false,
+      "failures": [
+        "任务超时被杀"
+      ],
+      "steps": 9,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "todo_write": 7,
+        "mat_gaussian": 4,
+        "job_output": 2
+      },
+      "inputTokens": 59604,
+      "outputTokens": 4431,
+      "wallSec": 469,
+      "sessionFound": true,
+      "compactionCount": 10,
+      "pruneCount": 1,
+      "summaryCount": 9,
+      "shadowedTokens": 37431,
+      "stepInputTokens": [
+        null,
+        6749,
+        8991,
+        8203,
+        1911,
+        8861,
+        7334,
+        8062,
+        9493
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 7737,
+          "shadowedMessages": 1,
+          "rangeStart": 165,
+          "rangeEnd": 165,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4318,
+          "shadowedMessages": 3,
+          "rangeStart": 7,
+          "rangeEnd": 9,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4056,
+          "shadowedMessages": 5,
+          "rangeStart": 173,
+          "rangeEnd": 167,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 595,
+          "shadowedMessages": 1,
+          "rangeStart": 389,
+          "rangeEnd": 389,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 5274,
+          "shadowedMessages": 6,
+          "rangeStart": 393,
+          "rangeEnd": 396,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4380,
+          "shadowedMessages": 10,
+          "rangeStart": 1212,
+          "rangeEnd": 1217,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 847,
+          "shadowedMessages": 1,
+          "rangeStart": 1525,
+          "rangeEnd": 1525,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4934,
+          "shadowedMessages": 2,
+          "rangeStart": 1693,
+          "rangeEnd": 1218,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 904,
+          "shadowedMessages": 1,
+          "rangeStart": 1850,
+          "rangeEnd": 1850,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4386,
+          "shadowedMessages": 12,
+          "rangeStart": 1854,
+          "rangeEnd": 1846,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "ranAt": "2026-10-15T08:31:59.445Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 0.5,
+  "totalInputTokens": 36821,
+  "totalOutputTokens": 4138,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": false,
+      "failures": [
+        "finalMustMatch 未命中: /(?:退出码|exit\\s*code)[^\\n]{0,30}?\\b0\\b|0:0/i"
+      ],
+      "steps": 10,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 2,
+        "mat_exec": 2,
+        "mat_sbatch": 4,
+        "mat_env_gate": 1,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 29378,
+      "outputTokens": 1960,
+      "wallSec": 321,
+      "sessionFound": true,
+      "compactionCount": 3,
+      "pruneCount": 2,
+      "summaryCount": 1,
+      "shadowedTokens": 8413,
+      "stepInputTokens": [
+        null,
+        6712,
+        2291,
+        478,
+        808,
+        1114,
+        270,
+        537,
+        3928,
+        997,
+        12243
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 110,
+          "rangeEnd": 110,
+          "model": ""
+        },
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 693,
+          "rangeEnd": 693,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4171,
+          "shadowedMessages": 2,
+          "rangeStart": 7,
+          "rangeEnd": 8,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    },
+    {
+      "id": "long-gaussian-pair",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "mat_gaussian": 4,
+        "job_output": 2
+      },
+      "inputTokens": 7443,
+      "outputTokens": 2178,
+      "wallSec": 155,
+      "sessionFound": true,
+      "compactionCount": 1,
+      "pruneCount": 1,
+      "summaryCount": 0,
+      "shadowedTokens": 7737,
+      "stepInputTokens": [
+        null,
+        1629,
+        2079,
+        1124,
+        848,
+        1763
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 7737,
+          "shadowedMessages": 1,
+          "rangeStart": 163,
+          "rangeEnd": 163,
+          "model": ""
+        }
+      ]
+    }
+  ]
+}

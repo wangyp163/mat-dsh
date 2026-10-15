@@ -134,7 +134,7 @@ profile 的**默认装载**（本仓会话一直在 bwrap 约束下跑，只是�
 | P0 | 术语对齐 + 面试叙事（第 5 节） | 2026-10-15 完成（本文档即载体） |
 | **P0.5** | **任务级评测基线**：golden task 集 + 本地回放泳道（fake HPC MCP）+ headless 跑批 + 基线指标（成功率/token/轮次/墙钟）。P1/P2/P3 共用的度量仪器 | **2026-10-15 完成并出基线**：5/5 通过（mat/deepseek-v4-pro，token in 91,699 / out 8,755），证据 `docs/evidence/eval/baseline-20261015/`，详见第 8 节 |
 | P1 | 沙箱：验证 + 覆盖 + 量化（前提修正：宿主默认已启用，见 3.2 四态） | **2026-10-15 完成**：探针 7/7 + A/B 6/6=6/6 + 开销 +3.1ms/调用，证据 `docs/evidence/eval/sandbox-20261015/report.md`；P1+（可选）：HPC 传输层 egress 收敛 |
-| P2 | 长会话 compaction 调优 + session-debug 解析 compaction 事件取证；复用 P0.5 长任务 | 未开工 |
+| P2 | 长会话 compaction 调优 + session-debug 解析 compaction 事件取证；复用 P0.5 长任务 | **2026-10-15 完成**：6 泳道 × 2 长任务矩阵 + 三问结论（本尺度激进压缩净亏损：token +50~130%、墙钟 ×2~5；pruner 免费杠杆；默认 0.8 哲学被验证），参数表 9.1 节，证据 `docs/evidence/eval/compaction-20261015/report.md` |
 | P3 | agent 经验记忆：会话结算写"经验卡"（失败签名→处方→有效性）复用 kb 表 + kb_hint 管道 | 未开工 |
 | P4 | Harness-native RL 概念（Agent Lightning 3500 行源码通读 + Polar） | 未开工 |
 | P5 | coding 域桥接 demo：Claude Agent SDK/OpenCode 小型 coding harness，迁移四件套/门禁/轨迹分析 | 未开工 |
@@ -192,7 +192,77 @@ cancel-job（提交+取消闭环）。会话/状态隔离：每任务独立 fake
    误报失败（v1.2 修正为行内邻近匹配）。教训：final-message 断言断「语义要素
    同行出现」，不断排版。
 
-## 9. 来源清单
+## 9. P2 Compaction 实验（实施态，2026-10-15）
+
+### 9.1 可调参数表（源码核对，含联动约束）
+
+**compaction-basic**（`packages/compaction/compaction-basic/src/config.ts`）：
+
+| 参数 | 默认 | 语义 |
+|---|---|---|
+| `auto` | true | 自动压力检查（agent/pre-step）+ 溢出恢复 开关 |
+| `thresholdRatio` | 0.8 | 触压比例 × 声明 contextWindow；tokenMeter 压力（头估算+surface）越线即压 |
+| `retainRatio` | 0.16 | 压缩后保留的逐字尾巴比例；**必须 < thresholdRatio**（校验器强制——否则压完仍在阈值上永久重触发） |
+| `retainTokens` | — | 绝对保留量（覆盖比例式） |
+| `summarizationProvider/Model` | '' | 摘要模型；缺省用会话当前路由模型 |
+| `maxTokens` | 8192 | 摘要本身的一次性 token 预算 |
+| `compactionRetries` / `maxOverflowRetries` | 1 / 1 | 压缩重试 / 溢出恢复重试 |
+| `modelPolicies` | [] | 按 provider/model 精确覆盖上列全部字段 |
+
+**tool-result-pruner**（base 行 `tool-result-pruner`）：`thresholdChars 8192 / headChars 4096 / tailChars 1024`——单条工具结果超阈值即头尾保留中段遮蔽（确定性、零 LLM）。
+**spill-policy**：`maxInlineBytes 50000`（超大输出外置文件，模型按需读回）。
+
+**实测联动约束（2026-10-15 六轮冒烟定位，非文档显式记载）**：
+
+1. **pi-ai 输出预算**：`min(显式 maxTokens ?? 模型能力, 声明窗口 − prompt 字符估算 − 4096)`——声明窗口过小会把输出挤到个位数（实测 out=2 的 max-tokens 死）；模型级 `maxTokens` 显式声明可作请求默认 cap，但救不了 available 为负的情形。
+2. **阈值可达性算术**：估算器对 prompt 的计价偏保守（约 1.4×），thresholdRatio 0.8 与"输出不饿死的最小窗口"联立后，摘要压缩在健康窗口下**几乎不可达**——它是溢出前的最后防线，pruner 才是日常主力。要实验触发需显式调低 thresholdRatio。
+3. **填充的反直觉**：工具结果超过 pruner 阈值后，可见部分被钉在 ~head+tail（≈5k 字符）；**恰好低于阈值的中等结果（~8k 字符）才是最大累积向量**。
+4. **压力口径**：tokenMeter 为锚定缓存式计价（头估算 + surface 增量），网关 usage 是"未命中缓存"口径——两者都不是 surface 全量，取证以 compaction 事件的 `shadowedTokenCount` 为权威。
+
+### 9.2 实验设计
+
+泳道（全部 `--tasks long-composite,long-gaussian-pair`，模型 mat/deepseek-v4-pro）：
+
+| 泳道 | overlay | 参数 | 轮数 |
+|---|---|---|---|
+| DEFAULT（现状） | eval-compaction.yml | 窗口 40960 + maxTokens 4096，compaction 默认 0.8/0.16 | 1 |
+| NOPRESSURE（对照） | eval-bigwin.yml | 窗口 1M（压缩永不触压），maxTokens 同左 | 1 |
+| EARLY | + eval-compact-early.yml | 0.15/0.08，pruner 默认 | 2 |
+| EARLY+FAT | + eval-compact-tuned.yml | 0.15/0.12 + pruner 4096/2048/512 | 2 |
+
+长任务（信息存活断言——早期喂入的会话代号/作业号/能量必须出现在最终答复）：
+`long-composite`（多计算+中途查询+末尾汇总）、`long-gaussian-pair`（同会话两次一站式计算）。
+
+### 9.3 结果与结论（2026-10-15 矩阵）
+
+**三问回答**（完整数据与失败谱系见 `docs/evidence/eval/compaction-20261015/report.md`）：
+
+1. **token**：本尺度上激进压缩（0.15 阈值）净亏损——未命中输入 token +50~130%
+   （摘要全价调用 + 压缩后 KV 前缀失效全量重读）；收益（防历史无限增长）在
+   回放泳道量级不可见。**pruner（确定性、零 LLM）是免费杠杆**。
+2. **成功率/信息存活**：单轮 pass 被模型方差主导（同配置 EARLY 两轮 2/2 vs
+   0/2；对照泳道也丢断言）；压缩特有风险 = 墙钟风暴（9 次摘要→480s 超时）
+   与弱显著性信息（会话代号类）不保证存活；retainRatio 0.12 厚尾巴下能量/
+   收敛/虚频全数存活。
+3. **KV-cache 代价叙事**："compaction 是一次全价重读换后续每步瘦身的交易"——
+   稳态未命中 ~0.3-1k/请求 → 压缩后首请求 4-12.7k。短会话净亏、长会话必要恶；
+   宿主默认 0.8 阈值（摘要=溢出保险而非日常）哲学被实验验证。
+
+**生产建议**：维持默认 0.8/0.16；真长会话场景优先调 retainRatio 而非降
+thresholdRatio；摘要模型可指 flash 档。
+
+**P2 泳道发现**（新增到第 8 节清单的同族条目）：
+
+5. **pi-ai 输出预算算术**（9.1 节联动约束 1）——声明窗口 − 字符估算 − 4096；
+   实验泳道必须同时声明窗口与显式 maxTokens，否则输出饿死（out=2 实锤）。
+6. **想撑爆上下文，用"多条中等"而非"一条巨大"**——pruner 把超大结果钉死在
+   ~5k 字符可见；恰低于 8192 阈值的中等结果才是最大累积向量（攻击面认知）。
+7. **压缩风暴的墙钟代价**——每次摘要是一次 reasoning-high 全价调用，9 次
+   连环压缩直接把 480s 任务上限烧穿；阈值调低的隐性成本。
+8. **断言归因纪律**——跨泳道稳定复现的失败才归因 harness；单轮失败先怀疑
+   模型方差（第 4 次同族教训，这次升级成了归因规则）。
+
+## 10. 来源清单
 
 - https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
 - https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents

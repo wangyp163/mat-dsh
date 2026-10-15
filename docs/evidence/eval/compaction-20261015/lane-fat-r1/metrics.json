@@ -1,0 +1,132 @@
+{
+  "ranAt": "2026-10-15T08:23:55.424Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 0.5,
+  "totalInputTokens": 52117,
+  "totalOutputTokens": 4784,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": false,
+      "failures": [
+        "finalMustMatch 未命中: /(?:退出码|exit\\s*code)[^\\n]{0,30}?\\b0\\b|0:0/i"
+      ],
+      "steps": 10,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 2,
+        "mat_env_gate": 1,
+        "write": 2,
+        "mat_upload": 2,
+        "mat_exec": 3,
+        "mat_sbatch": 2,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 29688,
+      "outputTokens": 2415,
+      "wallSec": 281,
+      "sessionFound": true,
+      "compactionCount": 4,
+      "pruneCount": 2,
+      "summaryCount": 2,
+      "shadowedTokens": 9189,
+      "stepInputTokens": [
+        null,
+        6712,
+        2532,
+        1049,
+        315,
+        478,
+        3997,
+        1086,
+        272,
+        514,
+        12733
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 192,
+          "rangeEnd": 192,
+          "model": ""
+        },
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 2121,
+          "shadowedMessages": 1,
+          "rangeStart": 889,
+          "rangeEnd": 889,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4301,
+          "shadowedMessages": 3,
+          "rangeStart": 7,
+          "rangeEnd": 9,
+          "model": "deepseek-v4-pro"
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 646,
+          "shadowedMessages": 1,
+          "rangeStart": 895,
+          "rangeEnd": 895,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    },
+    {
+      "id": "long-gaussian-pair",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "mat_gaussian": 4,
+        "job_output": 2
+      },
+      "inputTokens": 22429,
+      "outputTokens": 2369,
+      "wallSec": 176,
+      "sessionFound": true,
+      "compactionCount": 2,
+      "pruneCount": 1,
+      "summaryCount": 1,
+      "shadowedTokens": 11925,
+      "stepInputTokens": [
+        null,
+        6749,
+        1997,
+        2135,
+        994,
+        10554
+      ],
+      "compactionDetail": [
+        {
+          "kind": "prune",
+          "shadowedTokenCount": 7737,
+          "shadowedMessages": 1,
+          "rangeStart": 119,
+          "rangeEnd": 119,
+          "model": ""
+        },
+        {
+          "kind": "summary",
+          "shadowedTokenCount": 4188,
+          "shadowedMessages": 2,
+          "rangeStart": 7,
+          "rangeEnd": 8,
+          "model": "deepseek-v4-pro"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "ranAt": "2026-10-15T07:51:45.392Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 0.5,
+  "totalInputTokens": 48030,
+  "totalOutputTokens": 4585,
+  "tasks": [
+    {
+      "id": "long-composite",
+      "pass": false,
+      "failures": [
+        "finalMustMatch 未命中: /(?:退出码|exit\\s*code)[^\\n]{0,30}?\\b0\\b|0:0/i"
+      ],
+      "steps": 8,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_partitions": 2,
+        "mat_exec": 2,
+        "mat_sbatch": 2,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 26689,
+      "outputTokens": 2252,
+      "wallSec": 90,
+      "sessionFound": true,
+      "compactionCount": 0,
+      "pruneCount": 0,
+      "summaryCount": 0,
+      "shadowedTokens": 0,
+      "stepInputTokens": [
+        null,
+        3640,
+        6090,
+        1441,
+        6987,
+        1039,
+        271,
+        1638,
+        5583
+      ],
+      "compactionDetail": []
+    },
+    {
+      "id": "long-gaussian-pair",
+      "pass": true,
+      "failures": [],
+      "steps": 6,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "mat_gaussian": 3,
+        "job_output": 2
+      },
+      "inputTokens": 21341,
+      "outputTokens": 2333,
+      "wallSec": 80,
+      "sessionFound": true,
+      "compactionCount": 0,
+      "pruneCount": 0,
+      "summaryCount": 0,
+      "shadowedTokens": 0,
+      "stepInputTokens": [
+        null,
+        1629,
+        15699,
+        761,
+        1285,
+        1084,
+        883
+      ],
+      "compactionDetail": []
+    }
+  ]
+}

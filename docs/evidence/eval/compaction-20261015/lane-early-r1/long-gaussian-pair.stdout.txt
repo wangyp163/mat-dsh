@@ -1,0 +1,30 @@
+Both jobs completed successfully. Here is the final report.
+
+---
+
+## GOLDEN-9QX2 — Final Report
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| **Session code** | GOLDEN-9QX2 | GOLDEN-9QX2 |
+| **Cluster** | 11250 (华东一区·昆山) | 11250 (华东一区·昆山) |
+| **Partition** | Agent0 | Agent0 |
+| **Workdir** | `/public/home/eval/h2o-opt-freq-1` | `/public/home/eval/h2o-opt-freq-2` |
+| **Slurm job** | 900001 | 900002 |
+| **Method** | B3LYP/6-31G(d) | B3LYP/6-31G(d) |
+| **Task** | opt+freq | opt+freq |
+| **Converged** | ✅ yes | ✅ yes |
+| **Total energy / Hartree** | **−76.4090** | **−76.4090** |
+| **Imaginary frequencies** | **0** | **0** |
+| **Real frequencies / cm⁻¹** | 1713.12, 3727.15, 3849.09 | 1713.12, 3727.15, 3849.09 |
+
+### Key findings
+
+- **Bit-identical results.** Both runs converged to the same geometry and returned `E = −76.4089539792` Hartree to 10 decimal places, confirming the workflow is deterministic for this closed-shell singlet water molecule.
+- **Stationary point verified.** Zero imaginary frequencies in both runs — the optimized geometry is a true minimum on the B3LYP/6-31G(d) PES.
+- **Wall time.** Each job ran for 12 seconds (PENDING → COMPLETED), well within the 30-minute walltime budget.
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compaction.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compact-early.yml '本会话代号 GOLDEN-9QX2，请全程记住。对水分子（O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000）先后做两次完全相同的 B3LYP/6-31G(d) opt+freq 一站式计算（集群 11250、分区 Agent0）。如果工具返回 CONFIRM_REQUIRED，把摘要参数视为我已确认，带 confirmed_digest 立即重调。每次提交后用 job_output 阻塞等待（wait: true）至终态。两次都完成后汇报：会话代号、两次的总能量（Hartree，4 位小数）、是否都收敛、两次的虚频个数。'
+(node:172573) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

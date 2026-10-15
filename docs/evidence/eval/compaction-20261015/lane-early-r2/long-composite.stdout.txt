@@ -1,0 +1,19 @@
+两个作业均已成功完成：
+
+| Job ID | 状态 | 退出码 | 耗时 |
+|--------|------|--------|------|
+| 900001 | COMPLETED | 0 | 15s |
+| 900002 | COMPLETED | 0 | 15s |
+
+**kshcdev4 分区测试结论**：
+- 2/2 作业成功完成（COMPLETED，exit=0）
+- 作业等待时间很短，周转良好
+- **之前质疑队列-52 的 idle 节点为 0 的判断是错误的** —— 第二次查询显示 **20 个 idle 节点**，资源充足
+- 关于 Active=0 的解释：第二次查询中 `Agent0=20`（idle），根据之前的观察，当 idle 数量为非零时，系统正常显示该值而非总 idle 数。分区工作正常，不需要调整
+
+总结：**kshcdev4 分区完全可用**，两个作业均正常完成，无需进一步排查。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compaction.yml --patch ~/mat-harness/mat-dsh/profiles/eval-compact-early.yml '本会话代号 GOLDEN-7F3K，请全程记住。依次完成：① 用 mat_partitions 查分区表，记下 Agent0 分区的空闲节点数；② 提交 2 个运行 sleep 20 的作业（脚本自拟），用 mat_job_watch 一次性注册监控后，用 job_output 阻塞等待（wait: true）直到全部终态；③ 再用 mat_partitions 查一次分区表；④ 最后统一汇报四项：会话代号、Agent0 空闲节点数（两次查询的值）、两个作业的 Slurm 作业号与最终状态和退出码。'
+(node:172759) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
