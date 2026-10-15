@@ -1,0 +1,34 @@
+## 计算结果：失败 ❌
+
+### 诊断信息
+
+| 字段 | 值 |
+|---|---|
+| **Slurm Job ID** | `900001` |
+| **终态** | `FAILED` (exit code 1) |
+| **CPU 时间** | 1 分 47 秒 |
+| **关键错误** | `Number of steps exceeded, OptMax` |
+| **错误位置** | `Error termination via Lnk1e in l9999.exe` |
+
+### 失败原因
+
+Gaussian 优化在达到最大步数上限时仍未收敛，被强制终止。日志中只有这短短几行尾部输出，完整的 `.log` 文件只有约 6 行——作业在极短时间内就命中了 `OptMax` 上限并结束。
+
+对于水分子 B3LYP/6-31G(d) 这种轻量体系，起始几何（O–H ≈ 0.957 Å，∠HOH ≈ 104.5°）已经非常接近平衡构型，正常情况 1–3 步就应该收敛。不到 2 分钟 CPU 时间就因步数超限而失败，说明优化器可能遇到了以下情况之一：
+
+1. **步长上限配置异常低** —— `OptMax` 可能被设置了一个极小的非默认值（Gaussian 默认的优化步数上限通常是 20 或更多，按体系大小自动调整），导致刚启动几步就被截断。
+2. **Hessian 初始化问题** —— 起始几何离平衡点太近时，如果初始 Hessian 估算不准，第一步产生的位移极小，随后每步进展微弱，很快耗尽步数预算。
+3. **SCF 收敛困难** —— 虽然可能性低于前两种，但若每步 SCF 都挣扎很久，也会消耗大量时间而几何几乎不变。
+
+### 下一步建议
+
+1. **手动增加优化步数上限**：在 `run.json` 中指定 `Opt(MaxCycles=N)` （比如 `MaxCycles=50`），然后用 `task-builder` 或分步流程重新提交。如果确实是默认上限过低导致的，这就能直接解决。
+2. **换用 `Opt=CalcFC`**：在第一步用解析频率计算精确的 Hessian，可以避免初始 Hessian 估算不良导致的漂移/徘徊——这对近平衡起始结构尤其有效。
+3. **检查 workflow 默认参数**：如果 `OptMax` 是 workflow 层注入的而非 Gaussian 原生上限，需要确认该参数的实际值是否合理。
+
+需要我按上述任一方案重新搭建并提交吗？
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '用 mat_gaussian 一站式工具对水分子做 B3LYP/6-31G(d) 的 opt 计算。水分子笛卡尔坐标（埃）：O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000。集群用 11250，分区 Agent0。如果工具返回 CONFIRM_REQUIRED，把摘要里的参数视为我已确认，立即带 confirmed_digest 用完全相同的参数重调一次。提交后用 job_output 阻塞等待（wait: true）直到作业终态。如果计算失败：不要重试、不要换参数，根据返回的诊断信息（日志关键行）告诉我失败原因和下一步建议。'
+(node:121093) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

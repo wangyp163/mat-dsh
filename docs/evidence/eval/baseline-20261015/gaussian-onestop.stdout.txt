@@ -1,0 +1,16 @@
+计算完成。结果汇总：
+
+| 指标 | 值 |
+|------|-----|
+| **总能量 (Hartree)** | **-76.4090** |
+| **优化收敛** | ✅ 已收敛 |
+| **虚频个数** | **0**（无虚频，稳定极小点） |
+| 振动频率 (cm⁻¹) | 1713.1 / 3727.2 / 3849.1 |
+| Slurm 作业 | #900001，耗时 12s |
+
+水分子 B3LYP/6-31G(d) opt+freq 计算成功收敛至稳定极小点，无虚频，总能量 **-76.4090 Hartree**。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '用 mat_gaussian 一站式工具对水分子做 B3LYP/6-31G(d) 的 opt+freq 计算。水分子笛卡尔坐标（埃）：O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000。集群用 11250，分区 Agent0。如果工具返回 CONFIRM_REQUIRED，把摘要里的参数视为我已确认，立即带 confirmed_digest 用完全相同的参数重调一次。完成后报告：总能量（Hartree，保留 4 位小数）、优化是否收敛、虚频个数。'
+(node:105781) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -1,0 +1,18 @@
+---
+
+✅ **全部完成。** 操作摘要：
+
+| 步骤 | 详情 |
+|------|------|
+| 分区 | `Agent0`（11250 集群） |
+| 脚本 | `/tmp/sleep-test/slurm.sh` — `sleep 600`，单节点单核 |
+| 作业号 | **900001** |
+| 取消 | `scancel 900001` |
+| 最终状态 | **CANCELLED**（含 batch/extern 共三个 step 均已取消） |
+
+作业 900001 在提交后即被取消，未实际运行 `sleep 600`。确认完毕。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '在 11250 集群的 Agent0 分区提交一个运行 sleep 600 的作业（脚本自拟），拿到 Slurm 作业号后立刻取消它，然后向我确认取消已完成。'
+(node:105955) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

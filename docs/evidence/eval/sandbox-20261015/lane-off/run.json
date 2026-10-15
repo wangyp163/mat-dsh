@@ -1,0 +1,102 @@
+{
+  "ranAt": "2026-10-15T06:29:50.119Z",
+  "dshHome": "/tmp/mat-eval-home",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "env": {
+    "DSH_PERMISSION_MODE": "danger-full-access"
+  },
+  "results": [
+    {
+      "id": "partitions-lookup",
+      "prompt": "查看 11250 集群的分区情况：用 mat_partitions 工具列出分区表，告诉我 Agent0 分区当前有多少个空闲（idle）节点。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 45907,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "partitions-lookup.stdout.txt",
+      "wallSec": 19
+    },
+    {
+      "id": "sleep-watch",
+      "prompt": "在 11250 集群的 Agent0 分区提交 2 个运行 sleep 20 的作业（作业脚本内容自拟），用 mat_job_watch 工具把两个作业一次性注册成异步监控，然后用 job_output 阻塞等待（wait: true）直到监控结算，汇报两个作业的最终状态和退出码。不要手动轮询 sacct。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 46551,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "sleep-watch.stdout.txt",
+      "wallSec": 63
+    },
+    {
+      "id": "gaussian-onestop",
+      "prompt": "用 mat_gaussian 一站式工具对水分子做 B3LYP/6-31G(d) 的 opt+freq 计算。水分子笛卡尔坐标（埃）：O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000。集群用 11250，分区 Agent0。如果工具返回 CONFIRM_REQUIRED，把摘要里的参数视为我已确认，立即带 confirmed_digest 用完全相同的参数重调一次。完成后报告：总能量（Hartree，保留 4 位小数）、优化是否收敛、虚频个数。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 45239,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "gaussian-onestop.stdout.txt",
+      "wallSec": 65
+    },
+    {
+      "id": "gaussian-fail-diagnosis",
+      "prompt": "用 mat_gaussian 一站式工具对水分子做 B3LYP/6-31G(d) 的 opt 计算。水分子笛卡尔坐标（埃）：O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000。集群用 11250，分区 Agent0。如果工具返回 CONFIRM_REQUIRED，把摘要里的参数视为我已确认，立即带 confirmed_digest 用完全相同的参数重调一次。提交后用 job_output 阻塞等待（wait: true）直到作业终态。如果计算失败：不要重试、不要换参数，根据返回的诊断信息（日志关键行）告诉我失败原因和下一步建议。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 46567,
+      "fakeScenario": "failed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "gaussian-fail-diagnosis.stdout.txt",
+      "wallSec": 78
+    },
+    {
+      "id": "cancel-job",
+      "prompt": "在 11250 集群的 Agent0 分区提交一个运行 sleep 600 的作业（脚本自拟），拿到 Slurm 作业号后立刻取消它，然后向我确认取消已完成。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 44769,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "cancel-job.stdout.txt",
+      "wallSec": 132
+    },
+    {
+      "id": "local-bash",
+      "prompt": "用 bash 工具在当前工作目录下完成本地文件操作：创建 sandbox-check 目录，生成 20 行数据写入 sandbox-check/data.txt（第 i 行内容为 line-i，i 从 1 到 20），然后用 wc -l 统计行数，最后报告行数与 data.txt 的绝对路径。整个任务只用 bash 完成，不要用 write 工具。",
+      "provider": "mat",
+      "model": "deepseek-v4-pro",
+      "exitCode": 0,
+      "timedOut": false,
+      "fakePort": 45173,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "local-bash.stdout.txt",
+      "wallSec": 17
+    }
+  ]
+}

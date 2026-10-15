@@ -1,0 +1,29 @@
+计算已完成，但**作业失败**。以下是诊断结论：
+
+---
+
+## 失败诊断
+
+| 项 | 值 |
+|---|---|
+| Slurm 作业 | 900001 |
+| 终态 | **FAILED**（exit=1，运行 12s 墙钟 / 1m47s CPU） |
+| 关键错误行 | `Optimization stopped. -- Number of steps exceeded, OptMax.` |
+| 错误签名 | `Error termination via Lnk1e in /public/home/eval/g16/l9999.exe` |
+
+### 原因
+
+几何优化在默认最大步数内未能收敛——**l9999（OptMax）步数超限**。优化器走到了步数天花板但四个收敛判据仍未全部满足，Gaussian 以 `Lnk1e` 终止。
+
+对于水分子这种 3 原子小体系 + B3LYP/6-31G(d) 来说极不寻常（通常 5–10 步即收敛），说明优化路径可能震荡或初始 Hessian 不佳。
+
+### 下一步建议
+
+1. **加 `CalcFC` 改善初始 Hessian**：route 行追加 `opt=(CalcFC,MaxCycle=100)`，在第一步精确计算力常数，避免优化器在势能面上"迷路"。这是此类问题最直接有效的处方。
+2. **检查输入几何是否合理**：当前 O–H 键长约 0.96 Å，H–O–H 约 104.5°，本身接近平衡值，但如果坐标列精度或元素标签有隐藏问题（如行尾不可见字符），可能导致 Gaussian 解析异常。
+3. 如需继续，确认后可带上 `pre_json` 里的 `"opt": ["CalcFC", "MaxCycle=100"]` 重跑——但**按你"不重试不换参"的指示，我没有执行任何重提动作**，等你决策。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '用 mat_gaussian 一站式工具对水分子做 B3LYP/6-31G(d) 的 opt 计算。水分子笛卡尔坐标（埃）：O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000。集群用 11250，分区 Agent0。如果工具返回 CONFIRM_REQUIRED，把摘要里的参数视为我已确认，立即带 confirmed_digest 用完全相同的参数重调一次。提交后用 job_output 阻塞等待（wait: true）直到作业终态。如果计算失败：不要重试、不要换参数，根据返回的诊断信息（日志关键行）告诉我失败原因和下一步建议。'
+(node:105862) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

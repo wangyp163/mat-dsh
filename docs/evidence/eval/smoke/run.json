@@ -1,0 +1,24 @@
+{
+  "ranAt": "2026-10-15T03:32:19.181Z",
+  "dshHome": "/tmp/mat-eval-home",
+  "provider": "mat",
+  "model": "deepseek-v4-flash",
+  "lane": "replay",
+  "results": [
+    {
+      "id": "partitions-lookup",
+      "prompt": "查看 11250 集群的分区情况：用 mat_partitions 工具列出分区表，告诉我 Agent0 分区当前有多少个空闲（idle）节点。",
+      "provider": "mat",
+      "model": "deepseek-v4-flash",
+      "exitCode": 1,
+      "timedOut": false,
+      "fakePort": 45777,
+      "fakeScenario": "completed",
+      "sessionFiles": [
+        "session.jsonl.zstd"
+      ],
+      "stdoutFile": "partitions-lookup.stdout.txt",
+      "wallSec": 53
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+# eval 跑批专用 overlay（叠加在 profiles/mat.yml 之上，P0.5 评测基线）。
+#
+# headless 会话不需要的行在此整行禁用，缩小变量面（golden 评测的可复现原则）：
+#   - mat-ui：web-app 增强层，headless 无 UI；harmony 补丁行为与评测无关。
+#   - matgen/optimade MCP 引用：外部依赖（隧道/外网），连接失败只产生日志噪声；
+#     golden 任务不涉及，禁掉避免每次跑批等待重连退避。
+# 逐行 disabled 覆盖语义：与 mat.yml 里 skill-filesystem 的重启写法相同
+# （config patch 不改 disabled 位，必须显式声明）。
+# 环境相关行（LLM 路由/默认模型）不在本文件——沿用 mat.yml，由 eval-run
+# 以 LLM_PROVIDER_ID/LLM_MODEL_ID 环境变量注入评测模型。
+
+- id: mat-ui
+  disabled: true
+- id: matgen-mcp-reference
+  disabled: true
+- id: optimade-mcp-reference
+  disabled: true

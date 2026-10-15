@@ -1,0 +1,41 @@
+计算 **失败**，Slurm Job 900001，详情如下：
+
+---
+
+## 诊断信息
+
+| 项目 | 值 |
+|------|-----|
+| Slurm 状态 | `FAILED`（exit code 1） |
+| 运行耗时 | ~12 秒（CPU 时间 1 分 47 秒） |
+| 失败原因 | **Optimization stopped — Number of steps exceeded, OptMax** |
+| 错误模块 | `Lnk1e`（Gaussian Link 9999，收敛检测/终止阶段） |
+
+### 日志关键行
+
+```
+ Optimization stopped.
+ -- Number of steps exceeded, OptMax.
+ Error termination via Lnk1e in /public/home/eval/g16/l9999.exe
+```
+
+---
+
+## 失败原因
+
+几何优化在默认最大步数（Opt 的 `MaxCycles` 默认值，通常 20~30 步）内未能达到收敛标准。你给的初始笛卡尔坐标（O–H ≈ 0.97 Å，键角约 104.5°）是一个合理的近平衡构型，但仍然在默认步数内没有把力和位移收敛到 Gaussian 的四项判据（MaxForce、RMSForce、MaxDisp、RMSDisp）。到第 N 步时优化器"走不动了"，耗尽步数配额而终止——这通常意味着 PES 在该区域比较平坦，需要更多步来收敛，而不是计算出错。
+
+---
+
+## 下一步建议
+
+1. **增大 Opt 步数上限**：在 route 中加入 `MaxCycles=N`（例如 `Opt(MaxCycles=50)`），给优化器更多步数空间。这是最直接、最常用的修复方式。
+2. **检查初始构型**：如果初始构型离平衡点确实很远（虽然这里看起来还算合理），可以考虑先用半经验方法（GFN2-xTB、GFN-FF）预优化一次，再把结果作为 B3LYP 的起点。
+3. **调松收敛阈值**（谨慎）：如果对精度要求不高，可用 `Opt(Loose)` 放宽收敛判据。
+
+简言之：**重跑一次，route 改成 `Opt(MaxCycles=50)` 即可**。要我帮你重新提交吗？
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '用 mat_gaussian 一站式工具对水分子做 B3LYP/6-31G(d) 的 opt 计算。水分子笛卡尔坐标（埃）：O 0.000000 0.000000 0.000000；H 0.757000 0.586000 0.000000；H -0.757000 0.586000 0.000000。集群用 11250，分区 Agent0。如果工具返回 CONFIRM_REQUIRED，把摘要里的参数视为我已确认，立即带 confirmed_digest 用完全相同的参数重调一次。提交后用 job_output 阻塞等待（wait: true）直到作业终态。如果计算失败：不要重试、不要换参数，根据返回的诊断信息（日志关键行）告诉我失败原因和下一步建议。'
+(node:119758) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -1,0 +1,8 @@
+
+[ELIFECYCLE] Command failed with exit code 1.
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '查看 11250 集群的分区情况：用 mat_partitions 工具列出分区表，告诉我 Agent0 分区当前有多少个空闲（idle）节点。'
+(node:94382) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+dsh: SERVER: 503: {"message":"ServiceUnavailableError: ServiceUnavailableError: OpenAIException - The request could not be completed. Contact support with the call ID.","type":null,"param":null,"code":"503"}

@@ -1,0 +1,15 @@
+全部完成。汇总如下：
+
+| 步骤 | 内容 |
+|------|------|
+| **脚本** | `#!/bin/bash`，`#SBATCH --partition=Agent0`，`sleep 600`，时间上限 15 分钟 |
+| **提交** | `mat_sbatch` → Slurm 作业号 **900001** |
+| **取消** | `mat_cancel 900001` 已发出 |
+| **确认** | `mat_job_status` 显示作业 **CANCELLED**（含 `.batch` / `.extern` 两个子步骤也均为 `CANCELLED`） |
+
+作业 900001 已在 Agent0 分区提交后立即取消，确认取消已完成。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '在 11250 集群的 Agent0 分区提交一个运行 sleep 600 的作业（脚本自拟），拿到 Slurm 作业号后立刻取消它，然后向我确认取消已完成。'
+(node:120249) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

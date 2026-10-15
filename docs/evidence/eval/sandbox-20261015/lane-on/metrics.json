@@ -1,0 +1,112 @@
+{
+  "ranAt": "2026-10-15T06:38:43.217Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 1,
+  "totalInputTokens": 87198,
+  "totalOutputTokens": 13041,
+  "tasks": [
+    {
+      "id": "partitions-lookup",
+      "pass": true,
+      "failures": [],
+      "steps": 2,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 1
+      },
+      "inputTokens": 7495,
+      "outputTokens": 641,
+      "wallSec": 17,
+      "sessionFound": true
+    },
+    {
+      "id": "sleep-watch",
+      "pass": true,
+      "failures": [],
+      "steps": 7,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_partitions": 1,
+        "mat_exec": 2,
+        "mat_sbatch": 2,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 19087,
+      "outputTokens": 1345,
+      "wallSec": 62,
+      "sessionFound": true
+    },
+    {
+      "id": "gaussian-onestop",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_gaussian": 2,
+        "job_output": 1
+      },
+      "inputTokens": 6644,
+      "outputTokens": 1229,
+      "wallSec": 57,
+      "sessionFound": true
+    },
+    {
+      "id": "gaussian-fail-diagnosis",
+      "pass": true,
+      "failures": [],
+      "steps": 40,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_gaussian": 2,
+        "job_output": 2,
+        "mat_exec": 31,
+        "mat_download": 2,
+        "mat_job_status": 1
+      },
+      "inputTokens": 43984,
+      "outputTokens": 8584,
+      "wallSec": 315,
+      "sessionFound": true
+    },
+    {
+      "id": "cancel-job",
+      "pass": true,
+      "failures": [],
+      "steps": 7,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_partitions": 1,
+        "mat_exec": 1,
+        "mat_sbatch": 1,
+        "mat_cancel": 1,
+        "mat_job_status": 1
+      },
+      "inputTokens": 6663,
+      "outputTokens": 976,
+      "wallSec": 43,
+      "sessionFound": true
+    },
+    {
+      "id": "local-bash",
+      "pass": true,
+      "failures": [],
+      "steps": 2,
+      "turns": 1,
+      "toolCalls": {
+        "bash": 1
+      },
+      "inputTokens": 3325,
+      "outputTokens": 266,
+      "wallSec": 13,
+      "sessionFound": true
+    }
+  ]
+}

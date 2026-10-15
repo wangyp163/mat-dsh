@@ -1,0 +1,98 @@
+{
+  "ranAt": "2026-10-15T04:16:20.538Z",
+  "provider": "mat",
+  "model": "deepseek-v4-pro",
+  "lane": "replay",
+  "passRate": 1,
+  "totalInputTokens": 91699,
+  "totalOutputTokens": 8755,
+  "tasks": [
+    {
+      "id": "partitions-lookup",
+      "pass": true,
+      "failures": [],
+      "steps": 2,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 1
+      },
+      "inputTokens": 25921,
+      "outputTokens": 675,
+      "wallSec": 18,
+      "sessionFound": true
+    },
+    {
+      "id": "sleep-watch",
+      "pass": true,
+      "failures": [],
+      "steps": 13,
+      "turns": 1,
+      "toolCalls": {
+        "mat_partitions": 1,
+        "mat_env_gate": 1,
+        "mat_exec": 6,
+        "write": 2,
+        "mat_upload": 2,
+        "mat_sbatch": 2,
+        "mat_job_watch": 1,
+        "job_output": 1
+      },
+      "inputTokens": 18459,
+      "outputTokens": 2711,
+      "wallSec": 104,
+      "sessionFound": true
+    },
+    {
+      "id": "gaussian-onestop",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_gaussian": 2,
+        "job_output": 1
+      },
+      "inputTokens": 10614,
+      "outputTokens": 1600,
+      "wallSec": 59,
+      "sessionFound": true
+    },
+    {
+      "id": "gaussian-fail-diagnosis",
+      "pass": true,
+      "failures": [],
+      "steps": 5,
+      "turns": 1,
+      "toolCalls": {
+        "skill": 1,
+        "mat_env_gate": 1,
+        "mat_gaussian": 2,
+        "job_output": 1
+      },
+      "inputTokens": 25763,
+      "outputTokens": 2788,
+      "wallSec": 89,
+      "sessionFound": true
+    },
+    {
+      "id": "cancel-job",
+      "pass": true,
+      "failures": [],
+      "steps": 6,
+      "turns": 1,
+      "toolCalls": {
+        "mat_env_gate": 1,
+        "mat_partitions": 1,
+        "mat_exec": 1,
+        "mat_sbatch": 1,
+        "mat_cancel": 1,
+        "mat_job_status": 1
+      },
+      "inputTokens": 10942,
+      "outputTokens": 981,
+      "wallSec": 32,
+      "sessionFound": true
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "ranAt": "2026-10-15T03:32:19.181Z",
+  "provider": "mat",
+  "model": "deepseek-v4-flash",
+  "lane": "replay",
+  "passRate": 0,
+  "totalInputTokens": 0,
+  "totalOutputTokens": 0,
+  "tasks": [
+    {
+      "id": "partitions-lookup",
+      "pass": false,
+      "failures": [
+        "进程 exit=1",
+        "会话报错: 503: {\"message\":\"ServiceUnavailableError: ServiceUnavailableError: OpenAIException - The request could not be completed. Contact support with the call ID.\",\"typ",
+        "无最终 assistant 答复",
+        "finalMustMatch 未命中: /Agent0/",
+        "finalMustMatch 未命中: /20/",
+        "toolsAnyOf 全组未出现: [mat_partitions]（实调: 无）"
+      ],
+      "steps": 1,
+      "turns": 1,
+      "toolCalls": {},
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "wallSec": 48,
+      "sessionFound": true
+    }
+  ]
+}

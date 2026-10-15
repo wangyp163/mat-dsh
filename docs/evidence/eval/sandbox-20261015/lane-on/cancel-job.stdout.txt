@@ -1,0 +1,16 @@
+确认完成。作业 **900001** 已在 11250 集群的 Agent0 分区被取消，状态显示为 **CANCELLED**：
+
+| 项目 | 详情 |
+|------|------|
+| 集群 | 11250（华东一区昆山） |
+| 分区 | Agent0 |
+| 作业号 | 900001 |
+| 最终状态 | CANCELLED |
+| 工作目录 | `/tmp/sleep-test` |
+
+整个流程：提交 → 立即 `scancel` → 状态确认 `CANCELLED`，取消已生效。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '在 11250 集群的 Agent0 分区提交一个运行 sleep 600 的作业（脚本自拟），拿到 Slurm 作业号后立刻取消它，然后向我确认取消已完成。'
+(node:121254) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

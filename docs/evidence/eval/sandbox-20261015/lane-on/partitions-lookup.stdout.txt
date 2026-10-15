@@ -1,0 +1,29 @@
+## 集群 11250 分区情况
+
+| 分区 | 状态 | 时间限制 | 节点数 | 节点状态 |
+|-------|------|----------|--------|-----------|
+| kshctest | up | 3-00:00:00 | 2 | drain* |
+| kshctest | up | 3-00:00:00 | 153 | mix |
+| kshctest | up | 3-00:00:00 | 281 | alloc |
+| kshctest | up | 3-00:00:00 | 2 | idle |
+| kshdtest | up | 3-00:00:00 | 2 | drain* |
+| kshdtest | up | 3-00:00:00 | 1 | drng |
+| kshdtest | up | 3-00:00:00 | 4 | mix |
+| kshdtest | up | 3-00:00:00 | 68 | alloc |
+| kshdtest | up | 3-00:00:00 | 4 | idle |
+| kshdAI | up | 2:00:00 | 3 | drain* |
+| kshdAI | up | 2:00:00 | 1 | drng |
+| kshdAI | up | 2:00:00 | 1 | mix |
+| kshdAI | up | 2:00:00 | 34 | alloc |
+| kshdsctest | up | 3-00:00:00 | 1 | mix |
+| kshdsctest | up | 3-00:00:00 | 23 | alloc |
+| **Agent0** | **up** | **1-00:00:00** | **20** | **idle** |
+
+### Agent0 分区
+
+**Agent0 分区当前有 20 个空闲（idle）节点**，全部可用。该分区时间限制为 1 天（1-00:00:00），没有处于 mix、alloc、drain 或 drng 状态的节点 — 整分区当前完全空闲，没有任何作业占用。
+
+[stderr]
+$ node --import tsx/esm apps/cli/src/bin.ts --profile headless --patch ~/mat-harness/mat-dsh/profiles/mat.yml --patch ~/mat-harness/mat-dsh/profiles/eval.yml '查看 11250 集群的分区情况：用 mat_partitions 工具列出分区表，告诉我 Agent0 分区当前有多少个空闲（idle）节点。'
+(node:120443) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

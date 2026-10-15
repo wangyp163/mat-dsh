@@ -1,0 +1,126 @@
+{
+  "ranAt": "2026-10-15T06:22:48.825Z",
+  "backend": "bwrap (workspace-write profile, full enforcement)",
+  "matrix": [
+    {
+      "id": "write-workspace",
+      "note": "合法写：workspace 内（bind rw）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "stateOk": true,
+      "pass": true
+    },
+    {
+      "id": "write-tmp",
+      "note": "合法写：/tmp（bwrap tmpfs）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "stateOk": true,
+      "pass": true
+    },
+    {
+      "id": "write-home",
+      "note": "越权写：家目录（生产事故面：env.local 凭据在此）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 1,
+        "denied": true,
+        "stderrTail": "bash: line 1: ~/sbx-escape.marker: Read-only file system"
+      },
+      "stateOk": true,
+      "pass": true
+    },
+    {
+      "id": "write-usr-local",
+      "note": "越权写：系统路径（plain 泳道用 /tmp 替代目标，同命令类）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 1,
+        "denied": true,
+        "stderrTail": "bash: line 1: /usr/local/sbx-escape.marker: Read-only file system"
+      },
+      "stateOk": true,
+      "pass": true
+    },
+    {
+      "id": "append-etc-hosts",
+      "note": "越权改写 /etc/hosts·DNS 劫持面（plain 泳道用 /tmp 替代目标）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 1,
+        "denied": true,
+        "stderrTail": "bash: line 1: /etc/hosts: Read-only file system"
+      },
+      "stateOk": true,
+      "pass": true
+    },
+    {
+      "id": "rm-home-file",
+      "note": "越权删除：家目录预存文件（两泳道各自预建目标）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 1,
+        "denied": true,
+        "stderrTail": "rm: cannot remove '~/sbx-rm-confined.marker': Read-only file system"
+      },
+      "stateOk": true,
+      "pass": true
+    },
+    {
+      "id": "chmod-bypass",
+      "note": "绕过尝试：chmod 提权后写（EROFS 不可 chmod 解；plain 对自有目录）",
+      "plain": {
+        "code": 0,
+        "denied": false,
+        "stderrTail": ""
+      },
+      "confined": {
+        "code": 1,
+        "denied": true,
+        "stderrTail": "chmod: changing permissions of '/root': Read-only file system"
+      },
+      "stateOk": true,
+      "pass": true
+    }
+  ],
+  "bench": {
+    "n": 15,
+    "plainMedianMs": 1.84,
+    "confinedMedianMs": 4.94,
+    "overheadMs": 3.1,
+    "overheadRatio": 1.68
+  },
+  "allPass": true
+}
