@@ -11,8 +11,9 @@ const packagedNames = [
   'batch-orchestrator',
   'batch-roles',
   'gaussian-calc',
-  'gaussian-external-input',
   'gaussian-demo-stress',
+  'gaussian-external-input',
+  'mater-agents-smoke',
   'matgen',
   'orca-external-input',
   'qe-external-input',
@@ -20,6 +21,7 @@ const packagedNames = [
   'task-builder',
   'vasp-calc',
   'vasp-external-input',
+  'xtb-calc',
   'xtb-external-input',
 ]
 
