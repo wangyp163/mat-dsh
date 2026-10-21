@@ -34,6 +34,6 @@ const loop = createWatchLoop({
   clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
 })
 const outcome = await loop.done
-console.log('OUTCOME:', outcome.status, outcome.detail.slice(0, 80))
+console.log('OUTCOME:', outcome.status, outcome.detail?.slice(0, 80))
 console.log('ALERTS:', alerts.length, alerts)
 console.log('OUTPUT:', loop.readOutput().slice(-400))

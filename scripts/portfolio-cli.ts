@@ -118,7 +118,7 @@ function main(): void {
         fail(`unknown phase '${values.phase}' (valid: ${PHASE_ORDER.join('|')})`)
       }
       let verdict: Record<string, unknown> | undefined
-      let parsedVerdict: ReturnType<typeof parseVerdictBySchema>['value'] | undefined
+      let parsedVerdict: Extract<ReturnType<typeof parseVerdictBySchema>, { ok: true }>['value'] | undefined
       if (values['verdict-file'] !== undefined) {
         let payload: unknown
         try {
