@@ -1,7 +1,7 @@
 ---
 name: xtb-external-input
 description: Use this skill when the user provides a self-prepared xtb xcontrol steering file (next to their xyz) and wants it run as-is — trigger phrases include 自带 xcontrol, 现成 xcontrol, 用户操控文件, 自带输入, external input, 不重新生成输入, 按我的 xcontrol 跑. Routes the agent into the xtb-workflow external mode (section check + task registration at pre, slurm rendering with -I xcontrol at run, registry-gated post). Do NOT load for regular xtb calculations from a structure file without a user xcontrol (use xtb-calc).
-version: 0.1.0-demo
+version: 1.2.0-demo
 depends_on:
   - mat-chat
   - mat-job-manager
@@ -24,7 +24,7 @@ depends_on:
 
 ## 执行模型
 
-`pre`（xcontrol 语法检查 + task 登记）→ `run`（命令 `xtb <xyz> -I xcontrol`，不注入 CLI runtype 旗标）→ job-manager 提交/监控 → `post`（按推断 task 解析）。
+`pre`（xcontrol 语法检查 + task 登记）→ `run`（命令 `xtb <xyz> <推断 task 的 runtype 旗标> -I xcontrol`——xcontrol 节只**配置** runtype，runtype 本身由 CLI 旗标触发）→ job-manager 提交/监控 → `post`（按推断 task 解析）。
 
 ### 1. pre
 
@@ -44,7 +44,7 @@ cd "{work_dir}" && source {python_env} && \
   xtb-workflow -t external -p run -i {mol.xyz} -w "{work_dir}" --json run.json
 ```
 
-slurm 命令：`export OMP_NUM_THREADS=1 ...; xtb <xyz> --gfn 2 --chrg N -I xcontrol > xtb.out 2>&1; echo $? > xtb.exit`——runtype 操控（opt/md/scan）全部来自用户 xcontrol。
+slurm 命令：`export OMP_NUM_THREADS=1 ...; xtb <xyz> --gfn 2 --chrg N <runtype 旗标> -I xcontrol > xtb.out 2>&1; echo $? > xtb.exit`——旗标按推断 task 注入（`$opt`→`--opt`、`$md`→`--md`、`$metadyn`→`--metadyn`、`$scan`→**`--opt`**，xtb 无 `--scan` 旗标；sp 不注）。只写 `$opt` 节不注旗标会跑成单点（demo C1 实证），参数仍全部走 `-I xcontrol`。
 
 ### 3. 提交与监控 / 4. post
 

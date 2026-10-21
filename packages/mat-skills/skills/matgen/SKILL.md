@@ -37,8 +37,16 @@ device / queue 一次看全）；会话卡住先查 queue 再下结论。
 ## 工作流（双路编排，画像一次生成）
 
 ```
-用户意图
-  │ 按下表生成画像（extra_forbidden 严格校验——字段名错即整单被拒，
+用户意图（带隙类目标）
+  │ 带隙目标先过 landscape_check（2026-10-12 E2E 教训产品化，0.4.1+）：
+  │ landscape_check(elements, target_band_gap) 一次检索判可达性——
+  │ RETRIEVAL_HIT（库里已有，直接检索取用，不要生成）/ INTERPOLATION
+  │ （分布内部，生成合理）/ EDGE（贴上限可试）/ OUT_OF_LANDSCAPE
+  │ （超已知上限 0.3+ eV，生成是打不存在的靶——转告 verdict_detail 的
+  │ 扩域建议（同族替换）或与用户核口径，PBE 低估实验 40-50%）。
+  │ DATA_UNAVAILABLE 是数据源问题，不等于目标不可达。
+  ▼
+按下表生成画像（extra_forbidden 严格校验——字段名错即整单被拒，
   │ 不要试错猜字段；细节可 read material://search-spec-schema / design-spec-schema）
   ▼
 material_search_plan(search_spec)      ← 画像校验+补全，LLM 语义端
