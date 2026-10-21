@@ -10,7 +10,7 @@
 
   <!-- 标题 -->
   <text x="40" y="46" font-size="21" font-weight="700" fill="#1f2430">mat-dsh · 拓扑结构（简化版）</text>
-  <text x="40" y="68" font-size="12" fill="#5a6373">只看节点与连接 · 模块细节见完整版 architecture-diagram.html / .png</text>
+  <text x="40" y="68" font-size="12" fill="#5a6373">只看节点与连接 · 模块细节见完整版 architecture-diagram.html</text>
 
   <!-- ══ 连接线（先画线，节点盖在上面） ══ -->
   <g stroke="#97a3b5" stroke-width="1.7" fill="none">
