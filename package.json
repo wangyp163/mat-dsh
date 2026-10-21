@@ -10,7 +10,7 @@
     "stress:report-lint": "tsx scripts/stress-report-lint.ts",
     "build:mat-ui": "node scripts/build-mat-ui.mjs",
     "debug:session": "tsx scripts/session-debug.ts",
-    "dsh": "pnpm --dir ~/mat-harness/deepseek-harness dsh",
+    "dsh": "pnpm --dir ../deepseek-harness dsh",
     "eval:run": "tsx scripts/eval-run.ts",
     "eval:report": "tsx scripts/eval-report.ts",
     "eval:fake": "tsx scripts/eval-fake-mat.ts"
