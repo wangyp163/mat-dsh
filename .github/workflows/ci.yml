@@ -1,17 +1,14 @@
 name: ci
 
-# 最低可用 CI：typecheck + 全量测试。
+# CI 单一定义：typecheck + 全量测试。可执行步骤收敛在 scripts/ci.sh，
+# 本地、pre-push hook、GitHub Actions 走同一条路径，避免两套步骤漂移。
 #
-# ⚠️ 注意：本仓当前 remote 是 Gitee（git@your-remote.example/mat-dsh.git），
-# 此文件不会被自动执行。它存在的意义是「若将来镜像到 GitHub 即生效」，
-# 以及作为 CI 步骤的权威声明。**当前真正可执行的是 scripts/ci.sh**——
-# 本地、pre-push hook、或任何 CI 系统都调它。
-#
-# 仓库根 = mat-dsh 本身（不是 mat-harness），故路径均相对 mat-dsh。
+# 依赖前置：本仓是树外组合（host: deepseek-harness），pnpm overrides 以
+# link:../deepseek-harness/* 引用宿主源码，故安装前先浅克隆宿主到 sibling 目录。
 
 on:
   push:
-    branches: [master, main]
+    branches: [main, master]
   pull_request:
   workflow_dispatch:
 
@@ -28,10 +25,20 @@ jobs:
           node-version: '22.13'
       - uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
+
+      - name: clone host (out-of-tree composition, pinned to verified tag)
+        run: git clone --depth 1 --branch dsh-v0.1.0-rc.8 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+
+      # 宿主必须 install + build：link: overrides 的类型解析走宿主包 exports 指向的
+      # lib/*.d.ts 构建产物，未构建的宿主会让泛型推断链断掉（树外组合的隐性契约）。
+      - name: install and build host
+        run: |
+          pnpm --dir ../deepseek-harness install --no-frozen-lockfile
+          pnpm --dir ../deepseek-harness build
 
       - name: install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       # 单点定义：与本地/其他 CI 完全同一条路径，避免两套步骤漂移
       - name: ci
