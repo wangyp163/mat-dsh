@@ -279,8 +279,8 @@ pnpm --filter @deepseek-ai/dsh-client-ui-conversation bundle    # 在 harness �
 
 | 主题 | 路径 |
 |---|---|
-| 设计 spec | `../docs/superpowers/specs/2026-08-27-mat-dsh-design.md` |
-| M0 spike 计划/判定 | `../docs/superpowers/plans/2026-08-27-mat-dsh-m0-spike.md`、`docs/evidence/m0/m0-verdict.md`（含 M1 backlog） |
+| 设计 spec | `docs/design/superpowers/specs/2026-08-27-mat-dsh-design.md` |
+| M0 spike 计划/判定 | `docs/design/superpowers/plans/2026-08-27-mat-dsh-m0-spike.md`、`docs/evidence/m0/m0-verdict.md`（含 M1 backlog） |
 | 各里程碑证据 | `docs/evidence/{m0,m1,m2,m3,post-m0}/` |
 | 压测全套（SOP+工具+结果） | `docs/evidence/gw-merge-stress/`（README.md 起步） |
 | Workflow API 提案 | `docs/mat-workflow-api-product.md` |

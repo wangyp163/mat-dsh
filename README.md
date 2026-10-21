@@ -1,6 +1,12 @@
 # mat-dsh
 
-HPC 科学计算 harness（基于 DeepSeek Harness 0.1.0-rc.8，树外组合，不改宿主源码）。
+[![ci](https://github.com/wangyp163/mat-dsh/actions/workflows/ci.yml/badge.svg)](https://github.com/wangyp163/mat-dsh/actions/workflows/ci.yml)
+
+HPC 科学计算 harness（基于 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 0.1.0-rc.8，树外组合，不改宿主源码）。
+
+> **English** — An out-of-tree plugin family that turns DeepSeek Harness into a scientific-computing agent for HPC clusters (Slurm): skills and tools for Gaussian / VASP / xTB / ABACUS / QE workflows, asynchronous Slurm job monitoring, file transfer over OpenAPI, a deterministic task compiler (`mat_task_build`), and evidence-driven milestones with TDD'd core and replay contract tests. Credentials never enter the repo — everything routes through env vars (`env.example` documents the surface). See [`docs/architecture-topology.png`](docs/architecture-topology.png) and the milestone sections below.
+
+架构总览：[`docs/architecture-topology.png`](docs/architecture-topology.png) · 工程亮点提炼：[`docs/TECH-HIGHLIGHTS.md`](docs/TECH-HIGHLIGHTS.md) · 设计与实验方法：[`docs/design/superpowers/`](docs/design/superpowers/)
 
 ## 可移植组合（2026-10-08 插件化改造）
 
@@ -18,13 +24,15 @@ mat-dsh 采用本地控制平面、HPC 计算平面的混合架构：本地 dsh 
 远端保存完整原始结果，本地默认同步结构化结果与轻量重要文件；大型 checkpoint、波函数、轨迹和中间文件保持 `remote-only` 映射，需要时再按 Job 上下文同步。当前 Gaussian 命令链通过 `RemoteWorkflowAdapter` 作为兼容执行后端，待 HPC 提供统一的 workflow API 后可替换后端而不改变 skill 和工具调用面。
 
 - HPC Workflow API 产品形态（提案）：[`docs/mat-workflow-api-product.md`](docs/mat-workflow-api-product.md)
-- 设计：`../docs/superpowers/specs/2026-08-27-mat-dsh-design.md`
-- M0 spike 计划：`../docs/superpowers/plans/2026-08-27-mat-dsh-m0-spike.md`
+- 设计：[`docs/design/superpowers/specs/2026-08-27-mat-dsh-design.md`](docs/design/superpowers/specs/2026-08-27-mat-dsh-design.md)
+- M0 spike 计划：[`docs/design/superpowers/plans/2026-08-27-mat-dsh-m0-spike.md`](docs/design/superpowers/plans/2026-08-27-mat-dsh-m0-spike.md)
 
 ## 启动（M0）
 
 ```bash
-cp env.example env.local   # 填入真实凭证
+# 宿主（树外组合，不改宿主源码）：sibling 目录检出或 npm 安装均可
+git clone https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
+cp env.example env.local   # 填入真实凭证（env.local 已 gitignore，永不入库）
 set -a; source env.local; set +a
 pnpm install
 pnpm --dir ../deepseek-harness dsh web --no-open --patch "$PWD/profiles/mat.yml"
@@ -144,8 +152,7 @@ LLM 只站在两端（意图 → goal.json；结果 → 报告），中间全是
 
 ## matgen MCP 接入（树外 mcp-client 插件）
 
-材料筛选/生成能力（仓外 `~/aiagent/matgen` 的 matgen-mcp，HPC 容器 pod
-`matgen-mcp-pod:50046` 常驻 0.3.x）经宿主 `@deepseek-ai/dsh-mcp-client`
+材料筛选/生成能力（外部 matgen MCP 服务，HPC 容器 pod 常驻 0.3.x）经宿主 `@deepseek-ai/dsh-mcp-client`
 以 streamable-http 接入，同 OPTIMADE 模式（`profiles/mat.yml` 的
 `matgen-mcp-reference`）。8 工具以 `mcp__matgen__<name>` 注册：
 `material_search_plan` / `material_search` / `structure_generate` /
