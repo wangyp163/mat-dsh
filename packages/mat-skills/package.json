@@ -1,0 +1,26 @@
+{
+  "name": "mat-skills",
+  "version": "0.1.0",
+  "description": "HPC 打包技能 provider：包内 skills/ 目录 15 个 SKILL.md 经 ctx.skills 注册（bundled 血脉，路径自解析）",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "skills"
+  ],
+  "dependencies": {
+    "@deepseek-ai/dsh-skill": "^0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "yaml": "^2.9.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22"
+  }
+}
