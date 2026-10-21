@@ -1,0 +1,26 @@
+{
+  "name": "mat-bundle",
+  "description": "HPC 科学计算 harness 的 dsh profile bundle：HPC 工具面、打包技能、Web UI 增强与批量子代理角色的组合层",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "mat-core": "workspace:*",
+    "mat-tools": "workspace:*",
+    "mat-skills": "workspace:*",
+    "mat-ui": "workspace:*",
+    "@deepseek-ai/dsh-mcp-client": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-tool-subagent": "^0.1.0-rc.8"
+  }
+}

@@ -4,6 +4,24 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@deepseek-ai/cordis': link:../deepseek-harness/vendor/cordis
+  '@deepseek-ai/schemastery': link:../deepseek-harness/vendor/schemastery
+  '@deepseek-ai/dsh-tools': link:../deepseek-harness/packages/core/tools
+  '@deepseek-ai/dsh-llm': link:../deepseek-harness/packages/llm/llm
+  '@deepseek-ai/dsh-system-prompt': link:../deepseek-harness/packages/core/system-prompt
+  '@deepseek-ai/dsh-jobs': link:../deepseek-harness/packages/jobs/jobs
+  '@deepseek-ai/dsh-session': link:../deepseek-harness/packages/core/session
+  '@deepseek-ai/dsh-skill': link:../deepseek-harness/packages/skill/skill
+  '@deepseek-ai/dsh-mcp-client': link:../deepseek-harness/packages/mcp/mcp-client
+  '@deepseek-ai/dsh-tool-subagent': link:../deepseek-harness/packages/subagent/tool-subagent
+  '@deepseek-ai/dsh-client-ui-theme': link:../deepseek-harness/packages/client/ui-theme
+  '@deepseek-ai/dsh-client-ui-tool': link:../deepseek-harness/packages/client/ui-tool
+  '@deepseek-ai/dsh-client-ui-conversation': link:../deepseek-harness/packages/client/ui-conversation
+  '@deepseek-ai/dsh-client-ui-layout': link:../deepseek-harness/packages/client/ui-layout
+  '@deepseek-ai/dsh-client-ui-sidebar': link:../deepseek-harness/packages/client/ui-sidebar
+  '@deepseek-ai/dsh-client-ui-primitives': link:../deepseek-harness/packages/client/ui-primitives
+
 importers:
 
   .:
@@ -25,7 +43,47 @@ importers:
         specifier: ^3.2.7
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.12)(yaml@2.9.0)
 
+  packages/mat-bundle:
+    dependencies:
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: link:../../../deepseek-harness/packages/mcp/mcp-client
+        version: link:../../../deepseek-harness/packages/mcp/mcp-client
+      '@deepseek-ai/dsh-tool-subagent':
+        specifier: link:../../../deepseek-harness/packages/subagent/tool-subagent
+        version: link:../../../deepseek-harness/packages/subagent/tool-subagent
+      mat-core:
+        specifier: workspace:*
+        version: link:../mat-core
+      mat-skills:
+        specifier: workspace:*
+        version: link:../mat-skills
+      mat-tools:
+        specifier: workspace:*
+        version: link:../mat-tools
+      mat-ui:
+        specifier: workspace:*
+        version: link:../mat-ui
+
   packages/mat-core:
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+
+  packages/mat-skills:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: link:../../../deepseek-harness/vendor/cordis
+        version: link:../../../deepseek-harness/vendor/cordis
+      '@deepseek-ai/dsh-skill':
+        specifier: link:../../../deepseek-harness/packages/skill/skill
+        version: link:../../../deepseek-harness/packages/skill/skill
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../deepseek-harness/vendor/schemastery
+        version: link:../../../deepseek-harness/vendor/schemastery
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^22
@@ -42,12 +100,18 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: link:../../../deepseek-harness/packages/llm/llm
         version: link:../../../deepseek-harness/packages/llm/llm
+      '@deepseek-ai/dsh-session':
+        specifier: link:../../../deepseek-harness/packages/core/session
+        version: link:../../../deepseek-harness/packages/core/session
       '@deepseek-ai/dsh-system-prompt':
         specifier: link:../../../deepseek-harness/packages/core/system-prompt
         version: link:../../../deepseek-harness/packages/core/system-prompt
       '@deepseek-ai/dsh-tools':
         specifier: link:../../../deepseek-harness/packages/core/tools
         version: link:../../../deepseek-harness/packages/core/tools
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../deepseek-harness/vendor/schemastery
+        version: link:../../../deepseek-harness/vendor/schemastery
       mat-core:
         specifier: workspace:*
         version: link:../mat-core

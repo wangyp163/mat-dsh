@@ -1,7 +1,7 @@
 {
   "name": "mat-ui",
   "version": "0.1.0",
-  "private": true,
+  "description": "HPC Web UI 增强：品牌、会话归档、状态板卡片（harmony Source Patches + web client 模块）",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
@@ -9,6 +9,13 @@
     "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
+  "files": [
+    "src",
+    "lib",
+    "assets",
+    "turn-fold-compat.patch.cjs",
+    "details-tab-reactivity.patch.cjs"
+  ],
   "dsh": {
     "harmony": {
       "patches": [
@@ -23,20 +30,22 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-theme",
         "@deepseek-ai/dsh-client-ui-tool",
-      "@deepseek-ai/dsh-client-ui-layout",
-      "@deepseek-ai/dsh-client-ui-primitives",
-      "@deepseek-ai/dsh-client-ui-sidebar"
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-ui-sidebar"
       ]
     }
   },
   "dependencies": {
     "mat-core": "workspace:*",
-    "@deepseek-ai/cordis": "link:../../../deepseek-harness/vendor/cordis",
-    "@deepseek-ai/dsh-client-ui-theme": "link:../../../deepseek-harness/packages/client/ui-theme",
-    "@deepseek-ai/dsh-client-ui-tool": "link:../../../deepseek-harness/packages/client/ui-tool",
-    "@deepseek-ai/dsh-client-ui-conversation": "link:../../../deepseek-harness/packages/client/ui-conversation",
-    "@deepseek-ai/dsh-client-ui-layout": "link:../../../deepseek-harness/packages/client/ui-layout",
-    "@deepseek-ai/dsh-client-ui-sidebar": "link:../../../deepseek-harness/packages/client/ui-sidebar",
-    "@deepseek-ai/dsh-client-ui-primitives": "link:../../../deepseek-harness/packages/client/ui-primitives"
+    "@deepseek-ai/dsh-client-ui-theme": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-tool": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-layout": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.8"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
   }
 }

@@ -1,9 +1,16 @@
 {
   "name": "mat-core",
   "version": "0.1.0",
-  "private": true,
+  "description": "HPC harness 核心库：客户端/watch-loop/Slurm 解析/Gaussian·VASP producer/task-package 编译器/pipeline 状态机（纯 TS，零 dsh 依赖）",
   "type": "module",
   "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
   "devDependencies": {
     "@types/node": "^22"
   }

@@ -110,6 +110,50 @@ import type { SettledFileJob } from './file-service.ts'
 import { resolveEfileCredentials } from './efile-env.ts'
 import { createWorkdirResolver } from './workdir-resolver.ts'
 import type { WorkdirResolver } from './workdir-resolver.ts'
+import z from '@deepseek-ai/schemastery'
+import type Schema from '@deepseek-ai/schemastery'
+
+/**
+ * 插件配置（cordis.yml 行级 config；启动前经 schema 校验，非法值 fail-loud）。
+ * 原则：配置先行、环境变量兜底——已部署环境不写 config 也保持原行为；
+ * 新环境在组合层声明而非散落 env。凭证本体永远只在环境变量里（值不进配置，
+ * 这里只配置"读哪个环境变量"这类部署形态）。
+ */
+export interface Config {
+  /** HPC MCP 网关地址；缺省回退 MAT_MCP_BASE_URL。 */
+  mcpBaseUrl?: string
+  /** MCP 密钥读哪个环境变量；缺省 MAT_MCP_KEY。 */
+  mcpKeyEnv?: string
+  /** 命令传输实现：curl（默认，子进程稳）| fetch（原生 fetch，约 5x 快）。
+   *  缺省回退 MAT_TRANSPORT 再缺省 curl。 */
+  transport?: 'curl' | 'fetch'
+  /** 本地工件根（mat-files/task-packages/jobs.json/remote-homes.json）；
+   *  缺省回退 MAT_FILE_ROOT 再 $DSH_HOME/mat-files。 */
+  fileRoot?: string
+}
+
+export const Config: Schema<Config> = z.object({
+  mcpBaseUrl: z.string(),
+  mcpKeyEnv: z.string().default('MAT_MCP_KEY'),
+  transport: z.union([z.const('curl'), z.const('fetch')]),
+  fileRoot: z.string(),
+})
+
+/** apply() 落定的配置；读取点全部懒触发（首次工具调用晚于 apply），无竞态。 */
+let settings: Config = {}
+
+function mcpKey(): string {
+  return process.env[settings.mcpKeyEnv ?? 'MAT_MCP_KEY'] ?? ''
+}
+
+function mcpBaseUrl(): string | undefined {
+  return settings.mcpBaseUrl || process.env.MAT_MCP_BASE_URL || undefined
+}
+
+function transportOption(): { transportKind?: 'curl' | 'fetch' } {
+  // 未配置时不传——让 MatClient 自己回退 MAT_TRANSPORT（env 应急开关语义保留）。
+  return settings.transport !== undefined ? { transportKind: settings.transport } : {}
+}
 
 declare module '@deepseek-ai/dsh-jobs' {
   interface JobKindMap {
@@ -187,8 +231,7 @@ let client: MatClient | undefined
 
 function getClient(): MatClient {
   if (!client) {
-    const mcpKey = process.env.MAT_MCP_KEY ?? ''
-    client = new MatClient({ mcpKey, baseUrl: process.env.MAT_MCP_BASE_URL || undefined })
+    client = new MatClient({ mcpKey: mcpKey(), baseUrl: mcpBaseUrl(), ...transportOption() })
   }
   return client
 }
@@ -196,8 +239,9 @@ function getClient(): MatClient {
 /** 每次 watch 一个专属实例：与 mat_exec 的模块级单例隔离（并发策略见 mat-core client.ts）。 */
 function newWatchClient(): MatClient {
   return new MatClient({
-    mcpKey: process.env.MAT_MCP_KEY ?? '',
-    baseUrl: process.env.MAT_MCP_BASE_URL || undefined,
+    mcpKey: mcpKey(),
+    baseUrl: mcpBaseUrl(),
+    ...transportOption(),
   })
 }
 
@@ -247,7 +291,7 @@ function getWorkdirResolver(): WorkdirResolver {
 }
 
 function createMatFileService(): MatFileServiceImpl {
-  const localRoot = process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
+  const localRoot = localWorkspaceRoot()
   const service = new MatFileServiceImpl({
     localRoot,
     resolveWorkdir: (clusterId, workdir, hints) => getWorkdirResolver().resolve(clusterId, workdir, hints),
@@ -309,7 +353,7 @@ function vaspOptions(raw: unknown): VaspOptions {
 }
 
 function localWorkspaceRoot(): string {
-  return process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
+  return settings.fileRoot || process.env.MAT_FILE_ROOT || `${process.env.DSH_HOME || process.cwd()}/mat-files`
 }
 
 function reserveLocalWorkspace(clusterId: string, jobId: string): string {
@@ -645,7 +689,8 @@ function persistJobs(path: string, jobs: MatJobStatus[]): void {
   renameSync(temporary, path)
 }
 
-export function apply(ctx: Context): void {
+export function apply(ctx: Context, config: Config = {}): void {
+  settings = config
   const jobsPath = statusStorePath()
   const statusBoard = createStatusBoard({
     initialEntries: loadPersistedJobs(jobsPath),
@@ -734,6 +779,24 @@ export function apply(ctx: Context): void {
       'Move files between this machine and a cluster with mat_upload/mat_download. ' +
       'They prefer the efile API with MAT_ACCESS_KEY/MAT_SECRET_KEY/MAT_USER and fall back ' +
       'to the authorized remote-shell channel when that cluster has no OpenAPI file token.',
+  })
+
+  // xtb 引导段：与 gaussian/vasp 同款的"先 skill 后 workflow"引导。没有这段时
+  // 模型会手搓 xtb 命令+slurm（demo r-xtb 两连发实证），绕开 xtb-workflow 三相
+  // 链与结果契约（2026-10-09 E2E A1）。
+  ctx.systemPrompt.section({
+    name: 'tool:mat-xtb',
+    order: 101,
+    text:
+      'For xtb / GFN2-xTB / GFN-FF / semiempirical tight-binding calculations (single point, geometry ' +
+      'optimization, frequencies, MD, scans, conformer search, or lithium-battery pre-optimization such as ' +
+      'solvent stacking, electrolyte-on-surface slabs, and fixed/frozen-atom optimizations), load the ' +
+      'xtb-calc skill first (skill tool) and drive the deployed xtb-workflow through its pre → run → sbatch → ' +
+      'post chain instead of hand-writing xtb commands or slurm scripts: input validation, frozen-atom ' +
+      'restraints (verified against the real machine — xtb 6.7.1 ignores the $fix block in optimizers), ' +
+      'periodic extxyz handling, structured result JSON, and plots come from the workflow. If the user ' +
+      'supplies their own xcontrol steering file next to the xyz, load xtb-external-input instead. ' +
+      'Consume results only from the post-phase result JSON; never parse raw xtb logs by hand.',
   })
 
   // VASP 引导段：与 gaussian 同款的"先 skill 后一站式"引导。执行形态差异

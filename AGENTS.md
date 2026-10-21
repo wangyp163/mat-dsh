@@ -10,8 +10,8 @@
 
 ### 1.1 树外组合纪律
 
-- **宿主零改动**：本仓的一切能力以树外组合挂进 dsh——组合面只有三个：`profiles/mat.yml`（插件挂载）、`packages/*`（插件实现）、`skills/*`（协议）。不 patch 宿主源码、不 fork 宿主仓库。
-- 唯一例外是 `packages/mat-ui` 的 Harmony patch：它对宿主版本有指纹，**跨宿主版本可能静默失效**——升级 `../deepseek-harness` 后必须重验 mat-ui patch 是否仍然生效。
+- **宿主零改动**：本仓的一切能力以树外组合挂进 dsh——组合面四个：`packages/mat-bundle/cordis.patch.yml`（环境无关插件行的 bundle 层，2026-10-08 起）、`profiles/mat.yml`（环境相关行：LLM 路由 + dev 技能隔离）、`packages/*`（插件实现）、`skills`（协议；物理位置 `packages/mat-skills/skills/`，仓根 `skills` 是兼容软链，sops.yaml/kb-sync 引用继续有效）。不 patch 宿主源码、不 fork 宿主仓库。dev 与目标机同构装载（dsh-web.sh 注入 bundle），详见 `docs/portability.md`。
+- 唯一例外是 `packages/mat-ui` 的 Harmony patch：它对宿主版本有指纹，**跨宿主版本可能静默失效**——升级 `../deepseek-harness` 后必须重验 mat-ui patch 是否仍然生效（逃生口 `MAT_UI_OFF=1`）。
 - 树外改不动的宿主机理缺口，以树外协议绕过并记录为上游反馈，不为此破例改宿主。已知三缺口：jobs 不感知子 agent、per-child usage 无 API 面、outputSchema 按次传。
 
 ### 1.2 四层拆解纪律

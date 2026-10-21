@@ -2,6 +2,15 @@
 
 HPC 科学计算 harness（基于 DeepSeek Harness 0.1.0-rc.8，树外组合，不改宿主源码）。
 
+## 可移植组合（2026-10-08 插件化改造）
+
+dsh 侧资产已重组为可发布插件族：`mat-core`（纯库）/ `mat-tools`（工具面
+插件）/ `mat-skills`（打包技能 provider，skills 随包分发）/ `mat-ui`（可选
+UI 层）/ **`mat-bundle`**（profile bundle，一行装载入口）。dev 与目标机同构
+（dsh-web.sh 注入 bundle 装载），环境相关行只在 `profiles/mat.yml`。安装指南、
+兼容矩阵与机制变化见 [`docs/portability.md`](docs/portability.md) 与
+[`packages/mat-bundle/README.md`](packages/mat-bundle/README.md)。
+
 ## 产品边界
 
 mat-dsh 采用本地控制平面、HPC 计算平面的混合架构：本地 dsh 插件维护 skill、输入 schema、validator、声明式控制文件生成、结果解释器与 artifact 同步策略；HPC 维护并执行 workflow 商品、科学软件与许可证、集群适配和 Slurm 运行时。本地只发送结构及 `pre.json`/`run.json`/`post.json` 等控制数据，不上传 workflow 实现。

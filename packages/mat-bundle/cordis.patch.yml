@@ -1,0 +1,125 @@
+# mat-bundle：HPC 科学计算能力组合层（dsh profile bundle patch）。
+#
+# 本文件只收编「环境无关」的插件行——任何 dsh 发行版上语义不变的部分：
+# HPC 工具面（mat-tools）、打包技能 provider（mat-skills）、Web UI
+# 增强（mat-ui）、OPTIMADE/matgen 两个 MCP 引用、批量子代理四角色。
+# 环境相关行（LLM 路由/默认模型/网关地址）留在用户级 cordis.patch.yml
+# 或 --patch overlay（本仓 profiles/mat.yml 即模板）。
+#
+# 约定（继承 dsh-base patch 语义）：
+#   - 行顺序无加载语义（激活由 inject 依赖驱动），分组只为可读；
+#   - entry.name 必须是裸包名——loader 的 interpolate 只作用于 config/disabled，
+#     name 原样传给 tree.import，!!js 表达式会以 {__jsExpr} 对象崩掉包扫描；
+#   - config patch 是整体替换不是深合并；插件的默认敏感项都在此显式声明。
+#
+# 安装：目标机 profile 的 package.json 声明
+#   dependencies: { "mat-bundle": "<version>" }
+#   dsh.profile.bundles: [..., "mat-bundle"]
+# 详情见包 README 与仓 docs/portability.md。
+
+- insert:
+    # HPC 工具面 + 钩子（确认闸/波间门/相位闸/预算/环境门禁）。
+    - id: mat-tools
+      name: 'mat-tools'
+    # 打包技能 provider：包内 skills/ 目录（gaussian-calc 等 15 个）经
+    # import.meta.url 自解析注册，无环境变量依赖。
+    - id: mat-skills
+      name: 'mat-skills'
+    # Web UI 增强（品牌/会话归档/状态板）。依赖 harmony Source Patches 机制
+    # （dsh.harmony.patches 打在特定 web-app 源码上）——宿主 dsh 的 web-app
+    # 版本不兼容时设 MAT_UI_OFF=1 整行禁用，核心工具面不受影响。
+    - id: mat-ui
+      name: 'mat-ui'
+      disabled: !!js process.env.MAT_UI_OFF === '1'
+    # OPTIMADE 结构检索（vasp-calc skill 的结构来源之一）。端点经
+    # OPTIMADE_MCP_URL 覆盖。
+    - id: optimade-mcp-reference
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: optimade
+        transport: streamable-http
+        url: !!js process.env.OPTIMADE_MCP_URL || 'https://c-2076488383597109249.ksai.example.internal:58043/mcp/'
+    # matgen 材料筛选/生成（常驻 MCP 服务；本地隧道 127.0.0.1:18080 由
+    # scripts/matgen-tunnel.sh 维护，起 dsh 前先 start）。ml_screen 的 MACE
+    # 弛豫常态数分钟，toolCallTimeoutMs 放宽到 10 分钟。端点经 MATGEN_MCP_URL
+    # 覆写。
+    - id: matgen-mcp-reference
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: matgen
+        transport: streamable-http
+        url: !!js process.env.MATGEN_MCP_URL || 'http://127.0.0.1:18080/mcp'
+        toolCallTimeoutMs: 600000
+
+# ── batch-subagent / shepherd（角色协议见 mat-skills 内 batch-roles skill；
+#     层间契约校验在 mat-core/contracts.ts）──
+# web-app patch 层把 tool-subagent 默认 disabled: true（运行时
+# registry/providers 仍在）；主 agent 的 subagent 工具与角色实例都要显式启用。
+- id: tool-subagent
+  disabled: false
+# send_message/interrupt_agent（可续子 agent 的控制面）同样被 web-app 层默认禁用。
+- id: tool-subagent-control
+  disabled: false
+- insert:
+    # 四角色的模型路由默认 HPC 网关双模型，目标机经 LLM_PROVIDER_ID /
+    # LLM_MODEL_ID 环境变量整体改指（与用户级 agent-default-model 同旨）。
+    # 制备工：本地生成输入结构，零集群访问（H8——调不出任何 mat 工具）。
+    - id: subagent-prep
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_prep
+        backgroundMode: one-shot
+        toolFilter:
+          allow: ['skill', 'read', 'bash']
+        agentOptions:
+          provider: !!js process.env.LLM_PROVIDER_ID || 'mat'
+          model: !!js process.env.LLM_MODEL_ID || 'deepseek-v4-flash'
+          maxTokens: 8192
+        persona: 批量制备工（batch-roles skill 角色 prep）——只做输入结构制备，先读 skill batch-roles 再干活，按契约回传 JSON。
+    # 分诊工：只读远端取证（cat/tail/sacct），禁提交类工具。
+    - id: subagent-triage
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_triage
+        backgroundMode: one-shot
+        toolFilter:
+          allow: ['skill', 'read', 'mat_exec']
+        agentOptions:
+          provider: !!js process.env.LLM_PROVIDER_ID || 'mat'
+          model: !!js process.env.LLM_MODEL_ID || 'deepseek-v4-flash'
+          maxTokens: 8192
+        persona: 批量分诊工（batch-roles skill 角色 triage）——读失败证据归类，只读远端禁提交，先读 skill batch-roles，按契约回传 JSON。
+    # 分析师：消费结构化结果做科学判定，无任何 mat 工具。
+    - id: subagent-analyst
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_analyst
+        backgroundMode: one-shot
+        toolFilter:
+          allow: ['skill', 'read', 'bash', 'job_output']
+        agentOptions:
+          provider: !!js process.env.LLM_PROVIDER_ID || 'mat'
+          model: !!js process.env.LLM_MODEL_ID || 'deepseek-v4-flash'
+          maxTokens: 8192
+        persona: 批量分析师（batch-roles skill 角色 analyst）——判定结果科学可用性，数值逐位来自输入数据，先读 skill batch-roles，按契约回传 JSON。
+    # 牧羊人（shepherd）：可续后台子 agent，全权一条计算链。全 mat 工具面
+    # 但禁一切 agent 生成/控制工具（toolFilter 挡 affordance；maxDepth 1 是
+    # 运行时硬顶——牧羊人自身 depth 1 可创建，孙代 depth 2 必拒。注意
+    # maxDepth 0 语义是"本工具完全不能委托"）。
+    - id: subagent-shepherd
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_shepherd
+        backgroundMode: continuable
+        maxDepth: 1
+        toolFilter:
+          deny: ['subagent', 'subagent_fork', 'subagent_prep', 'subagent_triage', 'subagent_analyst', 'subagent_shepherd', 'send_message', 'interrupt_agent']
+        agentOptions:
+          provider: !!js process.env.LLM_PROVIDER_ID || 'mat'
+          model: !!js process.env.LLM_MODEL_ID || 'deepseek-v4-flash'
+          maxTokens: 16384
+        persona: 计算链牧羊人（batch-roles skill 角色 shepherd）——全权一条计算链：先读 skill batch-roles 与对应引擎 skill（gaussian-calc 或 vasp-calc），长回合内提交-等待-门检-推进，波内绝不结束回合，用 report 工具中途汇报，预算纪律全程生效。

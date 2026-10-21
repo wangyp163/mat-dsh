@@ -1,10 +1,10 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, access } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 
 const source = (file: string) => readFile(new URL(`../src/client/${file}`, import.meta.url), 'utf8')
 
-describe('HPC 品牌位（sidebar/hero 品牌插槽，零宿主改动）', () => {
-  it('锁定式：mark 插槽出品牌名 HPC，名字插槽只留限定词 Harness', async () => {
+describe('HPC 品牌位（sidebar 品牌名插槽，零宿主改动）', () => {
+  it('品牌名：占 sidebar.brand.name 插槽，只渲染限定词 Harness', async () => {
     const index = await source('index.tsx')
     expect(index).toContain("ctx.slots.inject('sidebar.brand.name'")
     const brand = await source('Brand.tsx')
@@ -19,20 +19,16 @@ describe('HPC 品牌位（sidebar/hero 品牌插槽，零宿主改动）', () =>
     expect(style).toContain('white-space:nowrap')
   })
 
-  it('鲸鱼 logo 换成黑色 HPC wordmark：占 sidebar 与 hero 两个 mark 插槽', async () => {
+  it('HPC wordmark 已去除：mark 插槽不再占用，回退宿主鱼形 fallback', async () => {
     const index = await source('index.tsx')
-    expect(index).toContain("ctx.slots.inject('sidebar.brand.mark'")
-    expect(index).toContain("ctx.slots.inject('conversation.hero.brand.mark'")
+    expect(index).not.toContain("ctx.slots.inject('sidebar.brand.mark'")
+    expect(index).not.toContain("ctx.slots.inject('conversation.hero.brand.mark'")
     const brand = await source('Brand.tsx')
-    expect(brand).toContain('matLogoDataUrl')
-    const logoData = await source('logo-data.ts')
-    expect(logoData).toContain("export const matLogoDataUrl = 'data:image/png;base64,")
-  })
-
-  it('mark 样式：不撑破窄 rail（max-width 收缩）+ 深色主题自动反白', async () => {
+    expect(brand).not.toContain('MatBrandMark')
+    expect(brand).not.toContain('matLogoDataUrl')
     const style = await source('style.ts')
-    expect(style).toContain('.mat-brand-mark{')
-    expect(style).toContain('max-width:100%')
-    expect(style).toContain('body[data-ds-dark-theme] .mat-brand-mark{filter:invert(1)}')
+    expect(style).not.toContain('mat-brand-mark')
+    await expect(access(new URL('../src/client/logo-data.ts', import.meta.url)))
+      .rejects.toThrow()
   })
 })

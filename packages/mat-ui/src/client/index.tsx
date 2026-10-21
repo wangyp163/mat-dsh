@@ -5,7 +5,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import { MatBrandName, MatBrandMark } from './Brand.tsx'
+import { MatBrandName } from './Brand.tsx'
 import { StatusDock } from './StatusDock.tsx'
 import { FileManagerPanel } from './FileManagerPanel.tsx'
 import { ViewerOverlay } from './ViewerOverlay.tsx'
@@ -18,16 +18,10 @@ export const inject = ['slots', 'theme', 'layout']
 
 export function apply(ctx: ClientContext): void {
   // 左上角品牌名：占宿主 sidebar.brand.name 插槽，fallback（DSH Local Build + 修订号）不再渲染。
+  // mark 插槽不再占用：HPC wordmark 已按用户要求去除，侧栏/hero 回退宿主鱼形 mark。
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({
     name: 'sidebar.brand.name',
   }, () => <MatBrandName />))
-  // 鲸鱼 mark → 黑色 HPC wordmark：侧栏（含折叠 rail）与 hero 标语两处。
-  ctx.slots.inject('sidebar.brand.mark', () => ctx.slots.register({
-    name: 'sidebar.brand.mark',
-  }, (props) => <MatBrandMark {...props} />))
-  ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({
-    name: 'conversation.hero.brand.mark',
-  }, (props) => <MatBrandMark {...props} />))
   ctx.slots.inject('conversation.details.tab', () => ctx.slots.register({
     name: 'conversation.details.tab',
     id: 'mat-files',
