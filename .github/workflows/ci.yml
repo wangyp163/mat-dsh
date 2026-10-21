@@ -22,10 +22,10 @@ jobs:
       # 直接 import 失败，故版本下限在此硬性声明。
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.13'
+          node-version: '22'
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.33.0
 
       - name: clone host (out-of-tree composition, pinned to verified tag)
         run: git clone --depth 1 --branch dsh-v0.1.0-rc.8 https://github.com/deepseek-ai/deepseek-harness.git ../deepseek-harness
@@ -43,3 +43,9 @@ jobs:
       # 单点定义：与本地/其他 CI 完全同一条路径，避免两套步骤漂移
       - name: ci
         run: bash scripts/ci.sh
+
+      # 失败现场直出 annotations（::error 可被 API 免认证读取），便于定位环境性解析问题
+      - name: diagnostics (on failure)
+        if: failure()
+        run: |
+          echo "::error::node=$(node -v) pnpm=$(pnpm -v) | tools=[$(ls packages/mat-tools/node_modules/@deepseek-ai 2>/dev/null | tr '\n' ',')] | root=[$(ls node_modules/@deepseek-ai 2>/dev/null | tr '\n' ',')]"

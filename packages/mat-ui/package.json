@@ -37,13 +37,15 @@
     }
   },
   "dependencies": {
-    "mat-core": "workspace:*",
-    "@deepseek-ai/dsh-client-ui-theme": "^0.1.0-rc.8",
-    "@deepseek-ai/dsh-client-ui-tool": "^0.1.0-rc.8",
+    "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-layout": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.8",
     "@deepseek-ai/dsh-client-ui-sidebar": "^0.1.0-rc.8",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.8"
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-tool": "^0.1.0-rc.8",
+    "mat-core": "workspace:*"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1"
